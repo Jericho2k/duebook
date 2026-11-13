@@ -225,6 +225,8 @@ def test_client_sends_a_strict_schema_and_reads_usage():
     assert seen["auth"] == "Bearer test-key"
     assert seen["body"]["response_format"]["json_schema"]["strict"] is True
     assert seen["body"]["usage"] == {"include": True}
+    assert seen["body"]["provider"] == {"require_parameters": True}
+    assert seen["body"]["reasoning"] == {"effort": "low"}
     assert seen["body"]["temperature"] == 0.0
 
 
@@ -242,7 +244,7 @@ def test_client_works_against_any_compatible_endpoint():
     assert client.complete_json([], {}).data == {}
     assert seen["url"] == "http://localhost:8000/v1/chat/completions"
     assert seen["body"]["response_format"] == {"type": "json_object"}
-    assert "usage" not in seen["body"]
+    assert not {"usage", "provider", "reasoning"} & set(seen["body"])
 
 
 def test_client_retries_faults_and_counts_what_every_attempt_cost():
@@ -257,6 +259,11 @@ def test_client_retries_faults_and_counts_what_every_attempt_cost():
     completion = client_for(lambda _: next(replies), attempts=4).complete_json([], {})
     assert completion.data == {"ok": True}
     assert completion.usage.calls == 3
+    assert [p.split(":")[0] for p in completion.retried] == [
+        "http 429",
+        "empty content",
+        "content is not valid JSON",
+    ]
     assert completion.usage.reported_usd == pytest.approx(0.00036)
 
 

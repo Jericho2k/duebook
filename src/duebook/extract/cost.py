@@ -29,7 +29,9 @@ class Pricing:
 #: Snapshots for planning only — prices move. The charged cost a provider
 #: reports always takes precedence over anything computed from these.
 PRICES: dict[str, Pricing] = {
-    "z-ai/glm-5.3-flash": Pricing(0.075, 0.25, 0.015),
+    # List price. The hosts that honour strict structured output charge more;
+    # a measured run came to about $0.0002 per ticket message.
+    "z-ai/glm-5.3-flash": Pricing(0.04, 0.078, 0.03),
 }
 
 
@@ -92,9 +94,9 @@ def estimate(
     pricing: Pricing,
     *,
     tokens_per_message: int = 120,
-    instruction_tokens: int = 1_300,
-    card_tokens: int = 600,
-    output_tokens: int = 150,
+    instruction_tokens: int = 800,
+    card_tokens: int = 400,
+    output_tokens: int = 250,
 ) -> Estimate:
     """Project the cost of one ticket. Prompt caching is ignored, so this is an upper bound."""
     per_call = instruction_tokens + card_tokens + tokens_per_message

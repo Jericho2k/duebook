@@ -67,7 +67,9 @@ model could not read is retried rather than silently skipped.
 ## Status
 
 Implemented: the domain core and the extractor, with tests. The extractor is
-tested against recorded responses.
+unit-tested against recorded responses; `scripts/smoke.py` runs a short ticket
+through a real model and prints the proposals, the refusals, the final card and
+the charged cost.
 
 Next: PostgreSQL event store and alert outbox, helpdesk adapter, handoff brief
 under a token budget, and the benchmark of simulated tickets with planted

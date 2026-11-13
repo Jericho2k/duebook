@@ -36,6 +36,8 @@ class Extraction:
     #: Entries the model produced that could not be read. Counted, not hidden.
     malformed: tuple[Malformed, ...] = ()
     usage: Usage = field(default_factory=Usage)
+    #: Why earlier model attempts were discarded, if any were.
+    retried: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -51,4 +53,4 @@ class Extractor:
         messages, aliases = build_messages(card, event, self.cal)
         completion = self.model.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
         proposals, malformed = parse_output(completion.data, aliases)
-        return Extraction(tuple(proposals), tuple(malformed), completion.usage)
+        return Extraction(tuple(proposals), tuple(malformed), completion.usage, completion.retried)

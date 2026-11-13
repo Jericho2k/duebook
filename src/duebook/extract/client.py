@@ -36,6 +36,8 @@ class ModelError(RuntimeError):
 class Completion:
     data: dict[str, Any]
     usage: Usage
+    #: Why earlier attempts were discarded. Empty when the first one succeeded.
+    retried: tuple[str, ...] = ()
 
 
 @dataclass(slots=True)
@@ -47,7 +49,12 @@ class ChatClient:
     #: that only guarantee valid JSON.
     structured: str = "json_schema"
     temperature: float = 0.0
-    max_tokens: int = 2_000
+    max_tokens: int = 4_000
+    #: Sent as ``reasoning.effort`` to OpenRouter. Extraction is a reading task:
+    #: left at a provider's default, a reasoning model spends ten times the
+    #: tokens thinking and regularly runs out of budget before answering.
+    #: None leaves the provider's default in place.
+    reasoning_effort: str | None = "low"
     attempts: int = 3
     timeout: float = 60.0
     #: Extra request fields, merged last. Provider routing, reasoning effort, etc.
@@ -73,14 +80,21 @@ class ChatClient:
         else:
             body["response_format"] = {"type": "json_object"}
         if "openrouter.ai" in self.base_url:
-            # Ask OpenRouter to report what it actually charged.
+            # Ask OpenRouter to report what it actually charged, and to route
+            # only to upstreams that honour the structured-output request: the
+            # same model is served by several hosts and not all of them do.
             body["usage"] = {"include": True}
+            body["provider"] = {"require_parameters": True}
+            if self.reasoning_effort:
+                body["reasoning"] = {"effort": self.reasoning_effort}
         body.update(self.extra)
 
         spent = Usage()
-        problem = "no attempt made"
+        problems: list[str] = []
+        problem = ""
         for attempt in range(self.attempts):
             if attempt:
+                problems.append(problem)
                 self.sleep(min(2.0**attempt, 20.0))
             try:
                 response = self._post(body)
@@ -111,12 +125,12 @@ class ChatClient:
             try:
                 data = json.loads(_strip_fence(content))
             except ValueError:
-                problem = "content is not valid JSON"
+                problem = f"content is not valid JSON: {content[:200]!r}"
                 continue
             if not isinstance(data, dict):
                 problem = "content is not a JSON object"
                 continue
-            return Completion(data, spent)
+            return Completion(data, spent, tuple(problems))
 
         raise ModelError(f"gave up after {self.attempts} attempts: {problem}", spent)
 
