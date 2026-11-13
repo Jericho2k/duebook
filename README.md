@@ -40,72 +40,38 @@ a false alarm teaches people to ignore the next one.
 A deadline resolves to the latest plausible moment: "by Friday" is the end of
 Friday.
 
-## Status is a function of the clock
+## Extraction and what it costs
 
-Only what events established is stored: open, claimed, fulfilled, cancelled,
-superseded. "Due soon" and "breached" are computed from the current time, so no
-background job can leave them stale. An alert is identified by what it is about
-— commitment, kind, deadline — so delivery can be made exactly-once with a
-unique key.
-
-## Example
+The extractor shows the model the card and the one message that just arrived —
+never the whole transcript — and works against any OpenAI-compatible endpoint:
 
 ```python
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from duebook import apply
+from duebook.extract import ChatClient, Extractor
 
-from duebook import Actor, Card, MessagePosted, Party, Role, apply, notices, status_at
-from duebook.proposals import MakeCommitment
-from duebook.temporal import WeekdayRef
-
-msk = ZoneInfo("Europe/Moscow")
-ivan = Actor("agent-ivan", Role.AGENT)
-
-event = MessagePosted(
-    id="e1",
-    ticket_id="T-1",
-    seq=1,
-    at=datetime(2027, 1, 11, 10, 0, tzinfo=msk),
-    author=ivan,
-    text="Анна, мы вернём деньги до пятницы.",
-)
-proposal = MakeCommitment(
-    owner=Party.COMPANY,
-    action="вернуть деньги",
-    quote="вернём деньги до пятницы",
-    due=WeekdayRef(4),
-    due_quote="до пятницы",
-)
-
-card = apply(Card("T-1"), event, [proposal]).card
-commitment = card.commitments[0]
-
-saturday = datetime(2027, 1, 16, 9, 0, tzinfo=msk)
-status_at(commitment, saturday)  # Status.BREACHED
-notices(card, saturday)  # one BREACHED notice with a stable key
+extractor = Extractor(ChatClient(api_key=key))  # OpenRouter by default
+extraction = extractor.extract(card, event)
+card = apply(card, event, extraction.proposals).card
+extraction.usage.usd()  # what this message cost
 ```
 
-## Layout
+Every call returns its token counts and, where the provider reports it, the
+amount actually charged. `duebook.extract.estimate` projects the cost of a
+ticket in advance and compares it with re-reading the whole transcript on every
+message: incremental cost grows linearly with ticket length, re-reading grows
+quadratically.
 
-| Module | Contents |
-|---|---|
-| `duebook.events` | The input stream: messages, assignee and status changes |
-| `duebook.card` | The card: facts with validity intervals, commitments, steps, questions |
-| `duebook.proposals` | What an extractor may propose |
-| `duebook.reducer` | `apply` and `replay`: admission rules, supersession, contradictions, handoff |
-| `duebook.temporal` | Deadline expressions, working calendar, the rule parser |
-| `duebook.lifecycle` | Status and alerts as functions of the clock |
-
-The core has no dependency on a database, a network or a model.
+A failed extraction raises. It never returns "nothing found", so a message the
+model could not read is retried rather than silently skipped.
 
 ## Status
 
-Implemented: the domain core above, with tests.
+Implemented: the domain core and the extractor, with tests. The extractor is
+tested against recorded responses.
 
-Next: LLM extractor with a JSON schema, PostgreSQL event store and alert
-outbox, helpdesk adapter, handoff brief under a token budget, and the benchmark
-of simulated tickets with planted events for comparison against full-context,
-rolling-summary and Mem0 baselines.
+Next: PostgreSQL event store and alert outbox, helpdesk adapter, handoff brief
+under a token budget, and the benchmark of simulated tickets with planted
+events for comparison against full-context, rolling-summary and Mem0 baselines.
 
 ## Development
 

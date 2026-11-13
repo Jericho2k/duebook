@@ -35,6 +35,7 @@ def local(deadline):
         ("через 2 часа", Offset(2, Unit.HOUR)),
         ("через час", Offset(1, Unit.HOUR)),
         ("через полчаса", Offset(30, Unit.MINUTE)),
+        ("через полтора часа", Offset(90, Unit.MINUTE)),
         ("через пару дней", Offset(2, Unit.DAY)),
         ("в течение 3 рабочих дней", Offset(3, Unit.BUSINESS_DAY)),
         ("в течении трёх рабочих дней", Offset(3, Unit.BUSINESS_DAY)),
@@ -63,6 +64,30 @@ def test_parse_due(phrase, expected):
 @pytest.mark.parametrize("phrase", ["", "мы разберёмся", "как можно скорее", "we'll look into it"])
 def test_parser_stays_silent_when_no_deadline_was_stated(phrase):
     assert parse_due(phrase) is None
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    [
+        "в следующую пятницу",
+        "next Friday",
+        "на следующей неделе",
+        "в эту пятницу или в понедельник",
+        "через 2-3 дня",
+        "примерно через час",
+        "не раньше среды",
+        "после 15 марта",
+    ],
+)
+def test_parser_stays_silent_on_phrases_it_cannot_place_with_certainty(phrase):
+    assert parse_due(phrase) is None
+
+
+def test_weekday_in_a_named_week_is_counted_from_that_weeks_monday():
+    # Said on Monday 11 January: "Friday next week" is the 22nd, not the 15th.
+    assert local(resolve(WeekdayRef(4, week=1), START, CAL)).date() == date(2027, 1, 22)
+    saturday = datetime(2027, 1, 16, 12, 0, tzinfo=MSK)
+    assert local(resolve(WeekdayRef(4, week=1), saturday, CAL)).date() == date(2027, 1, 22)
 
 
 def test_business_qualifier_only_applies_to_days():

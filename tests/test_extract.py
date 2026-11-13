@@ -1,0 +1,300 @@
+import json
+from datetime import date, time
+
+import httpx
+import pytest
+from helpers import ANNA, CAL, IVAN, MSK, Ticket
+
+from duebook import CommitmentState, Confidence, MessagePosted, Party, Reason, apply
+from duebook.extract import (
+    PRICES,
+    ChatClient,
+    Completion,
+    Extractor,
+    ModelError,
+    Pricing,
+    Usage,
+    estimate,
+    parse_output,
+)
+from duebook.extract.prompt import build_messages, render_card
+from duebook.extract.schema import OUTPUT_SCHEMA, parse_due_expr
+from duebook.proposals import AskQuestion, MakeCommitment, RecordStep, ResolveCommitment
+from duebook.temporal import DateRef, DayRef, Offset, Period, PeriodEnd, Unit, WeekdayRef
+
+NO_DUE = {
+    "kind": "none", "amount": None, "unit": None, "days_ahead": None, "weekday": None,
+    "week": None, "day": None, "month": None, "year": None, "period": None, "time": None,
+}  # fmt: skip
+
+
+def due(**fields):
+    return {**NO_DUE, **fields}
+
+
+def output(**sections):
+    empty = {key: [] for key in OUTPUT_SCHEMA["properties"]}
+    return {**empty, **sections}
+
+
+class FakeModel:
+    """Replays prepared responses and records what it was asked."""
+
+    def __init__(self, *responses):
+        self.responses = list(responses)
+        self.requests = []
+
+    def complete_json(self, messages, schema, name="output"):
+        self.requests.append(messages)
+        return Completion(self.responses.pop(0), Usage(1, 900, 80, reported_usd=0.0001))
+
+
+# --------------------------------------------------------------- schema ----
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (due(), None),
+        (due(kind="offset", amount=3, unit="business_day"), Offset(3, Unit.BUSINESS_DAY)),
+        (due(kind="day", days_ahead=1, time="15:00"), DayRef(1, time(15, 0))),
+        (due(kind="weekday", weekday="friday"), WeekdayRef(4)),
+        (due(kind="weekday", weekday="friday", week=1), WeekdayRef(4, None, 1)),
+        (due(kind="date", day=15, month=3), DateRef(15, 3)),
+        (due(kind="period_end", period="week"), PeriodEnd(Period.WEEK)),
+    ],
+)
+def test_structured_deadline_is_read(raw, expected):
+    assert parse_due_expr(raw) == expected
+
+
+def test_a_malformed_entry_is_dropped_and_the_rest_is_kept():
+    raw = output(
+        facts=[
+            {"slot": "plan", "value": "Про", "quote": "тариф Про", "change": False},
+            {"slot": "plan", "value": 5, "quote": "x", "change": False},
+        ],
+        commitments=[
+            {
+                "owner": "nobody", "action": "a", "quote": "q",
+                "due_quote": None, "due": due(), "supersedes": None,
+            },
+            {
+                "owner": "company", "action": "вернуть деньги", "quote": "вернём",
+                "due_quote": None, "due": due(kind="offset", unit="hour"), "supersedes": None,
+            },
+        ],
+    )  # fmt: skip
+    proposals, malformed = parse_output(raw)
+    assert [type(p).__name__ for p in proposals] == ["AssertFact"]
+    assert [m.section for m in malformed] == ["facts", "commitments", "commitments"]
+
+
+def test_handles_shown_to_the_model_map_back_to_real_ids():
+    raw = output(resolved=[{"id": "c1", "quote": "готово"}, {"id": "C9", "quote": "готово"}])
+    proposals, _ = parse_output(raw, {"C1": "e1#0"})
+    assert proposals == [ResolveCommitment("e1#0", "готово"), ResolveCommitment("C9", "готово")]
+
+
+def test_schema_is_strict_everywhere():
+    def check(node):
+        if isinstance(node, dict):
+            if node.get("type") == "object":
+                assert node["additionalProperties"] is False
+                assert node["required"] == list(node["properties"])
+            for value in node.values():
+                check(value)
+        elif isinstance(node, list):
+            for value in node:
+                check(value)
+
+    check(OUTPUT_SCHEMA)
+
+
+# --------------------------------------------------------------- prompt ----
+
+
+def test_the_model_sees_the_card_and_one_message_never_the_transcript():
+    t = Ticket()
+    t.assign(None, IVAN.id)
+    t.say(
+        IVAN,
+        "СЕКРЕТНОЕ-СЛОВО. Мы вернём деньги до пятницы. Переустановите приложение. Какой заказ?",
+        MakeCommitment(Party.COMPANY, "вернуть деньги", "вернём деньги до пятницы"),
+        RecordStep("переустановить приложение", "Переустановите приложение"),
+        AskQuestion("какой заказ?", "Какой заказ?"),
+    )
+    rendered = render_card(t.card, t.now, CAL)
+    assert set(rendered.aliases) == {"C1", "S1", "Q1"}
+    assert rendered.aliases["C1"] == t.card.commitments[0].id
+    assert "C1 [company, open] вернуть деньги | due 2027-01-15 23:59" in rendered.text
+
+    event = MessagePosted(
+        id="e9", ticket_id="T-1", seq=9, at=t.now, author=ANNA, text="Заказ 4815", public=True
+    )
+    messages, _ = build_messages(t.card, event, CAL)
+    assert [m["role"] for m in messages] == ["system", "user"]
+    assert "Sent: Monday 2027-01-11 10:00 (Europe/Moscow)" in messages[1]["content"]
+    assert messages[1]["content"].endswith("Заказ 4815")
+    assert "СЕКРЕТНОЕ-СЛОВО" not in messages[1]["content"]
+
+
+# ------------------------------------------------------------ extractor ----
+
+
+def test_extraction_flows_through_the_reducer_end_to_end():
+    promise = output(
+        commitments=[
+            {
+                "owner": "company", "action": "вернуть деньги",
+                "quote": "вернём деньги до пятницы", "due_quote": "до пятницы",
+                "due": due(kind="weekday", weekday="friday"), "supersedes": None,
+            },
+            {
+                "owner": "company", "action": "подарить промокод",
+                "quote": "мы подарим вам промокод", "due_quote": None,
+                "due": due(), "supersedes": None,
+            },
+        ]
+    )  # fmt: skip
+    confirmation = output(resolved=[{"id": "C1", "quote": "деньги пришли"}])
+    extractor = Extractor(FakeModel(promise, confirmation), CAL)
+
+    t = Ticket()
+    first = MessagePosted(
+        id="e1", ticket_id="T-1", seq=1, at=t.now, author=IVAN,
+        text="Анна, мы вернём деньги до пятницы.",
+    )  # fmt: skip
+    extraction = extractor.extract(t.card, first)
+    outcome = apply(t.card, first, extraction.proposals, CAL)
+
+    # The model invented a promise the message never made; the reducer refused it.
+    assert [r.reason for r in outcome.rejections] == [Reason.UNGROUNDED]
+    (c,) = outcome.card.commitments
+    assert c.due.confidence is Confidence.HIGH
+    assert c.due.deadline.due_at.astimezone(MSK).date() == date(2027, 1, 15)
+
+    second = MessagePosted(
+        id="e2", ticket_id="T-1", seq=2, at=t.now, author=ANNA, text="Спасибо, деньги пришли!"
+    )
+    extraction = extractor.extract(outcome.card, second)
+    card = apply(outcome.card, second, extraction.proposals, CAL).card
+    assert card.commitments[0].state is CommitmentState.FULFILLED
+    assert extraction.usage.reported_usd == 0.0001
+
+
+def test_events_without_text_cost_nothing():
+    from duebook import AssigneeChanged
+
+    model = FakeModel()
+    t = Ticket()
+    event = AssigneeChanged(id="e1", ticket_id="T-1", seq=1, at=t.now, previous=None, current="x")
+    assert Extractor(model, CAL).extract(t.card, event).proposals == ()
+    assert model.requests == []
+
+
+# --------------------------------------------------------------- client ----
+
+
+def chat_response(content, cost=0.00012):
+    usage = {"prompt_tokens": 1000, "completion_tokens": 50, "cost": cost}
+    usage["prompt_tokens_details"] = {"cached_tokens": 800}
+    return httpx.Response(
+        200, json={"choices": [{"message": {"content": content}}], "usage": usage}
+    )
+
+
+def client_for(handler, **options):
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    return ChatClient(api_key="test-key", http=http, sleep=lambda _: None, **options)
+
+
+def test_client_sends_a_strict_schema_and_reads_usage():
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        seen["auth"] = request.headers["authorization"]
+        seen["body"] = json.loads(request.content)
+        return chat_response('{"facts": []}')
+
+    completion = client_for(handler).complete_json([{"role": "user", "content": "x"}], {"a": 1})
+    assert completion.data == {"facts": []}
+    assert completion.usage == Usage(1, 1000, 50, 800, 0.00012)
+    assert seen["url"] == "https://openrouter.ai/api/v1/chat/completions"
+    assert seen["auth"] == "Bearer test-key"
+    assert seen["body"]["response_format"]["json_schema"]["strict"] is True
+    assert seen["body"]["usage"] == {"include": True}
+    assert seen["body"]["temperature"] == 0.0
+
+
+def test_client_works_against_any_compatible_endpoint():
+    seen = {}
+
+    def handler(request):
+        seen["url"] = str(request.url)
+        seen["body"] = json.loads(request.content)
+        return chat_response("```json\n{}\n```")
+
+    client = client_for(
+        handler, base_url="http://localhost:8000/v1/", model="local", structured="json_object"
+    )
+    assert client.complete_json([], {}).data == {}
+    assert seen["url"] == "http://localhost:8000/v1/chat/completions"
+    assert seen["body"]["response_format"] == {"type": "json_object"}
+    assert "usage" not in seen["body"]
+
+
+def test_client_retries_faults_and_counts_what_every_attempt_cost():
+    replies = iter(
+        [
+            httpx.Response(429, text="slow down"),
+            chat_response(""),
+            chat_response("not json"),
+            chat_response('{"ok": true}'),
+        ]
+    )
+    completion = client_for(lambda _: next(replies), attempts=4).complete_json([], {})
+    assert completion.data == {"ok": True}
+    assert completion.usage.calls == 3
+    assert completion.usage.reported_usd == pytest.approx(0.00036)
+
+
+def test_client_gives_up_loudly_and_reports_the_spend():
+    with pytest.raises(ModelError) as failure:
+        client_for(lambda _: chat_response(""), attempts=2).complete_json([], {})
+    assert "empty content" in str(failure.value)
+    assert failure.value.usage.calls == 2
+
+
+def test_client_does_not_retry_a_request_that_can_never_succeed():
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(401, text="bad key")
+
+    with pytest.raises(ModelError, match="http 401"):
+        client_for(handler).complete_json([], {})
+    assert len(calls) == 1
+
+
+# ----------------------------------------------------------------- cost ----
+
+
+def test_cost_prefers_what_was_charged_and_falls_back_to_the_price_list():
+    pricing = Pricing(1.0, 2.0, cached_input_per_m=0.1)
+    assert Usage(1, 1000, 100, reported_usd=0.5).usd(pricing) == 0.5
+    assert Usage(1, 1_000_000, 500_000, cached_tokens=400_000).usd(pricing) == pytest.approx(
+        0.6 + 0.04 + 1.0
+    )
+    assert Usage(1, 10, 10).usd() is None
+    assert (Usage(1, 10, 5) + Usage(1, 20, 5, reported_usd=0.1)).reported_usd == 0.1
+
+
+def test_incremental_cost_is_linear_and_rereading_is_quadratic():
+    pricing = PRICES["z-ai/glm-5.3-flash"]
+    short, long = estimate(50, pricing), estimate(500, pricing)
+    assert long.incremental_usd == pytest.approx(short.incremental_usd * 10)
+    assert long.reread_usd > short.reread_usd * 40
+    assert long.ratio > short.ratio

@@ -60,10 +60,15 @@ class DayRef:
 
 @dataclass(frozen=True, slots=True)
 class WeekdayRef:
-    """The next occurrence of a weekday, Monday = 0."""
+    """A weekday, Monday = 0.
+
+    With ``week`` unset it is the next occurrence ("by Friday"). ``week=1`` is
+    that weekday in the following calendar week ("Friday next week").
+    """
 
     weekday: int
     at: time | None = None
+    week: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,9 +165,14 @@ def resolve(expr: DueExpr, said_at: datetime, cal: WorkCalendar) -> Deadline:
                 raise ValueError("day reference must not point backwards")
             return on(today + timedelta(days=days_ahead), at)
 
-        case WeekdayRef(weekday=weekday, at=at):
+        case WeekdayRef(weekday=weekday, at=at, week=week):
             if not 0 <= weekday <= 6:
                 raise ValueError("weekday must be 0..6")
+            if week is not None:
+                if week < 0:
+                    raise ValueError("week must not point backwards")
+                monday = today - timedelta(days=today.weekday())
+                return on(monday + timedelta(days=7 * week + weekday), at)
             ahead = (weekday - today.weekday()) % 7
             if ahead == 0 and on(today, at).due_at <= said_at:
                 ahead = 7
@@ -230,6 +240,18 @@ _OFFSET = re.compile(
     rf"(?:через|в течени[еи]|за|in|within)\s+(?:{_NUM}\s+)?(?:{_BUSINESS}\s+)?{_UNIT}"
 )
 _HALF_HOUR = re.compile(r"(?:через|в течени[еи]|in|within)\s+(?:полчаса|half an hour)")
+_HOUR_AND_HALF = re.compile(
+    r"(?:через|в течени[еи]|in|within)\s+(?:полтора часа|an hour and a half|1[.,]5 (?:часа|hours))"
+)
+# Phrases the rules cannot place with certainty. "В следующую пятницу" may mean
+# the coming Friday or the one after; "Friday or Monday" names two deadlines.
+# The parser answers nothing rather than guess, because a wrong second opinion
+# disputes a correct first one.
+_AMBIGUOUS = re.compile(
+    r"следующ|ближайш|\bnext\b|\bэт(?:у|от|о|ой)\b|\bthis\b|\bили\b|\bor\b|примерно|около|"
+    r"\babout\b|\baround\b|не раньше|не ранее|\bпосле\b|\bafter\b|"
+    r"(?<![\d-])\d{1,2}\s*[-–—]\s*\d{1,2}(?![\d-])"
+)
 _PERIOD_END = re.compile(
     r"(?:кон(?:ца|ец|цу)\s+(?:рабочего\s+)?(?P<ru>дня|недели|месяца)"
     r"|end of (?:the\s+)?(?:business\s+|working\s+)?(?P<en>day|week|month)"
@@ -283,8 +305,12 @@ def parse_due(text: str) -> DueExpr | None:
     if not s:
         return None
 
+    if _AMBIGUOUS.search(s):
+        return None
     if _HALF_HOUR.search(s):
         return Offset(30, Unit.MINUTE)
+    if _HOUR_AND_HALF.search(s):
+        return Offset(90, Unit.MINUTE)
     if m := _OFFSET.search(s):
         raw = m.group("num")
         amount = 1 if raw is None else int(raw) if raw.isdigit() else _NUMBER_WORDS[raw]
