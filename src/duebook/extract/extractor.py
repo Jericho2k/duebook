@@ -32,6 +32,12 @@ class JsonModel(Protocol):
     ) -> Completion: ...
 
 
+class Reader(Protocol):
+    """Anything that turns an event into proposals. Raises when it cannot."""
+
+    def extract(self, card: Card, event: Event) -> Extraction: ...
+
+
 @dataclass(frozen=True, slots=True)
 class Extraction:
     proposals: tuple[Proposal, ...] = ()

@@ -32,19 +32,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
 
 from .card import Card
 from .events import Event
 from .extract.cost import Usage
-from .extract.extractor import Extraction
+from .extract.extractor import Reader
 from .store.store import Hold, Store
-
-
-class Reader(Protocol):
-    """Anything that turns an event into proposals. Raises when it cannot."""
-
-    def extract(self, card: Card, event: Event) -> Extraction: ...
 
 
 @dataclass(frozen=True, slots=True)

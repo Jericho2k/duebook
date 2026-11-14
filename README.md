@@ -186,17 +186,60 @@ sections from the bottom of that order and ends by naming them — "Не
 estimated pessimistically for Russian; pass a real tokenizer's counter as
 `count` when the exact figure matters.
 
+## The benchmark (first cut)
+
+```bash
+python -m duebook.bench --seed 1 --tickets 200      # self-check, no model called
+python -m duebook.bench --model z-ai/glm-5.3-flash --writer <another model> --max-usd 0.5
+```
+
+`duebook.bench` builds simulated tickets the other way round: the events are
+planted first — a promise kept, a promise broken, a promise with no deadline,
+a fact changed, a contradiction, a failed fix suggested again after a handoff
+— and the conversation is written around them, so the labels are true by
+construction. Generation is seeded: the same seed gives the same tickets.
+
+The scorer reports commitment precision, recall and F1 (a promise is
+identified by the message it was made in and the side that owes it), deadline
+accuracy (the exact instant, or correctly none), and the precision and recall
+of "promise broken" alerts at the end of the ticket.
+
+Each ticket carries the proposals a perfect extractor would make. Pushed
+through the real reducer they must score exactly 1.0 — that is the check that
+generator, reducer and scorer agree, and it is the only run made so far:
+
+    tickets: 200
+    commitments: precision 1.000  recall 1.000  F1 1.000  (tp 434, fp 0, fn 0)
+    deadline accuracy: 1.000 (434/434)
+    breach alerts: precision 1.000  recall 1.000  (tp 145, fp 0, fn 0)
+
+Tickets must be written by a different model than the one that reads them.
+`--writer` rewrites the template text with another model while the planted
+spans are kept word for word (a rewrite that loses one is discarded), and the
+run refuses to start when writer and extractor are the same model.
+
+Not there yet: no model has been measured on it, fact changes, contradictions
+and repeated fixes are labelled but not scored, and there are no full-context,
+rolling-summary or Mem0 baselines.
+
 ## Status
 
 Implemented, with tests: the domain core, the extractor, and the PostgreSQL
 event store with its alert outbox, scheduler and delivery worker, the
-per-ticket pipeline that ties them together, and the handoff brief. The
+per-ticket pipeline that ties them together, the handoff brief, slot
+normalisation, and a first cut of the benchmark. The
 extractor is unit-tested against recorded responses; `scripts/smoke.py` runs a
 short ticket through a real model and prints the proposals, the refusals, the
 final card and the charged cost.
 
-Next: a helpdesk adapter and the benchmark of simulated tickets with planted events
-for comparison against full-context, rolling-summary and Mem0 baselines.
+Checked against a real model so far: the extractor as it was before slot
+normalisation. The slot vocabulary added to the model's instructions, the
+ticket rewriter and the benchmark have only been run against recorded and
+scripted responses.
+
+Next: a helpdesk adapter; measuring real models on the benchmark, scoring the
+remaining planted events, and the full-context, rolling-summary and Mem0
+baselines.
 
 ## Development
 
