@@ -1,9 +1,9 @@
 from datetime import timedelta
 
 import pytest
-from helpers import ANNA, CAL, IVAN, START, persist, promise
+from helpers import ANNA, CAL, IVAN, OLGA, START, persist, promise
 
-from duebook import Notice, NoticeKind
+from duebook import AssigneeChanged, Notice, NoticeKind
 from duebook.proposals import ResolveCommitment
 from duebook.store import Store, Worker, connect
 from duebook.store.scheduler import idle_for, run, run_due
@@ -122,6 +122,28 @@ def test_an_alert_that_stopped_being_true_is_retired_instead_of_sent(store, conn
     done = Worker(store, channel, "w1").run_once(LATE)
     assert channel.sent == [] and done.discarded == 1
     assert rows(conn)[0]["discard_reason"] == "no longer due" and store.outbox.pending() == 0
+
+
+def test_an_alert_queued_before_a_handoff_goes_to_whoever_holds_the_ticket_now(store, conn):
+    persist(store, promise("T-1"))
+    run_due(store, LATE)
+    assert rows(conn)[0]["recipient"] == IVAN.id
+
+    handoff = AssigneeChanged(
+        id="e3", ticket_id="T-1", seq=3, at=LATE, previous=IVAN.id, current=OLGA.id
+    )
+    store.record(handoff, (), now=LATE)
+
+    class Recipients:
+        def __init__(self):
+            self.seen = []
+
+        def send(self, n: Notice) -> None:
+            self.seen.append((n.key, n.recipient))
+
+    channel = Recipients()
+    Worker(store, channel, "w1").run_once(LATE + timedelta(minutes=1))
+    assert channel.seen == [(rows(conn)[0]["key"], OLGA.id)]
 
 
 def test_a_channel_failure_is_retried_with_a_growing_delay_until_it_succeeds(store, conn):

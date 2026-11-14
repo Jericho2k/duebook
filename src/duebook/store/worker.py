@@ -9,6 +9,8 @@ The order of those four steps is the whole design.
   refund, the promise is renegotiated. An alert that is no longer derivable
   from the current card is retired, not sent: a false alarm costs more than a
   missed one.
+  The same check re-reads who the alert is for, so a ticket handed over
+  while its alert waited in the queue alerts the operator who holds it now.
 * Send, then record. A worker killed between the two leaves a claimed,
   unrecorded notice; its lease expires and another worker sends it again under
   the same key. Recording first would turn that same crash into a lost alert,
@@ -62,9 +64,14 @@ class Worker:
     def run_once(self, now: datetime) -> Round:
         sent = discarded = failed = 0
         for claim in self.store.outbox.claim(self.name, now, self.batch):
-            notice = claim.notice
-            card = self.store.card(notice.ticket_id)
-            if notice.key not in {n.key for n in notices(card, now, self.store.policy)}:
+            card = self.store.card(claim.notice.ticket_id)
+            current = {n.key: n for n in notices(card, now, self.store.policy)}
+            # Send the alert as the card derives it NOW, not as it was queued.
+            # The key says what the alert is about and does not change, but who
+            # must hear it does: a ticket handed over after the alert was
+            # queued owes it to the new operator, not the one who left.
+            notice = current.get(claim.notice.key)
+            if notice is None:
                 self.store.outbox.discard(claim, "no longer due", now)
                 discarded += 1
                 continue
