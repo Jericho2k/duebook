@@ -66,7 +66,7 @@ CANONICAL: Mapping[str, tuple[str, ...]] = MappingProxyType(
 class Vocabulary:
     """The controlled list a deployment uses. Replace it to fit another domain."""
 
-    canonical: Mapping[str, tuple[str, ...]] = CANONICAL
+    canonical: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: CANONICAL)
     filler: frozenset[str] = FILLER
     _alias: dict[str, str] = field(init=False, repr=False, compare=False)
 
