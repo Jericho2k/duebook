@@ -75,9 +75,9 @@ from duebook.store import Store, Worker, connect, migrate
 conn = connect("postgresql://...")
 migrate(conn)
 store = Store(conn)
-store.record(event, proposals, now=now)   # one transaction, see below
-store.card(ticket_id)                     # the current snapshot
-store.replay(ticket_id, upto=12)          # the card as of event 12, from the log alone
+store.record(event, proposals, now=now)  # one transaction, see below
+store.card(ticket_id)  # the current snapshot
+store.replay(ticket_id, upto=12)  # the card as of event 12, from the log alone
 ```
 
 One transaction per event writes the event, the proposals made for it, the
@@ -115,15 +115,37 @@ The scheduler does not poll tickets. Each ticket row carries
 `lifecycle.next_wakeup` — the next instant at which its alerts change — and
 the scheduler sleeps until the earliest one.
 
+## The pipeline: one event, all the way through
+
+```python
+from duebook.pipeline import Pipeline
+
+pipeline = Pipeline(store, extractor)
+handled = pipeline.handle(event)   # ingest -> extract -> apply -> persist -> queue alerts
+pipeline.retry_held()              # tickets whose failed extraction is due for another try
+```
+
+The event is stored first, so it cannot be lost and the helpdesk can be
+acknowledged whatever happens next. Events are then applied strictly in order
+under a per-ticket lock: one that arrives ahead of its predecessor waits in
+the log and is applied in the same pass that closes the gap; a redelivered one
+is recognised and not read again.
+
+When extraction fails the ticket is **held** at that event. No empty result
+is recorded for it and nothing after it is applied; the hold is stored with
+the error, the cost of the failed calls and a retry time that backs off. Other
+tickets are not affected.
+
 ## Status
 
 Implemented, with tests: the domain core, the extractor, and the PostgreSQL
-event store with its alert outbox, scheduler and delivery worker. The
+event store with its alert outbox, scheduler and delivery worker, and the
+per-ticket pipeline that ties them together. The
 extractor is unit-tested against recorded responses; `scripts/smoke.py` runs a
 short ticket through a real model and prints the proposals, the refusals, the
 final card and the charged cost.
 
-Next: the per-ticket pipeline, the handoff brief under a token budget, a
+Next: the handoff brief under a token budget, a
 helpdesk adapter, and the benchmark of simulated tickets with planted events
 for comparison against full-context, rolling-summary and Mem0 baselines.
 

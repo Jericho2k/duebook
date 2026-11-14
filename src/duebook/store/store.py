@@ -19,6 +19,7 @@ here.
 from __future__ import annotations
 
 from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -54,6 +55,20 @@ class Recorded:
     replayed: bool = False
     #: Keys of the alerts this event newly queued.
     enqueued: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Hold:
+    """A ticket stopped at an event whose extraction failed."""
+
+    ticket_id: str
+    seq: int
+    error: str
+    attempts: int
+    first_failed_at: datetime
+    retry_at: datetime
+    #: What the failed attempts cost, as stored.
+    usage: Any = None
 
 
 @dataclass(slots=True)
@@ -103,6 +118,7 @@ class Store:
         *,
         now: datetime,
         usage: Any = None,
+        malformed: Any = None,
     ) -> Recorded:
         """Apply one event and persist everything that follows from it.
 
@@ -122,11 +138,16 @@ class Store:
             ]
             self.conn.execute(
                 "insert into event_proposals"
-                " (ticket_id, seq, proposals, rejections, usage, applied_at)"
-                " values (%s, %s, %s, %s, %s, %s)",
+                " (ticket_id, seq, proposals, rejections, usage, malformed, applied_at)"
+                " values (%s, %s, %s, %s, %s, %s, %s)",
                 (event.ticket_id, event.seq, Jsonb(encode(tuple(proposals))), Jsonb(refused),
-                 Jsonb(usage) if usage is not None else None, now),
+                 _json(usage), _json(malformed), now),
             )  # fmt: skip
+            # The event is read at last: whatever held the ticket here is over.
+            self.conn.execute(
+                "delete from holds where ticket_id = %s and seq <= %s",
+                (event.ticket_id, event.seq),
+            )
             enqueued = self._settle(outcome.card, now)
         return Recorded(outcome.card, outcome.rejections, enqueued=enqueued)
 
@@ -150,6 +171,46 @@ class Store:
             for row in rows:
                 self._settle(decode_card(row["card"]), now)
         return len(rows)
+
+    def hold(
+        self,
+        ticket_id: str,
+        seq: int,
+        error: str,
+        *,
+        now: datetime,
+        retry_at: datetime,
+        usage: Any = None,
+    ) -> Hold:
+        """Record that extraction failed at ``seq``. The ticket stays where it is."""
+        with self.conn.transaction():
+            row = self.conn.execute(
+                "insert into holds (ticket_id, seq, error, attempts, first_failed_at,"
+                " last_failed_at, retry_at, usage) values (%s, %s, %s, 1, %s, %s, %s, %s)"
+                " on conflict (ticket_id) do update set"
+                " attempts = case when holds.seq = excluded.seq then holds.attempts + 1 else 1 end,"
+                " first_failed_at = case when holds.seq = excluded.seq"
+                "  then holds.first_failed_at else excluded.first_failed_at end,"
+                " seq = excluded.seq, error = excluded.error, usage = excluded.usage,"
+                " last_failed_at = excluded.last_failed_at, retry_at = excluded.retry_at"
+                " returning *",
+                (ticket_id, seq, error[:1000], now, now, retry_at, _json(usage)),
+            ).fetchone()
+        return _hold(row)
+
+    @contextmanager
+    def exclusive(self, ticket_id: str) -> Iterator[None]:
+        """Hold the ticket for the duration of the block; wait if another worker has it.
+
+        A session-level advisory lock rather than a row lock, because the block
+        includes a model call and no transaction should stay open across one.
+        If the process dies the session ends and the lock goes with it.
+        """
+        self.conn.execute("select pg_advisory_lock(hashtextextended(%s, 0))", (ticket_id,))
+        try:
+            yield
+        finally:
+            self.conn.execute("select pg_advisory_unlock(hashtextextended(%s, 0))", (ticket_id,))
 
     def rebuild(self, ticket_id: str, now: datetime) -> Card:
         """Throw the snapshot away and recompute it from the log."""
@@ -191,6 +252,26 @@ class Store:
         """The card rebuilt from the log alone — as of ``upto`` when given."""
         return fold(ticket_id, self.stream(ticket_id, upto), self.cal)
 
+    def held(self, ticket_id: str) -> Hold | None:
+        row = self.conn.execute("select * from holds where ticket_id = %s", (ticket_id,)).fetchone()
+        return _hold(row) if row else None
+
+    def holds_due(self, now: datetime, limit: int = 100) -> list[Hold]:
+        """Held tickets whose next attempt is due."""
+        rows = self.conn.execute(
+            "select * from holds where retry_at <= %s order by retry_at limit %s", (now, limit)
+        ).fetchall()
+        return [_hold(row) for row in rows]
+
+    def backlog(self, ticket_id: str) -> int:
+        """How many stored events have not been applied yet."""
+        row = self.conn.execute(
+            "select count(*) as n from events e where e.ticket_id = %s and not exists"
+            " (select 1 from event_proposals p where p.ticket_id = e.ticket_id and p.seq = e.seq)",
+            (ticket_id,),
+        ).fetchone()
+        return row["n"]
+
     def next_wake(self) -> datetime | None:
         """The earliest instant at which any ticket's alerts change."""
         row = self.conn.execute("select min(wake_at) as at from tickets").fetchone()
@@ -223,6 +304,22 @@ class Store:
              card.ticket_id),
         )  # fmt: skip
         return enqueued
+
+
+def _json(value: Any) -> Jsonb | None:
+    return Jsonb(value) if value is not None else None
+
+
+def _hold(row: dict) -> Hold:
+    return Hold(
+        ticket_id=row["ticket_id"],
+        seq=row["seq"],
+        error=row["error"],
+        attempts=row["attempts"],
+        first_failed_at=row["first_failed_at"],
+        retry_at=row["retry_at"],
+        usage=row["usage"],
+    )
 
 
 def _position(proposals: Sequence[Proposal], proposal: Proposal) -> int:

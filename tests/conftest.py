@@ -11,7 +11,7 @@ import os
 
 import pytest
 
-TABLES = "events, event_proposals, tickets, outbox"
+TABLES = "events, event_proposals, tickets, outbox, holds"
 
 
 @pytest.fixture(scope="session")

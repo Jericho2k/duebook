@@ -6,13 +6,14 @@ the core imports this package.
 
 from .db import connect, migrate
 from .outbox import Claim, Outbox
-from .store import Conflict, Recorded, Store
+from .store import Conflict, Hold, Recorded, Store
 from .worker import Channel, Round, Worker
 
 __all__ = [
     "Channel",
     "Claim",
     "Conflict",
+    "Hold",
     "Outbox",
     "Recorded",
     "Round",
