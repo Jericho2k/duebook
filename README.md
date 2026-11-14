@@ -64,16 +64,68 @@ quadratically.
 A failed extraction raises. It never returns "nothing found", so a message the
 model could not read is retried rather than silently skipped.
 
+## Storage: an event log, a snapshot, an outbox
+
+`duebook.store` puts the pure core on PostgreSQL (psycopg 3, plain SQL
+migrations in `src/duebook/store/migrations`, no ORM).
+
+```python
+from duebook.store import Store, Worker, connect, migrate
+
+conn = connect("postgresql://...")
+migrate(conn)
+store = Store(conn)
+store.record(event, proposals, now=now)   # one transaction, see below
+store.card(ticket_id)                     # the current snapshot
+store.replay(ticket_id, upto=12)          # the card as of event 12, from the log alone
+```
+
+One transaction per event writes the event, the proposals made for it, the
+new card snapshot and any alert that became due. The log is append-only — a
+trigger refuses UPDATE and DELETE — and unique on `(ticket_id, seq)`, so a
+redelivered event is recognised and a *different* event at an occupied
+position is reported as a conflict instead of silently dropped.
+
+The proposals are stored whole, in order, together with which of them the
+reducer refused and why. Replaying them through the same reducer reproduces
+the card exactly, without calling the model again.
+
+### Alerts: nothing lost, nothing repeated
+
+An alert is identified by what it is about (`Notice.key`), and that key is the
+outbox's primary key: deriving the same alert twice queues it once. A worker
+claims notices with `FOR UPDATE SKIP LOCKED`, checks that each is still true
+of the current card, sends it, and records the delivery. A claim is a lease;
+one left behind by a dead worker is taken over when it goes stale.
+
+Sending cannot be made atomic with recording, so a worker that dies between
+the two leaves a notice that will be attempted again under the same key. The
+channel must treat the key as an idempotency key — that is the single
+requirement placed on the outside world.
+
+`tests/test_delivery_crash.py` checks the result two ways. Deterministically:
+a worker is killed before and after every send in a batch. And bluntly: real
+worker processes are killed with SIGKILL at random moments while two of them
+drain 300 notices. A typical run:
+
+    300 notices, 20 SIGKILLs, 36 notices re-claimed after a dead worker,
+    7 repeated attempts absorbed by the key, 0 lost, 0 duplicated
+
+The scheduler does not poll tickets. Each ticket row carries
+`lifecycle.next_wakeup` — the next instant at which its alerts change — and
+the scheduler sleeps until the earliest one.
+
 ## Status
 
-Implemented: the domain core and the extractor, with tests. The extractor is
-unit-tested against recorded responses; `scripts/smoke.py` runs a short ticket
-through a real model and prints the proposals, the refusals, the final card and
-the charged cost.
+Implemented, with tests: the domain core, the extractor, and the PostgreSQL
+event store with its alert outbox, scheduler and delivery worker. The
+extractor is unit-tested against recorded responses; `scripts/smoke.py` runs a
+short ticket through a real model and prints the proposals, the refusals, the
+final card and the charged cost.
 
-Next: PostgreSQL event store and alert outbox, helpdesk adapter, handoff brief
-under a token budget, and the benchmark of simulated tickets with planted
-events for comparison against full-context, rolling-summary and Mem0 baselines.
+Next: the per-ticket pipeline, the handoff brief under a token budget, a
+helpdesk adapter, and the benchmark of simulated tickets with planted events
+for comparison against full-context, rolling-summary and Mem0 baselines.
 
 ## Development
 
@@ -83,6 +135,13 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 
 ```bash
 .venv/bin/pytest -q
+```
+
+The store tests need a PostgreSQL database they may wipe, and are skipped
+without one:
+
+```bash
+TEST_DATABASE_URL=postgresql://user:password@localhost:5432/duebook_test .venv/bin/pytest -q
 ```
 
 ```bash
