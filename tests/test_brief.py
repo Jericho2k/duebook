@@ -106,7 +106,8 @@ def test_a_dispute_shows_both_sides_and_is_not_also_listed_as_a_fact():
 def test_a_change_reads_was_x_now_y_with_both_sources():
     (change,) = next(s for s in brief(story().card).sections if s.key == "changes").lines
     assert change.text == (
-        "plan: было «Базовый» [№2 Анна: «Тариф Базовый»], стало «Про» [№5 Иван: «на тариф Про»]"
+        "account.plan: было «Базовый» [№2 Анна: «Тариф Базовый»], "
+        "стало «Про» [№5 Иван: «на тариф Про»]"
     )
 
 

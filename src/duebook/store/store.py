@@ -33,6 +33,8 @@ from ..lifecycle import AlertPolicy, next_wakeup, notices
 from ..proposals import Proposal
 from ..reducer import Rejection, apply
 from ..reducer import replay as fold
+from ..slots import DEFAULT as DEFAULT_VOCABULARY
+from ..slots import Vocabulary
 from ..temporal import WorkCalendar
 from .codec import decode_card, decode_event, decode_proposals, encode
 from .outbox import Outbox
@@ -78,6 +80,8 @@ class Store:
     #: only under the calendar it was built with.
     cal: WorkCalendar = field(default_factory=WorkCalendar)
     policy: AlertPolicy = field(default_factory=AlertPolicy)
+    #: Like the calendar, part of what a replay depends on.
+    vocab: Vocabulary = DEFAULT_VOCABULARY
     outbox: Outbox = field(init=False)
 
     def __post_init__(self) -> None:
@@ -128,7 +132,7 @@ class Store:
         with self.conn.transaction():
             self.ingest(event, now)
             card = self._lock(event.ticket_id, now)
-            outcome = apply(card, event, proposals, self.cal)
+            outcome = apply(card, event, proposals, self.cal, self.vocab)
             if outcome.replayed:
                 return Recorded(card, replayed=True)
 
@@ -250,7 +254,7 @@ class Store:
 
     def replay(self, ticket_id: str, upto: int | None = None) -> Card:
         """The card rebuilt from the log alone — as of ``upto`` when given."""
-        return fold(ticket_id, self.stream(ticket_id, upto), self.cal)
+        return fold(ticket_id, self.stream(ticket_id, upto), self.cal, self.vocab)
 
     def held(self, ticket_id: str) -> Hold | None:
         row = self.conn.execute("select * from holds where ticket_id = %s", (ticket_id,)).fetchone()

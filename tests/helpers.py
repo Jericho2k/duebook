@@ -43,8 +43,9 @@ START = datetime(2027, 1, 11, 10, 0, tzinfo=MSK)
 
 
 class Ticket:
-    def __init__(self, ticket_id: str = "T-1", start: datetime = START) -> None:
+    def __init__(self, ticket_id: str = "T-1", start: datetime = START, vocab=None) -> None:
         self.card = Card(ticket_id)
+        self.vocab = vocab
         self.now = start
         self.last: Outcome | None = None
         #: Every event with the proposals made for it, for tests that store a ticket.
@@ -81,7 +82,7 @@ class Ticket:
 
     def _apply(self, event, proposals) -> Outcome:
         self.log.append((event, tuple(proposals)))
-        self.last = apply(self.card, event, proposals, CAL)
+        self.last = apply(self.card, event, proposals, CAL, self.vocab)
         self.card = self.last.card
         return self.last
 
@@ -100,7 +101,7 @@ def story() -> Ticket:
         "Заказ 4815 оплатила 5 января, он не пришёл. Тариф Базовый.",
         AssertFact("order.number", "4815", "Заказ 4815"),
         AssertFact("order.status", "не пришёл", "он не пришёл"),
-        AssertFact("plan", "Базовый", "Тариф Базовый"),
+        AssertFact("account.plan", "Базовый", "Тариф Базовый"),
     )
     t.wait(minutes=20)
     t.say(
@@ -123,7 +124,7 @@ def story() -> Ticket:
     t.say(
         IVAN,
         "Перевёл вас на тариф Про. Вернём деньги до пятницы, завтра до 15:00 перезвоню.",
-        AssertFact("plan", "Про", "на тариф Про", change=True),
+        AssertFact("account.plan", "Про", "на тариф Про", change=True),
         MakeCommitment(
             Party.COMPANY, "вернуть деньги", "Вернём деньги до пятницы", due=WeekdayRef(4),
             due_quote="до пятницы",

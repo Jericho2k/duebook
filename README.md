@@ -28,6 +28,20 @@ event stream, so it can be rebuilt, audited, and inspected as of any moment.
 | One side updating its own statement *supersedes*; two sides disagreeing is a *contradiction* | A change is history, a disagreement is an open problem |
 | A promise follows the ticket on handoff and is marked *inherited*; with no assignee it is *orphaned* | Handoff is where promises are lost |
 | The model never computes a date | It emits a structured expression; code resolves it against the message time, timezone and working calendar |
+| The model does not get to name a fact's slot freely | One thing must have one slot, or an update looks like a second fact and a disagreement goes unnoticed |
+
+## One name for one thing
+
+In live runs the model filed a refund under `order.refund` in one message and
+`order.refund_status` in the next. Every rule about facts compares slots, so
+the update was stored as a second, unrelated fact. `duebook.slots` normalises
+the proposed name before the reducer compares anything: spelling is folded
+(`orderStatus`, `Order-Status`), known aliases lead to a canonical slot from a
+controlled vocabulary (`order.refund_status` -> `refund.status`), and a name
+outside the vocabulary joins the slot the card already has for the same thing
+(`warranty_info` -> `warranty`). The vocabulary is also written into the
+model's instructions. It is open on purpose: an unforeseen slot is kept, it
+just cannot split in two. Pass your own `Vocabulary` for another domain.
 
 ## Deadlines with a confidence level
 
@@ -155,14 +169,14 @@ facts, what changed, steps that failed, open questions.
     Тикет T-1 на вт 12.01 12:00 · ответственный: Ольга [событие №7] · учтено событий: 7
 
     Просрочено и на подходе:
-    - осталось 3 ч (срок до вт 12.01 15:00); агент: перезвонить; отвечает Ольга; раньше отвечал: Иван [№5 Иван: «завтра до 15:00 перезвоню»]
     - ПРОСРОЧЕНО на 12 ч (срок был до конца пн 11.01); клиент: прислать скриншот [№4 Анна: «Пришлю скриншот сегодня»]
+    - осталось 3 ч (срок до вт 12.01 15:00); агент: перезвонить; отвечает Ольга; раньше отвечал: Иван [№5 Иван: «завтра до 15:00 перезвоню»]
 
     Открытые противоречия:
     - order.status: клиент: «не пришёл» [№2 Анна: «он не пришёл»] — компания: «вручён» [№3 Иван: «заказ вручён»]
 
     Что изменилось:
-    - plan: было «Базовый» [№2 Анна: «Тариф Базовый»], стало «Про» [№5 Иван: «на тариф Про»]
+    - account.plan: было «Базовый» [№2 Анна: «Тариф Базовый»], стало «Про» [№5 Иван: «на тариф Про»]
 
 Every line ends with the message it rests on: its number in the ticket, the
 author and the quoted words. Under a token budget the brief loses whole

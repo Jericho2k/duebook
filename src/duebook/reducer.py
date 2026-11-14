@@ -14,6 +14,10 @@ The extractor proposes; this decides. A proposal is admitted only if
   debtor cannot verify or cancel their own obligation;
 * it is consistent with what the card already holds.
 
+It also decides what a proposal is ABOUT. A fact's slot is normalised against a
+controlled vocabulary and the slots already on the card, so that a model
+naming one thing two ways does not split it into two facts.
+
 Everything refused is returned with a reason rather than dropped, because a
 rejection rate is a measurement: it is how a drifting extractor gets noticed.
 """
@@ -51,6 +55,8 @@ from .proposals import (
     ResolveCommitment,
     SetStepOutcome,
 )
+from .slots import DEFAULT as DEFAULT_VOCABULARY
+from .slots import Vocabulary
 from .temporal import WorkCalendar, parse_due, resolve
 
 
@@ -103,6 +109,7 @@ def apply(
     event: Event,
     proposals: Sequence[Proposal] = (),
     cal: WorkCalendar | None = None,
+    vocab: Vocabulary | None = None,
 ) -> Outcome:
     if event.ticket_id != card.ticket_id:
         raise ValueError(f"event {event.id} belongs to ticket {event.ticket_id}")
@@ -112,6 +119,7 @@ def apply(
         raise OutOfOrder(f"expected seq {card.last_seq + 1}, got {event.seq}")
 
     cal = cal or WorkCalendar()
+    vocab = vocab or DEFAULT_VOCABULARY
     card = replace(card, last_seq=event.seq)
     rejections: list[Rejection] = []
 
@@ -131,7 +139,7 @@ def apply(
             continue
         source = Source(event.id, event.seq, event.author.id, event.author.side, proposal.quote)
         new_id = f"{event.id}#{index}"
-        card, reasons = _admit(card, event, proposal, source, new_id, text, cal)
+        card, reasons = _admit(card, event, proposal, source, new_id, text, cal, vocab)
         rejections += [Rejection(proposal, reason) for reason in reasons]
 
     return Outcome(card, tuple(rejections))
@@ -141,11 +149,12 @@ def replay(
     ticket_id: str,
     stream: Iterable[tuple[Event, Sequence[Proposal]]],
     cal: WorkCalendar | None = None,
+    vocab: Vocabulary | None = None,
 ) -> Card:
     """Fold a whole ticket. Stop the stream early to get the card as of that point."""
     card = Card(ticket_id)
     for event, proposals in stream:
-        card = apply(card, event, proposals, cal).card
+        card = apply(card, event, proposals, cal, vocab).card
     return card
 
 
@@ -193,10 +202,11 @@ def _admit(
     new_id: str,
     text: str,
     cal: WorkCalendar,
+    vocab: Vocabulary,
 ) -> tuple[Card, list[Reason]]:
     match proposal:
         case AssertFact():
-            return _assert_fact(card, event, proposal, source, new_id)
+            return _assert_fact(card, event, proposal, source, new_id, vocab)
         case MakeCommitment():
             return _make_commitment(card, event, proposal, source, new_id, text, cal)
         case ResolveCommitment():
@@ -215,9 +225,11 @@ def _admit(
 
 
 def _assert_fact(
-    card: Card, event: MessagePosted, p: AssertFact, source: Source, new_id: str
+    card: Card, event: MessagePosted, p: AssertFact, source: Source, new_id: str, vocab: Vocabulary
 ) -> tuple[Card, list[Reason]]:
-    slot, value = _norm(p.slot), p.value.strip()
+    # The proposed name is not trusted to be the name used last time: see slots.
+    slot = vocab.normalise(p.slot, {f.slot for f in card.facts})
+    value = p.value.strip()
     if not slot or not value:
         return card, [Reason.EMPTY]
 

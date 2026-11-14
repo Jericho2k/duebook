@@ -86,8 +86,10 @@ def test_replay_can_stop_at_any_point_in_the_ticket(store):
     persist(store, ticket)
     as_of_3 = store.replay("T-1", upto=3)
     assert as_of_3.last_seq == 3
-    assert [f.value for f in as_of_3.current_facts() if f.slot == "plan"] == ["Базовый"]
-    assert [f.value for f in store.replay("T-1").current_facts() if f.slot == "plan"] == ["Про"]
+    assert [f.value for f in as_of_3.current_facts() if f.slot == "account.plan"] == ["Базовый"]
+    assert [f.value for f in store.replay("T-1").current_facts() if f.slot == "account.plan"] == [
+        "Про"
+    ]
 
 
 def test_refused_proposals_are_kept_with_the_reason_and_replay_refuses_them_again(store, conn):

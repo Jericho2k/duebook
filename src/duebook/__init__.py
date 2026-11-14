@@ -4,6 +4,7 @@ from .card import Card, Commitment, CommitmentState, Confidence, Fact, Party, St
 from .events import Actor, AssigneeChanged, MessagePosted, Role, Side, StatusChanged
 from .lifecycle import AlertPolicy, Notice, NoticeKind, Status, next_wakeup, notices, status_at
 from .reducer import Outcome, Reason, Rejection, apply, replay
+from .slots import Vocabulary
 from .temporal import WorkCalendar, parse_due, resolve
 
 __all__ = [
@@ -27,6 +28,7 @@ __all__ = [
     "Status",
     "StatusChanged",
     "StepOutcome",
+    "Vocabulary",
     "WorkCalendar",
     "apply",
     "next_wakeup",
