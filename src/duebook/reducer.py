@@ -118,7 +118,7 @@ def apply(
     if isinstance(event, AssigneeChanged):
         card = _hand_over(card, event)
     elif isinstance(event, StatusChanged):
-        card = replace(card, status=event.current)
+        card = replace(card, status=event.current, status_seq=event.seq)
 
     if not isinstance(event, MessagePosted):
         rejections += [Rejection(p, Reason.NOT_A_MESSAGE) for p in proposals]
@@ -177,6 +177,7 @@ def _hand_over(card: Card, event: AssigneeChanged) -> Card:
     return replace(
         card,
         assignee=event.current,
+        assignee_seq=event.seq,
         commitments=tuple(move(c) for c in card.commitments),
     )
 

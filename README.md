@@ -121,8 +121,8 @@ the scheduler sleeps until the earliest one.
 from duebook.pipeline import Pipeline
 
 pipeline = Pipeline(store, extractor)
-handled = pipeline.handle(event)   # ingest -> extract -> apply -> persist -> queue alerts
-pipeline.retry_held()              # tickets whose failed extraction is due for another try
+handled = pipeline.handle(event)  # ingest -> extract -> apply -> persist -> queue alerts
+pipeline.retry_held()  # tickets whose failed extraction is due for another try
 ```
 
 The event is stored first, so it cannot be lost and the helpdesk can be
@@ -136,17 +136,52 @@ is recorded for it and nothing after it is applied; the hold is stored with
 the error, the cost of the failed calls and a retry time that backs off. Other
 tickets are not affected.
 
+## The handoff brief
+
+```python
+from duebook.brief import compose
+
+brief = compose(card, now, budget=600, names={"agent-olga": "Ольга"})
+print(brief.text)
+brief.dropped  # what did not fit, by section, with counts
+```
+
+A deterministic rendering of the card, in Russian, for the operator taking a
+ticket over. No model writes it. It is ordered by what hurts most if missed:
+promises broken or about to be, promises that changed hands or have nobody
+answerable, the other unresolved promises, open contradictions, current
+facts, what changed, steps that failed, open questions.
+
+    Тикет T-1 на вт 12.01 12:00 · ответственный: Ольга [событие №7] · учтено событий: 7
+
+    Просрочено и на подходе:
+    - осталось 3 ч (срок до вт 12.01 15:00); агент: перезвонить; отвечает Ольга; раньше отвечал: Иван [№5 Иван: «завтра до 15:00 перезвоню»]
+    - ПРОСРОЧЕНО на 12 ч (срок был до конца пн 11.01); клиент: прислать скриншот [№4 Анна: «Пришлю скриншот сегодня»]
+
+    Открытые противоречия:
+    - order.status: клиент: «не пришёл» [№2 Анна: «он не пришёл»] — компания: «вручён» [№3 Иван: «заказ вручён»]
+
+    Что изменилось:
+    - plan: было «Базовый» [№2 Анна: «Тариф Базовый»], стало «Про» [№5 Иван: «на тариф Про»]
+
+Every line ends with the message it rests on: its number in the ticket, the
+author and the quoted words. Under a token budget the brief loses whole
+sections from the bottom of that order and ends by naming them — "Не
+поместилось в лимит 330 токенов: что известно сейчас (3), открытые вопросы
+(1)" — so a short brief is never mistaken for a complete one. Tokens are
+estimated pessimistically for Russian; pass a real tokenizer's counter as
+`count` when the exact figure matters.
+
 ## Status
 
 Implemented, with tests: the domain core, the extractor, and the PostgreSQL
-event store with its alert outbox, scheduler and delivery worker, and the
-per-ticket pipeline that ties them together. The
+event store with its alert outbox, scheduler and delivery worker, the
+per-ticket pipeline that ties them together, and the handoff brief. The
 extractor is unit-tested against recorded responses; `scripts/smoke.py` runs a
 short ticket through a real model and prints the proposals, the refusals, the
 final card and the charged cost.
 
-Next: the handoff brief under a token budget, a
-helpdesk adapter, and the benchmark of simulated tickets with planted events
+Next: a helpdesk adapter and the benchmark of simulated tickets with planted events
 for comparison against full-context, rolling-summary and Mem0 baselines.
 
 ## Development
