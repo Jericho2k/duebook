@@ -19,7 +19,7 @@ from ..events import Side
 from .deadlines import classify
 from .experiment import table
 from .figures import line_chart
-from .generate import SPLITS
+from .generate import SPLITS, CloseCase
 from .methods import MethodRun
 from .result import Checkpoint, Moment, Promise, PromiseStatus, Snapshot
 
@@ -234,7 +234,8 @@ def main() -> None:
     sections = (("Accuracy (end of ticket)", ACCURACY),
                 ("Context (every handoff and the end)", CONTEXT), ("Cost", COST))  # fmt: skip
     if "guard_effects" in result:
-        sections = (("Closes (end of ticket)", CLOSES), *sections)
+        cases = [case.value for case in CloseCase if case.value in s["methods"][s["reference"]]]
+        sections = (("Closes (end of ticket)", CLOSES + cases), *sections)
     for title, keys in sections:
         print(f"### {title}\n\n{table(s, keys)}\n")
     if "guard_effects" in result:

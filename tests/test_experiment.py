@@ -23,7 +23,7 @@ from duebook.bench.experiment import (
     to_json,
     unguarded,
 )
-from duebook.bench.generate import SPLITS
+from duebook.bench.generate import SPLITS, CloseCase
 from duebook.bench.meter import Ledger, Tally
 from duebook.bench.methods import EventMemory, MethodRun
 from duebook.bench.result import PromiseStatus, checkpoints
@@ -74,6 +74,27 @@ def test_a_worse_method_is_compared_with_a_paired_interval():
     assert worse["false_alerts_per_ticket"]["value"] > 0
     rendered = table(summary, ["status_accuracy", "false_alerts_per_ticket"])
     assert rendered.count("\n") == 3 and "worse" in rendered
+
+
+@pytest.mark.parametrize("kind", CloseCase)
+def test_a_wrong_close_case_outcome_lowers_only_its_own_case_metric(kind):
+    ticket = SPLITS["dev3"].tickets()[0]
+    good = oracle_run(ticket)
+    case = next(case for case in ticket.gold.close_cases if case.kind is kind)
+    end = good.snapshots[-1]
+    # Close the still-owed rival for rescue, choose an ambiguous twin, or
+    # drop the callback altogether. Each fails to show what is still owed.
+    owed = next(seq for seq in case.promise_seqs if seq != case.target_seq)
+    promises = tuple(
+        replace(p, status=PromiseStatus.FULFILLED, closed_seq=case.seq) if p.seq == owed else p
+        for p in end.promises
+        if kind is not CloseCase.WRONG_THING or p.seq != owed
+    )
+    bad = replace(good, method="full_context", snapshots=(replace(end, promises=promises),))
+    rows = summarise([ticket], [good, bad], boot=1)["methods"]
+    for metric in CloseCase:
+        assert rows["event_memory"][metric.value]["value"] == 1.0
+        assert rows["full_context"][metric.value]["value"] == float(metric is not kind)
 
 
 def test_a_record_holds_what_the_method_said_and_is_plain_json():

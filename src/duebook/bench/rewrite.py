@@ -92,6 +92,8 @@ class Rewriter:
 
     def text(self, event: MessagePosted, anchors: tuple[str, ...]) -> str:
         """One message in the writer's words, or as it was if the rewrite is unusable."""
+        if event.text in anchors:
+            return event.text
         listed = "\n".join(f"- {a}" for a in anchors) or "- (none)"
         completion = self.model.complete_json(
             [

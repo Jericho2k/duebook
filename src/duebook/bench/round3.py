@@ -53,6 +53,7 @@ from ..temporal import WorkCalendar
 from .experiment import (
     CACHE,
     ROUND2,
+    ROUND3,
     WRITER,
     guard_effects,
     project,
@@ -70,7 +71,6 @@ from .result import checkpoints
 from .run import Replayed, fold, refold, snapshots
 from .score import score_ticket
 
-ROUND3 = Path("results/round3")
 #: Round 2's frozen dev run: the proposals C and B replay.
 RECORDED = ROUND2 / "dev2-4.json"
 #: What every live model call of round 3 may cost together.

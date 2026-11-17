@@ -6,13 +6,16 @@ import argparse
 import os
 
 from ..extract import ChatClient, Extractor
-from . import Oracle, Rewriter, evaluate, generate, require_different_models
+from . import SPLITS, Oracle, Rewriter, evaluate, generate, require_different_models
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m duebook.bench", description=__doc__)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--tickets", type=int, default=50)
+    parser.add_argument(
+        "--split", choices=SPLITS, help="fixed split instead of --seed and --tickets"
+    )
     parser.add_argument("--model", help="extracting model; omit to run the oracle self-check")
     parser.add_argument(
         "--writer", help="model that rewrites the tickets; must differ from --model"
@@ -20,7 +23,7 @@ def main() -> None:
     parser.add_argument("--max-usd", type=float, default=0.5, help="stop once this was charged")
     args = parser.parse_args()
 
-    tickets = generate(args.seed, args.tickets)
+    tickets = SPLITS[args.split].tickets() if args.split else generate(args.seed, args.tickets)
     if not args.model:
         print("oracle self-check (no model called)")
         print(evaluate(tickets, Oracle.of(tickets)).summary())
