@@ -99,6 +99,7 @@ def recorded(path: Path = RECORDED) -> dict[str, dict[str, Any]]:
             "seconds": run["ingest_seconds"],
             "providers": detail.get("providers", {}),
             "failure": run["failure"],
+            "source": str(path),
         }
     return out
 
@@ -117,7 +118,7 @@ def replay_c(ticket: SimTicket, rec: dict[str, Any], cal: WorkCalendar) -> Metho
     """Round 2's proposals through today's reducer: no model call."""
     folded = refold(ticket, rec["proposals"], Guards(), cal)
     return _run("C", ticket, folded, rec["usage"], rec["seconds"],
-                {"providers": rec["providers"], "replayed_from": str(RECORDED)})  # fmt: skip
+                {"providers": rec["providers"], "replayed_from": rec.get("source")})  # fmt: skip
 
 
 def replay_b(
@@ -132,7 +133,7 @@ def replay_b(
     spent = meter.tally.usage
     detail = {
         "providers": rec["providers"],
-        "replayed_from": str(RECORDED),
+        "replayed_from": rec.get("source"),
         "verifier": {"model": verifier.model, "reasoning": getattr(verifier, "reasoning", None),
                      "usage": asdict(spent), "usd": spent.usd(),
                      "providers": meter.tally.providers,
@@ -250,6 +251,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--out", type=Path, default=ROUND3 / "dev2.json")
     parser.add_argument("--label", default="")
+    parser.add_argument("--recorded", type=Path, default=RECORDED,
+                        help="the round-2 dev run whose proposals C and B replay")
     args = parser.parse_args(argv)
 
     configs = [c for c in args.configs.split(",") if c]
@@ -265,7 +268,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     cache = ResponseCache(CACHE)
     split = SPLITS["dev2"]
     tickets, _ = rewritten(split, WRITER, ledger, ROUND2 / "tickets")  # cached: no call
-    rec = recorded()
+    rec = recorded(args.recorded)
     needs = target_quotes(rec)
     print(f"recorded round-2 proposals: {needs}", file=sys.stderr)
 
@@ -330,7 +333,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "split": split.name, "seed": split.seed, "model": DEFAULT_MODEL,
         "configs": {k: CONFIGS[k] for k in configs},
         "started": started.isoformat(), "finished": datetime.now().astimezone().isoformat(),
-        "recorded_from": str(RECORDED), "recorded_target_quotes": needs,
+        "recorded_from": str(args.recorded), "recorded_target_quotes": needs,
         "spent_usd": {"total": ledger.usd(), "reused_from_cache": ledger.reused.usd() or 0.0},
         "projection": projections,
         "guard_effects": {c: guard_effects(tickets, [r for r in runs if r.method == c])

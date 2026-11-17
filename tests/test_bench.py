@@ -455,3 +455,6 @@ def test_round_two_splits_use_fresh_seeds():
     old = {SPLITS[n].seed for n in ("dev", "test", "long")}
     assert SPLITS["dev2"].seed not in old and SPLITS["test2"].seed not in old
     assert SPLITS["test2"].count >= 20 and SPLITS["test2"].profile is MAIN
+    fresh = SPLITS["test3"]
+    assert fresh.seed not in old | {SPLITS["dev2"].seed, SPLITS["test2"].seed}
+    assert fresh.count == 20 and fresh.profile is MAIN
