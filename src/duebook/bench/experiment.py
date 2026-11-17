@@ -64,7 +64,7 @@ from .generate import MAIN, MAIN2, SPLITS, CloseCase, SimTicket, Split
 from .meter import Ledger, Meter, OverBudget
 from .methods import EventMemory, Method, MethodRun
 from .result import Snapshot, checkpoints
-from .rewrite import Rewriter, require_different_models
+from .rewrite import Rewriter, require_different_models, with_rewritten_text
 from .run import refold, snapshots
 from .score import Score, TicketScore, match, same_deadline, score_ticket
 
@@ -83,6 +83,10 @@ UNGUARDED_RUN = "event_memory_unguarded"
 
 
 # --------------------------------------------------------------- tickets ----
+
+
+def results_directory(split: Split) -> Path:
+    return {MAIN: ROUND2, MAIN2: ROUND3}.get(split.profile, RESULTS)
 
 
 def rewritten(
@@ -124,13 +128,7 @@ def rewritten(
                   "profile": split.profile.name, "writer": writer, "tickets": out}  # fmt: skip
         cache.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(stored, ensure_ascii=False, indent=1))
-    result = []
-    for t in tickets:
-        texts = stored["tickets"][t.ticket_id]["texts"]
-        events = tuple(
-            replace(e, text=texts[e.id]) if isinstance(e, MessagePosted) else e for e in t.events
-        )
-        result.append(replace(t, events=events))
+    result = [with_rewritten_text(t, stored["tickets"][t.ticket_id]["texts"]) for t in tickets]
     return result, stored
 
 
@@ -590,7 +588,7 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     require_different_models(args.writer, args.model)
     split = SPLITS[args.split]
-    results = args.results or {MAIN: ROUND2, MAIN2: ROUND3}.get(split.profile, RESULTS)
+    results = args.results or results_directory(split)
     out = args.out or results / f"{split.name}.json"
     if split.name.startswith("test") and out.exists():
         raise SystemExit(f"{out} exists: the test split is run once")

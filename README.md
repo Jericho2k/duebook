@@ -288,6 +288,7 @@ python -m duebook.bench --split dev3                 # self-check a fixed split
 python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
 python -m duebook.bench.round3 --max-usd 0.2   # round 3: dev only, configurations A, B, C
+python -m duebook.bench.review --split test2  # regenerate the human spot-check
 ```
 
 `duebook.bench` builds simulated tickets the other way round: the events are
@@ -355,6 +356,10 @@ Tickets are rewritten by a different model than the one that reads them
 span, turns into something other than one message, or adds a number, a
 question, a negation or a promise-like verb, is discarded and the template
 text kept.
+
+The [test2 spot-check packet](docs/review/test2-spotcheck.md) samples four
+archived rewrites. Its answer key follows all four conversations. The review
+command uses archived text when available and generated text otherwise.
 
 The experiment runner keeps every run inside a session budget: answers are
 cached on disk, every run logs its charge to `spend.jsonl`, and a run first
