@@ -29,6 +29,8 @@ follow, so a provider's prompt cache can serve the fixed part.
 
 from __future__ import annotations
 
+import logging
+from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -46,9 +48,10 @@ from ..proposals import (
 from ..temporal import WorkCalendar
 from .client import DEFAULT_MODEL, ChatClient, ModelError
 from .cost import Usage
-from .extractor import Extraction, JsonModel, Reader
+from .extractor import Extraction, JsonModel, Reader, VerifierUsage
 
 DEFAULT_VERIFIER_REASONING = "low"
+log = logging.getLogger(__name__)
 
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -143,8 +146,8 @@ class Verifier:
 
     def verify(
         self, target: Commitment, proposal: Proposal, event: MessagePosted
-    ) -> tuple[Verification, Usage]:
-        """The verdict, and what asking for it cost (failed calls included)."""
+    ) -> tuple[Verification, Usage, str | None]:
+        """The verdict, its cost and the provider that answered, if known."""
         messages = [
             {"role": "system", "content": VERIFIER_PROMPT},
             {"role": "user", "content": render_request(target, proposal, event, self.cal)},
@@ -153,17 +156,19 @@ class Verifier:
         try:
             completion = self.model.complete_json(messages, VERIFY_SCHEMA, name="verdict")
         except ModelError as error:  # fail safe: as if no verifier had been asked
-            spent = getattr(error, "usage", None) or Usage()
-            return Verification(Verdict.UNSURE, model=name,
-                                error=f"{type(error).__name__}: {error}"), spent  # fmt: skip
+            failure = Verification(Verdict.UNSURE, model=name, error=f"ModelError: {error}")
+            return failure, error.usage, error.provider
         try:
             verdict = Verdict(completion.data["verdict"])
-            evidence = str(completion.data.get("evidence_quote") or "").strip()
+            evidence = completion.data["evidence_quote"]
+            if not isinstance(evidence, str):
+                raise TypeError("evidence_quote must be text")
         except (KeyError, ValueError, TypeError) as error:
-            unreadable = Verification(Verdict.UNSURE, model=name,
-                                      error=f"unreadable verdict: {error}")  # fmt: skip
-            return unreadable, completion.usage
-        return Verification(verdict, evidence, model=name), completion.usage
+            verification = Verification(Verdict.UNSURE, model=name,
+                                        error=f"unreadable verdict: {error}")  # fmt: skip
+        else:
+            verification = Verification(verdict, evidence.strip(), model=name)
+        return verification, completion.usage, completion.provider
 
 
 @dataclass(slots=True)
@@ -172,8 +177,7 @@ class VerifyingReader:
 
     Only a proposal that would close, cancel or replace a commitment that is
     open on the card is put to the verifier; one aimed at an unknown or
-    already closed commitment is refused by the reducer anyway. The verifier's
-    cost is added to the extraction's.
+    already closed commitment is refused by the reducer anyway.
     """
 
     reader: Reader
@@ -184,13 +188,23 @@ class VerifyingReader:
         if not isinstance(event, MessagePosted):
             return extraction
         spent, proposals = Usage(), []
+        providers: Counter[str] = Counter()
+        failures = 0
         for p in extraction.proposals:
             target = card.commitment(target_of(p) or "")
             if target is not None and target.unresolved and p.verification is None:
-                verdict, cost = self.verifier.verify(target, p, event)
+                verdict, cost, provider = self.verifier.verify(target, p, event)
                 p, spent = replace(p, verification=verdict), spent + cost
+                providers[provider or "unknown"] += 1
+                if verdict.error:
+                    failures += 1
+                    log.warning("verifier failed for ticket %s event %s target %s (%s)",
+                                event.ticket_id, event.seq, target.id, verdict.model)  # fmt: skip
             proposals.append(p)
-        return replace(extraction, proposals=tuple(proposals), usage=extraction.usage + spent)
+        if not providers:
+            return extraction
+        usage = VerifierUsage(providers.total(), failures, spent, dict(providers))
+        return replace(extraction, proposals=tuple(proposals), verifier_usage=usage)
 
 
 def _model_name(model: object) -> str:

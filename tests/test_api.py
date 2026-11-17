@@ -242,7 +242,10 @@ def test_status_reports_the_backlog_and_the_hold(client, store):
 def test_health_counts_pending_alerts_and_held_tickets(client, store):
     persist(store, promise("T-1"), now=START + timedelta(hours=3))
     data = client.get("/health").json()
-    assert data == {"database": "ok", "pending_outbox": 1, "held_tickets": 0}
+    assert data == {
+        "database": "ok", "pending_outbox": 1, "held_tickets": 0,
+        "verifier_calls": 0, "verifier_failures": 0,
+    }  # fmt: skip
     assert data["pending_outbox"] == store.outbox.pending()
 
 

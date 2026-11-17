@@ -205,12 +205,14 @@ class Pipeline:
                     )
                     return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
 
-                spent += extraction.usage
+                spent += extraction.total_usage
                 self.store.record(
                     event,
                     extraction.proposals,
                     now=now,
                     usage=asdict(earlier + extraction.usage),
+                    verifier_usage=asdict(extraction.verifier_usage)
+                    if extraction.verifier_usage is not None else None,
                     malformed=[
                         {"section": m.section, "error": m.error} for m in extraction.malformed
                     ],

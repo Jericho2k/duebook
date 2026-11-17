@@ -39,6 +39,15 @@ class Reader(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class VerifierUsage:
+    #: One call per proposal, including failures that report no usage.
+    calls: int
+    failures: int
+    usage: Usage
+    providers: dict[str, int]
+
+
+@dataclass(frozen=True, slots=True)
 class Extraction:
     proposals: tuple[Proposal, ...] = ()
     #: Entries the model produced that could not be read. Counted, not hidden.
@@ -46,6 +55,11 @@ class Extraction:
     usage: Usage = field(default_factory=Usage)
     #: Why earlier model attempts were discarded, if any were.
     retried: tuple[str, ...] = ()
+    verifier_usage: VerifierUsage | None = None
+
+    @property
+    def total_usage(self) -> Usage:
+        return self.usage if self.verifier_usage is None else self.usage + self.verifier_usage.usage
 
 
 @dataclass(slots=True)

@@ -170,9 +170,10 @@ def fold(
             failure = (ticket.ticket_id, event.seq, f"{type(error).__name__}: {error}")
             break
         seconds += time.perf_counter() - started
-        spent += extraction.usage
-        if extraction.usage.calls:
-            prompts.append((event.seq, extraction.usage.prompt_tokens))
+        usage = extraction.total_usage
+        spent += usage
+        if usage.calls:
+            prompts.append((event.seq, usage.prompt_tokens))
         read.append(extraction.proposals)
         outcome = apply(card, event, extraction.proposals, cal, guards=guards)
         refused += [_refused(card, event.seq, r.proposal, r.reason)

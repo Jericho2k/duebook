@@ -599,8 +599,8 @@ def test_only_proposals_that_would_close_an_open_promise_are_put_to_the_verifier
     got_fact, got_close, got_stale = extraction.proposals
     assert got_fact == fact and got_stale.verification is None
     assert got_close.verification == Verification(Verdict.YES, "всё получила", "stub/judge")
-    # The verifier's cost is the extraction's too.
-    assert extraction.usage.calls == 2 and extraction.usage.reasoning_tokens == 300
+    assert extraction.usage.calls == 1 and extraction.usage.reasoning_tokens == 0
+    assert extraction.total_usage.calls == 2 and extraction.total_usage.reasoning_tokens == 300
     out = apply(t.card, msg, extraction.proposals, CAL)
     assert t.card.commitment(refund).unresolved
     assert out.card.commitment(refund).state is CommitmentState.FULFILLED
@@ -612,7 +612,12 @@ def test_only_proposals_that_would_close_an_open_promise_are_put_to_the_verifier
 
 @pytest.mark.parametrize(
     "answer",
-    [ModelError("timeout, not retried", Usage(1, 400, 0)), {"verdict": "maybe"}, {"nothing": 1}],
+    [
+        ModelError("timeout, not retried"),
+        ModelError("http 503"),
+        {"verdict": "maybe"},
+        {"verdict": "yes", "evidence_quote": 7},
+    ],
 )
 def test_a_verifier_that_fails_or_garbles_counts_as_unsure(answer):
     t = Ticket()

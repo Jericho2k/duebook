@@ -118,10 +118,13 @@ def settings_for(model: str, reasoning: str | None = None) -> ModelSettings:
 class ModelError(RuntimeError):
     """The model could not be reached or did not return usable content."""
 
-    def __init__(self, message: str, usage: Usage | None = None) -> None:
+    def __init__(
+        self, message: str, usage: Usage | None = None, *, provider: str | None = None
+    ) -> None:
         super().__init__(message)
         #: Whatever was spent before giving up. A failed call is still billed.
         self.usage = usage or Usage()
+        self.provider = provider
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,6 +240,7 @@ class ChatClient:
                                   provider=stored.get("provider"))  # fmt: skip
 
         spent = Usage()
+        provider = None
         problems: list[str] = []
         left = {"http": self.http_retries, "content": self.content_retries}
 
@@ -245,7 +249,8 @@ class ChatClient:
             problems.append(problem)
             if left[kind] <= 0:
                 tried = "; ".join(problems)
-                raise ModelError(f"gave up after {len(problems)} attempts: {tried}", spent)
+                raise ModelError(f"gave up after {len(problems)} attempts: {tried}",
+                                 spent, provider=provider)  # fmt: skip
             left[kind] -= 1
             if kind == "http":
                 self.sleep(2.0)
@@ -255,26 +260,38 @@ class ChatClient:
                 response = self._post(body)
             except httpx.TimeoutException as error:
                 raise ModelError(f"timeout, not retried (it may have been billed): {error!r}",
-                                 spent) from error  # fmt: skip
+                                 spent, provider=provider) from error  # fmt: skip
             except httpx.ConnectError as error:
                 again("http", f"connect: {error!r}")
                 continue
-            except httpx.TransportError as error:
+            except httpx.RequestError as error:
                 # The request went out; an answer may have been generated.
-                raise ModelError(f"transport, not retried: {error!r}", spent) from error
+                raise ModelError(f"transport, not retried: {error!r}",
+                                 spent, provider=provider) from error  # fmt: skip
             status = response.status_code
             if status == 429 or status >= 500:
                 again("http", f"http {status}")
                 continue
             if status >= 400:
-                raise ModelError(f"http {status}: {response.text[:300]}", spent)
+                raise ModelError(f"http {status}: {response.text[:300]}",
+                                 spent, provider=provider)  # fmt: skip
 
             try:
                 payload = response.json()
             except ValueError:
                 again("content", "response body is not JSON")
                 continue
-            spent += _usage(payload)
+            if not isinstance(payload, dict):
+                again("content", "response body is not a JSON object")
+                continue
+            host = payload.get("provider")
+            if isinstance(host, str) and host:
+                provider = host
+            try:
+                spent += _usage(payload)
+            except (AttributeError, TypeError, ValueError, OverflowError):
+                again("content", "response usage is unreadable")
+                continue
             try:
                 content = payload["choices"][0]["message"]["content"]
             except (KeyError, IndexError, TypeError):
@@ -283,6 +300,9 @@ class ChatClient:
             if not content:
                 # Typically a reasoning model that spent its budget thinking.
                 again("content", "empty content")
+                continue
+            if not isinstance(content, str):
+                again("content", "message content is not text")
                 continue
             try:
                 data = json.loads(_strip_fence(content))
@@ -294,7 +314,7 @@ class ChatClient:
                 continue
             if cache is not None:
                 cache.put(body, payload)
-            return Completion(data, spent, tuple(problems), provider=payload.get("provider"))
+            return Completion(data, spent, tuple(problems), provider=provider)
 
     def _post(self, body: dict[str, Any]) -> httpx.Response:
         http = self.http or httpx

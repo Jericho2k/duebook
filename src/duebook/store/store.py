@@ -123,6 +123,7 @@ class Store:
         *,
         now: datetime,
         usage: Any = None,
+        verifier_usage: Any = None,
         malformed: Any = None,
     ) -> Recorded:
         """Apply one event and persist everything that follows from it.
@@ -143,10 +144,10 @@ class Store:
             ]
             self.conn.execute(
                 "insert into event_proposals"
-                " (ticket_id, seq, proposals, rejections, usage, malformed, applied_at)"
-                " values (%s, %s, %s, %s, %s, %s, %s)",
+                " (ticket_id, seq, proposals, rejections, usage, verifier_usage, malformed,"
+                " applied_at) values (%s, %s, %s, %s, %s, %s, %s, %s)",
                 (event.ticket_id, event.seq, Jsonb(encode(tuple(proposals))), Jsonb(refused),
-                 _json(usage), _json(malformed), now),
+                 _json(usage), _json(verifier_usage), _json(malformed), now),
             )  # fmt: skip
             # The event is read at last: whatever held the ticket here is over.
             self.conn.execute(
@@ -326,6 +327,17 @@ class Store:
             "select 1 from tickets where ticket_id = %s", (ticket_id,)
         ).fetchone()
         return row is not None
+
+    def verifier_counts(self, ticket_id: str | None = None) -> dict[str, int]:
+        """Verifier calls and failures on applied events, for one ticket or all."""
+        query = (
+            "select coalesce(sum((verifier_usage->>'calls')::integer), 0) as verifier_calls,"
+            " coalesce(sum((verifier_usage->>'failures')::integer), 0) as verifier_failures"
+            " from event_proposals where verifier_usage is not null"
+        )
+        if ticket_id is not None:
+            return self.conn.execute(query + " and ticket_id = %s", (ticket_id,)).fetchone()
+        return self.conn.execute(query).fetchone()
 
     def authors(self, ticket_id: str) -> dict[str, str]:
         """Display names of the ticket's message authors, as their latest message gives them."""
