@@ -135,7 +135,7 @@ class GraphitiMemory:
                                       read.snapshot.disputes, failure))  # fmt: skip
                 malformed += read.malformed
                 kept.append({"seq": cp.seq, "facts": len(facts), "entities": len(entities),
-                             "answer": completion.data})  # fmt: skip
+                             "listing": listing, "answer": completion.data})  # fmt: skip
             loop.run(graph.close())
         detail = {"malformed": malformed, "checkpoints": kept, "episodes": len(seq_of),
                   "cache_hits": meter.tally.cache_hits}  # fmt: skip

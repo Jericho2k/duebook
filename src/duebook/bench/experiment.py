@@ -237,8 +237,10 @@ def sample_of(ticket: SimTicket, events: int) -> SimTicket:
 #: Mem0's store grow, and later checkpoint answers list more. Measured on
 #: round 2's test split against a 20-event sample: event memory 1.5, full
 #: context 0.7, rolling summary 3.4 (it was projected at 2.0 and three of its
-#: four tickets ran into the cap), Mem0 2.4.
-GROWTH = {"event_memory": 1.6, "full_context": 1.5, "rolling_summary": 3.5, "mem0": 2.5}
+#: four tickets ran into the cap), Mem0 2.4. Graphiti, on two dev2 tickets
+#: against a 30-event sample: 1.1.
+GROWTH = {"event_memory": 1.6, "full_context": 1.5, "rolling_summary": 3.5, "mem0": 2.5,
+          "graphiti": 1.2}  # fmt: skip
 
 
 def project(
