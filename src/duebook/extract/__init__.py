@@ -2,7 +2,7 @@
 
 from .client import DEFAULT_MODEL, OPENROUTER_URL, ChatClient, Completion, ModelError
 from .cost import PRICES, Estimate, Pricing, Usage, estimate
-from .extractor import Extraction, Extractor
+from .extractor import Extraction, Extractor, Reader
 from .schema import OUTPUT_SCHEMA, Malformed, parse_output
 
 __all__ = [
@@ -18,6 +18,7 @@ __all__ = [
     "Malformed",
     "ModelError",
     "Pricing",
+    "Reader",
     "Usage",
     "estimate",
     "parse_output",

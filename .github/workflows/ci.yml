@@ -14,6 +14,24 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.11", "3.13"]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: duebook
+          POSTGRES_PASSWORD: duebook
+          POSTGRES_DB: duebook_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U duebook"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Without this the store tests are skipped, and a green run would say
+      # nothing about the event store or the outbox.
+      TEST_DATABASE_URL: postgresql://duebook:duebook@localhost:5432/duebook_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,4 +40,4 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[dev]"
       - run: ruff check .
-      - run: pytest -q
+      - run: pytest -q -rs

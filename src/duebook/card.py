@@ -181,6 +181,10 @@ class Card:
     last_seq: int = 0
     assignee: str | None = None
     status: str = ""
+    #: The events that last set the assignee and the status. They are shown
+    #: too, so they need a source like everything else.
+    assignee_seq: int | None = None
+    status_seq: int | None = None
     facts: tuple[Fact, ...] = ()
     contradictions: tuple[Contradiction, ...] = ()
     commitments: tuple[Commitment, ...] = ()

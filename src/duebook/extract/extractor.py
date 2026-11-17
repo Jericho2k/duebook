@@ -17,6 +17,8 @@ from typing import Protocol
 from ..card import Card
 from ..events import Event, MessagePosted
 from ..proposals import Proposal
+from ..slots import DEFAULT as DEFAULT_VOCABULARY
+from ..slots import Vocabulary
 from ..temporal import WorkCalendar
 from .client import Completion
 from .cost import Usage
@@ -28,6 +30,12 @@ class JsonModel(Protocol):
     def complete_json(
         self, messages: list[dict[str, str]], schema: dict, name: str = ...
     ) -> Completion: ...
+
+
+class Reader(Protocol):
+    """Anything that turns an event into proposals. Raises when it cannot."""
+
+    def extract(self, card: Card, event: Event) -> Extraction: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,13 +52,14 @@ class Extraction:
 class Extractor:
     model: JsonModel
     cal: WorkCalendar = field(default_factory=WorkCalendar)
+    vocab: Vocabulary = DEFAULT_VOCABULARY
 
     def extract(self, card: Card, event: Event) -> Extraction:
         """Read one event against the card. Raises ``ModelError`` on failure."""
         if not isinstance(event, MessagePosted) or not event.text.strip():
             # Assignee and status changes carry no text; the reducer handles them.
             return Extraction()
-        messages, aliases = build_messages(card, event, self.cal)
+        messages, aliases = build_messages(card, event, self.cal, self.vocab)
         completion = self.model.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
         proposals, malformed = parse_output(completion.data, aliases)
         return Extraction(tuple(proposals), tuple(malformed), completion.usage, completion.retried)

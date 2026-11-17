@@ -18,9 +18,11 @@ from datetime import datetime
 from ..card import Card
 from ..events import MessagePosted
 from ..lifecycle import status_at
+from ..slots import DEFAULT as DEFAULT_VOCABULARY
+from ..slots import Vocabulary
 from ..temporal import WorkCalendar
 
-SYSTEM_PROMPT = """\
+_INSTRUCTIONS = """\
 You maintain the record of a customer support ticket. You are given the record \
 so far and ONE new message. Report only what this new message adds or changes.
 
@@ -34,8 +36,10 @@ cannot quote it, do not report it.
 
 facts — stable details of the case (order number, product, plan, device, what \
 is broken, current state of the problem).
-- "slot" is a short lowercase English key such as "order.status". Reuse an \
-existing slot from the record whenever the message is about the same thing.
+- "slot" names what the fact is about. If the record already has a slot for \
+the same thing, use exactly that slot. Otherwise use one from this list when \
+it fits: {slots}. Only when none fits, make a short lowercase English key in \
+the same "object.attribute" form. Never use two slots for one thing.
 - "change": true only when the message says the value CHANGED ("I've upgraded \
 you to Pro"). false when it just states or disputes a value.
 
@@ -73,6 +77,14 @@ answers — the message answers a listed open question. Use its id.
 
 Use only ids that appear in the record (C1, S1, Q1, ...).\
 """
+
+
+def system_prompt(vocab: Vocabulary = DEFAULT_VOCABULARY) -> str:
+    """The fixed instructions, with the deployment's slot vocabulary written in."""
+    return _INSTRUCTIONS.replace("{slots}", ", ".join(vocab.slots()))
+
+
+SYSTEM_PROMPT = system_prompt()
 
 _WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
@@ -139,11 +151,11 @@ def render_message(event: MessagePosted, cal: WorkCalendar) -> str:
 
 
 def build_messages(
-    card: Card, event: MessagePosted, cal: WorkCalendar
+    card: Card, event: MessagePosted, cal: WorkCalendar, vocab: Vocabulary = DEFAULT_VOCABULARY
 ) -> tuple[list[dict[str, str]], dict[str, str]]:
     rendered = render_card(card, event.at, cal)
     user = f"{rendered.text}\n\n{render_message(event, cal)}"
     return (
-        [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user}],
+        [{"role": "system", "content": system_prompt(vocab)}, {"role": "user", "content": user}],
         rendered.aliases,
     )
