@@ -15,7 +15,9 @@ The extractor proposes; this decides. A proposal is admitted only if
 * it is consistent with what the card already holds;
 * if it closes or replaces a commitment, it is about THAT commitment: the
   model named it twice and both names agree, the closing words share content
-  with the commitment's own, and they fit no other open commitment as well.
+  with the commitment's own — or a verifier, asked about that one close, said
+  yes and quoted the message for it — and they fit no other open commitment
+  as well.
 
 Closing is where a wrong admission costs most. A commitment closed by mistake
 raises no alert and drops out of the brief, so nobody is ever reminded of it;
@@ -54,7 +56,7 @@ from .card import (
     StepOutcome,
     Suggestion,
 )
-from .closing import confirms, names_other, overlap, quote_identifies
+from .closing import confirms, names_other, overlap, quote_identifies, vouches
 from .events import AssigneeChanged, Event, MessagePosted, Role, Side, StatusChanged
 from .proposals import (
     AnswerQuestion,
@@ -66,6 +68,7 @@ from .proposals import (
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    Verification,
 )
 from .slots import DEFAULT as DEFAULT_VOCABULARY
 from .slots import Vocabulary
@@ -114,6 +117,9 @@ class Guards:
     relevance: bool = True
     #: No other open commitment of the same side may fit the closing words as well.
     ambiguity: bool = True
+    #: A verifier's yes, with its evidence in the message, may stand in for
+    #: ``relevance`` — never for the others, nor for who may close.
+    verifier: bool = True
 
 
 #: The reducer as it was before the guards: who may close, never what.
@@ -376,7 +382,8 @@ def _make_commitment(
             return card, [Reason.UNKNOWN_TARGET]
         if not old.unresolved:
             return card, [Reason.ALREADY_RESOLVED]
-        refused = _check_close(card, old, (p.quote, p.action), p.target_quote, guards, True)
+        refused = _check_close(card, old, (p.quote, p.action), p.target_quote, guards,
+                               p.verification, event.text, restates=True)  # fmt: skip
         if refused is not None:
             # The new promise was made and is kept; the old one is NOT retired
             # on this evidence, only marked as possibly replaced.
@@ -458,7 +465,8 @@ def _resolve_commitment(
         return card, [Reason.UNKNOWN_TARGET]
     if not c.unresolved:
         return card, [Reason.ALREADY_RESOLVED]
-    refused = _check_close(card, c, (p.quote,), p.target_quote, guards)
+    refused = _check_close(card, c, (p.quote,), p.target_quote, guards, p.verification,
+                           event.text)  # fmt: skip
     if refused is not None:
         hint = Suggestion(Closure.RESOLVED, source, refused.value)
         return _put_commitment(card, _suggest(c, hint)), [refused]
@@ -485,7 +493,8 @@ def _cancel_commitment(
         return card, [Reason.ALREADY_RESOLVED]
     if event.author.side is c.owner.side:
         return card, [Reason.DEBTOR_CANNOT_CANCEL]
-    refused = _check_close(card, c, (p.quote,), p.target_quote, guards)
+    refused = _check_close(card, c, (p.quote,), p.target_quote, guards, p.verification,
+                           event.text)  # fmt: skip
     if refused is not None:
         hint = Suggestion(Closure.CANCELLED, source, refused.value)
         return _put_commitment(card, _suggest(c, hint)), [refused]
@@ -499,6 +508,8 @@ def _check_close(
     said: Sequence[str],
     target_quote: str,
     guards: Guards,
+    verification: Verification | None = None,
+    message: str = "",
     restates: bool = False,
 ) -> Reason | None:
     """Why a close of ``target`` on the words ``said`` must not be admitted, or None.
@@ -510,19 +521,30 @@ def _check_close(
     done — and fit no other open commitment of that side as well. Bare thanks
     passes none of this, which is the point: "спасибо" closes nothing.
 
+    The one SOFT check is the first of those: a verifier that said yes, and
+    quoted the ``message`` for it, can stand in for shared words. Everything
+    else is HARD — the verifier is not consulted — and its evidence is added
+    to the closing words, so a quote that fits another open commitment as
+    well makes the close ambiguous rather than certain.
+
     A renegotiation (``restates``) must also be about the same thing: a
     promise naming something the old one did not, and leaving out something
-    it did, is a second promise, not a new date for the first.
+    it did, is a second promise, not a new date for the first. That is
+    evidence against, not a lack of evidence for, so it is hard as well.
     """
     if guards.target and not quote_identifies(target_quote, target.source.quote):
         return Reason.TARGET_MISMATCH
+    vouched = guards.verifier and vouches(verification, message)
+    if vouched:
+        said = (*said, verification.evidence_quote)
     text = " ".join(said)
     rivals = [
         c for c in card.commitments
         if c.unresolved and c.id != target.id and c.owner.side is target.owner.side
     ]  # fmt: skip
     fit = overlap(text, _wording(target))
-    if guards.relevance and fit == 0 and (rivals or not confirms(text)):
+    unrelated = fit == 0 and (rivals or not confirms(text))
+    if guards.relevance and unrelated and not vouched:
         return Reason.NOT_ABOUT_TARGET
     if guards.relevance and restates and names_other(text, _wording(target)):
         return Reason.NOT_ABOUT_TARGET

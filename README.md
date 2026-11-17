@@ -56,6 +56,40 @@ still fire, and the brief says "возможно, выполнено по соо
 подтвердите". `apply(..., guards=UNGUARDED)` switches the checks off, for
 measuring what they do.
 
+### A second opinion on destructive changes
+
+The lexical checks also stop some true closes: "Спасибо, всё получила" shares
+no word with "вернём деньги за доставку" and, with a callback also open, is
+refused. `extract.VerifyingReader` puts every proposal that would resolve,
+cancel or replace an open commitment — a few per ticket, never an ordinary
+message — to a separate model call (`extract.Verifier`). It sees only that
+commitment (owner, action, original words, deadline) and the new message with
+its author, and answers yes / no / unsure with `evidence_quote`, copied from
+the message. The verdict rides on the proposal (`verification`) and is stored
+with it, so a replay reproduces the card without a model; the reducer stays
+pure.
+
+The reducer weighs it in layers. **Hard**, never overridden: who may close
+(nobody binds or releases the other side), the span of the target's wording,
+ambiguity (the closing words — and the verifier's evidence — fit another open
+commitment of that side as well), a renegotiation that names a different
+thing. **Soft**: lexical relevance. A close is admitted when relevance passes
+OR the verifier said yes with evidence that is literally, word for word, in
+the message and is more than thanks or acknowledgement. Any other verdict —
+no, unsure, a quote not in the message, a verifier that could not be asked —
+leaves the close to the deterministic checks, and what they refuse becomes a
+suggestion, as before. Bare thanks still closes nothing, whatever the
+verifier says. `Guards(verifier=False)` ignores verdicts, for measurement.
+
+```python
+from duebook.extract import ChatClient, Extractor, Verifier, VerifyingReader
+
+reader = VerifyingReader(
+    Extractor(ChatClient(api_key=key)),                   # reasoning off
+    Verifier(ChatClient(api_key=key, reasoning="low")),   # thinks, only on closes
+)
+```
+
 ## One name for one thing
 
 In live runs the model filed a refund under `order.refund` in one message and
@@ -431,7 +465,8 @@ Implemented, with tests: the domain core, the extractor, and the PostgreSQL
 event store with its alert outbox, scheduler and delivery worker, the
 per-ticket pipeline that ties them together, the handoff brief, slot
 normalisation, the close guards (`duebook.closing`, with an adversarial
-suite in `tests/test_guards.py`), the benchmark with its three baselines and
+suite in `tests/test_guards.py`) and the verifier of destructive changes
+(`extract.verifier`), the benchmark with its three baselines and
 the experiment runner, and the service around them: the HTTP API, the processor, scheduler
 and delivery loops, log and webhook alert channels, and an end-to-end test
 from webhook to delivered alert. `scripts/smoke.py` runs a short ticket

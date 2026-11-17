@@ -7,7 +7,7 @@ from helpers import ANNA, CAL, IVAN, START, persist, promise, story
 
 from duebook import AlertPolicy, Card, Reason
 from duebook.brief import compose
-from duebook.proposals import AssertFact
+from duebook.proposals import AssertFact, ResolveCommitment, Verdict, Verification
 from duebook.reducer import OutOfOrder
 from duebook.store import Conflict, Store, connect
 
@@ -171,3 +171,18 @@ def test_the_ticket_row_records_when_its_alerts_next_change(store, conn):
     row = conn.execute("select wake_at from tickets").fetchone()
     assert row["wake_at"] == START + timedelta(hours=1)  # due soon: half the two-hour span
     assert count(conn, "outbox") == 0
+
+
+def test_a_verifiers_verdict_is_stored_with_the_close_and_replay_needs_no_model(store, conn):
+    # The verdict travels in the stored proposals; replaying them reproduces
+    # the card it helped make.
+    ticket = promise("T-1")
+    verdict = Verification(Verdict.YES, "звонок был", model="stub")
+    call = ticket.card.commitments[0]
+    ticket.say(ANNA, "Да, звонок был, спасибо.",
+               ResolveCommitment(call.id, "звонок был", "Перезвоню вам", verdict))  # fmt: skip
+    assert not ticket.card.commitments[0].unresolved
+    persist(store, ticket)
+    row = conn.execute("select * from event_proposals where seq = 3").fetchone()
+    assert row["proposals"][0]["verification"]["verdict"] == "yes"
+    assert store.replay("T-1") == ticket.card

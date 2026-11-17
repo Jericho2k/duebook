@@ -34,6 +34,14 @@ support tickets: every entry makes some pair of promises harder to tell apart.
 A message with no content word in common can still close a promise when it
 plainly confirms that something was done ("всё получила", "пришло") and only
 one promise of that side is open: then there is nothing else it could mean.
+
+Or when a second model, asked about that one close, says yes and quotes the
+message for it (``vouches``). The verifier can only stand in for the lexical
+relevance check — "Спасибо, всё получила" names no word of "вернём деньги за
+доставку", yet plainly confirms it. It can never override the checks that
+rest on positive evidence: who may close, the span of the target's wording,
+two open promises that the closing words fit equally, a renegotiation that
+names a different thing.
 """
 
 from __future__ import annotations
@@ -41,6 +49,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
+
+from .proposals import Verdict, Verification
 
 _WORD = re.compile(r"[0-9]+|[a-zа-я]+")
 
@@ -231,3 +241,31 @@ def _has_number(text: str) -> bool:
 def _norm(value: str) -> str:
     folded = value.casefold().replace("ё", "е")
     return re.sub(r"\s+", " ", re.sub(r"[«»\"“”„.,!?;:]", " ", folded)).strip()
+
+
+#: Words that acknowledge or wait. Like thanks, they say nothing was done.
+ACKNOWLEDGING = frozenset(
+    {"жду", "ждем", "ждём", "ожидаю", "ожидаем", "понял", "поняла", "поняли", "принято",
+     "принял", "приняла", "договорились", "waiting", "noted", "understood"}
+)  # fmt: skip
+
+
+def vouches(verification: Verification | None, message: str) -> bool:
+    """Did a verifier say yes, quoting words that really are in the message?
+
+    A quote the message does not contain is the verifier talking, not the
+    ticket: that verdict counts as unsure. So does a quote of nothing but
+    thanks, acknowledgement or waiting ("Спасибо!", "Ок, жду"): whatever the
+    verifier says, bare thanks closes nothing.
+    """
+    if verification is None or verification.verdict is not Verdict.YES:
+        return False
+    evidence = _ws(verification.evidence_quote)
+    # Whole words: "все получил" is not in "всё получила".
+    if not evidence or not re.search(rf"(?<!\w){re.escape(evidence)}(?!\w)", _ws(message)):
+        return False
+    return any(s.word not in ACKNOWLEDGING for s in content(evidence, generic=True))
+
+
+def _ws(value: str) -> str:
+    return re.sub(r"\s+", " ", value.casefold().replace("ё", "е")).strip()

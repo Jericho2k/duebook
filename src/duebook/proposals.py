@@ -13,14 +13,45 @@ A proposal that closes or replaces a commitment names it twice: by id, and by
 two must agree before anything is closed (see ``closing``). They default to
 empty only so that proposals stored before the field existed can be read; an
 empty ``target_quote`` closes nothing.
+
+Such a proposal may also carry a ``Verification``: a second model's verdict,
+asked between extraction and the reducer, on whether the new message really
+closes (cancels, replaces) THAT commitment. It travels with the proposal and
+is stored with it, so a replay reproduces the card without asking anyone. It
+defaults to None, which is what every proposal stored before it existed reads
+as: no second opinion.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from .card import Party, StepOutcome
 from .temporal import DueExpr
+
+
+class Verdict(StrEnum):
+    YES = "yes"
+    NO = "no"
+    UNSURE = "unsure"
+
+
+@dataclass(frozen=True, slots=True)
+class Verification:
+    """A second model's verdict on one close, with the words it rests on.
+
+    Only a YES whose ``evidence_quote`` is literally in the message counts
+    (``closing.vouches``); anything else is as good as no verdict.
+    """
+
+    verdict: Verdict
+    #: Copied from the new message: what shows the commitment was closed.
+    evidence_quote: str = ""
+    #: Which model gave it, for the record.
+    model: str = ""
+    #: Why there is no real verdict, when the verifier could not be asked.
+    error: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +77,8 @@ class MakeCommitment:
     supersedes: str | None = None
     #: A span of the superseded commitment's original wording.
     target_quote: str = ""
+    #: The verifier's verdict on retiring the superseded commitment.
+    verification: Verification | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +89,8 @@ class ResolveCommitment:
     quote: str
     #: A span of the commitment's original wording, naming it a second time.
     target_quote: str = ""
+    #: The verifier's verdict on this close, when one was asked.
+    verification: Verification | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +99,8 @@ class CancelCommitment:
     quote: str
     #: A span of the commitment's original wording, naming it a second time.
     target_quote: str = ""
+    #: The verifier's verdict on this close, when one was asked.
+    verification: Verification | None = None
 
 
 @dataclass(frozen=True, slots=True)

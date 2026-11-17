@@ -13,12 +13,31 @@ from datetime import timedelta
 import pytest
 from helpers import ANNA, BILLING, CAL, IVAN, OLGA, Ticket
 
-from duebook import UNGUARDED, CommitmentState, Party, Reason, apply, notices
+from duebook import (
+    UNGUARDED,
+    CommitmentState,
+    Guards,
+    MessagePosted,
+    Party,
+    Reason,
+    apply,
+    notices,
+)
 from duebook.brief import compose
 from duebook.card import Closure
-from duebook.closing import confirms, overlap, quote_identifies
-from duebook.proposals import CancelCommitment, MakeCommitment, ResolveCommitment
-from duebook.store.codec import decode_card, encode
+from duebook.closing import confirms, overlap, quote_identifies, vouches
+from duebook.extract import Completion, ModelError, Usage, Verifier, VerifyingReader
+from duebook.extract.extractor import Extraction
+from duebook.proposals import (
+    AssertFact,
+    CancelCommitment,
+    MakeCommitment,
+    ResolveCommitment,
+    Verdict,
+    Verification,
+)
+from duebook.reducer import replay
+from duebook.store.codec import decode_card, decode_proposals, encode
 from duebook.temporal import DayRef, Offset, Unit, WeekdayRef
 
 
@@ -387,3 +406,237 @@ def test_a_promise_worded_only_in_generic_verbs_can_still_be_renegotiated():
 def test_thanks_is_not_a_confirmation_and_receipt_is():
     assert not confirms("Спасибо, что держите в курсе")
     assert confirms("Всё получила") and confirms("Деньги пришли")
+
+
+# ------------------------------------------------- the second opinion ----
+#
+# A verifier is asked about each close, cancel or replacement, and its verdict
+# rides on the proposal. Its yes can stand in for the LEXICAL relevance check
+# (shared words) and for nothing else: who may close, the span of the
+# target's wording, ambiguity and a renegotiation naming another thing are
+# hard. The model below is a stub; what matters is what the reducer does with
+# each kind of answer.
+
+
+def said(verdict: str, evidence: str = "") -> Verification:
+    return Verification(Verdict(verdict), evidence, model="stub")
+
+
+def received_with_a_callback_open(verification: Verification | None):
+    t = Ticket()
+    refund, call = callback_and_refund(t)
+    text = "Спасибо, всё получила!"
+    close = ResolveCommitment(refund, "Спасибо, всё получила", "Вернём деньги", verification)
+    return t, refund, call, t.wait(hours=30).say(ANNA, text, close)
+
+
+def test_a_verified_receipt_closes_the_refund_that_shares_no_word_with_it():
+    t, refund, call, out = received_with_a_callback_open(said("yes", "всё получила"))
+    assert out.rejections == ()
+    assert t.card.commitment(refund).state is CommitmentState.FULFILLED
+    assert t.card.commitment(call).state is CommitmentState.OPEN
+
+
+@pytest.mark.parametrize(
+    "verification",
+    [
+        None,  # nobody was asked
+        Verification(Verdict.NO, "", "stub"),
+        Verification(Verdict.UNSURE, "", "stub"),
+        # A yes whose evidence is not in the message is the verifier talking.
+        Verification(Verdict.YES, "деньги пришли", "stub"),
+        Verification(Verdict.YES, "", "stub"),
+        # A verifier that could not be asked counts as unsure.
+        Verification(Verdict.UNSURE, "", "stub", error="ModelError: timeout"),
+    ],
+)
+def test_without_a_vouching_yes_the_same_receipt_stays_a_suggestion(verification):
+    t, refund, call, out = received_with_a_callback_open(verification)
+    assert reasons(out) == [Reason.NOT_ABOUT_TARGET]
+    c = t.card.commitment(refund)
+    assert c.state is CommitmentState.OPEN and c.suggestions[0].kind is Closure.RESOLVED
+
+
+@pytest.mark.parametrize(("text", "evidence"), [("Спасибо!", "Спасибо"),
+                                                 ("Хорошо, жду.", "Хорошо, жду"),
+                                                 ("Ок, понял, спасибо.", "Ок, понял")])  # fmt: skip
+def test_bare_thanks_cannot_close_even_when_the_verifier_says_yes(text, evidence):
+    t = Ticket()
+    refund, call = callback_and_refund(t)
+    close = ResolveCommitment(refund, evidence, "Вернём деньги", said("yes", evidence))
+    out = t.say(ANNA, text, close)
+    assert reasons(out) == [Reason.NOT_ABOUT_TARGET]
+    assert t.card.commitment(refund).state is CommitmentState.OPEN
+
+
+def test_a_verifier_yes_cannot_override_the_span_of_the_targets_wording():
+    t = Ticket()
+    refund, call = callback_and_refund(t)
+    close = ResolveCommitment(refund, "Деньги пришли", "Я перезвоню", said("yes", "Деньги пришли"))
+    out = t.say(ANNA, "Деньги пришли!", close)
+    assert reasons(out) == [Reason.TARGET_MISMATCH]
+    assert t.card.commitment(refund).state is CommitmentState.OPEN
+
+
+def test_a_verifier_yes_cannot_override_ambiguity_between_two_similar_promises():
+    t = Ticket()
+    delivery, case = two_refunds(t)
+    close = ResolveCommitment(case, "Деньги пришли", "вернём деньги за чехол",
+                              said("yes", "Деньги пришли"))  # fmt: skip
+    out = t.wait(hours=5).say(ANNA, "Деньги пришли, спасибо!", close)
+    assert reasons(out) == [Reason.AMBIGUOUS_TARGET]
+    assert all(c.state is CommitmentState.OPEN for c in t.card.commitments)
+
+
+def test_the_verifiers_evidence_counts_toward_ambiguity_too():
+    # The proposal quotes thanks; the verifier's evidence names money, which
+    # fits both refunds: ambiguous, not certain.
+    t = Ticket()
+    delivery, case = two_refunds(t)
+    close = ResolveCommitment(case, "Спасибо", "вернём деньги за чехол",
+                              said("yes", "деньги на карте"))  # fmt: skip
+    out = t.wait(hours=5).say(ANNA, "Спасибо, деньги на карте.", close)
+    assert reasons(out) == [Reason.AMBIGUOUS_TARGET]
+
+
+def test_a_verifier_yes_cannot_let_the_debtor_cancel_their_own_promise():
+    t = Ticket()
+    refund, call = callback_and_refund(t)
+    words = "Возврат отменяем"
+    out = t.say(IVAN, f"{words}.", CancelCommitment(refund, words, "Вернём деньги",
+                                                    said("yes", words)))  # fmt: skip
+    assert reasons(out) == [Reason.DEBTOR_CANNOT_CANCEL]
+    assert t.card.commitment(refund).state is CommitmentState.OPEN
+
+
+def test_a_verifier_yes_cannot_make_a_promise_about_another_thing_a_renegotiation():
+    t = Ticket()
+    t.assign(None, IVAN.id)
+    old = "Я перезвоню вам насчёт оплаты до среды"
+    payment = promise(t, f"{old}.", old, "перезвонить насчёт оплаты", owner=Party.AGENT,
+                      due=WeekdayRef(2), due_quote="до среды")  # fmt: skip
+    new = "Я перезвоню вам насчёт рассрочки до пятницы"
+    second = MakeCommitment(Party.AGENT, "перезвонить насчёт рассрочки", new, due=WeekdayRef(4),
+                            due_quote="до пятницы", supersedes=payment, target_quote=old,
+                            verification=said("yes", new))  # fmt: skip
+    out = t.say(IVAN, f"{new}.", second)
+    assert reasons(out) == [Reason.NOT_ABOUT_TARGET]
+    assert t.card.commitment(payment).state is CommitmentState.OPEN
+
+
+def message(t: Ticket, text: str) -> MessagePosted:
+    """The next message of the ticket, built but not applied."""
+    seq = t.card.last_seq + 1
+    return MessagePosted(id=f"e{seq}", ticket_id="T-1", seq=seq, at=t.now, author=ANNA, text=text)
+
+
+def test_a_verifier_yes_does_nothing_when_the_guards_are_told_to_ignore_it():
+    t = Ticket()
+    refund, call = callback_and_refund(t)
+    close = ResolveCommitment(refund, "всё получила", "Вернём деньги", said("yes", "всё получила"))
+    msg = message(t, "Спасибо, всё получила!")
+    out = apply(t.card, msg, [close], CAL, guards=Guards(verifier=False))
+    assert reasons(out) == [Reason.NOT_ABOUT_TARGET]
+
+
+def test_vouches_requires_a_yes_with_content_literally_in_the_message():
+    msg = "Спасибо,   ВСЁ получила!"
+    assert vouches(said("yes", "всё получила"), msg)
+    assert not vouches(said("yes", "все получил"), msg)
+    assert not vouches(said("no", "всё получила"), msg)
+    assert not vouches(said("unsure", "всё получила"), msg)
+    assert not vouches(said("yes", "Спасибо"), msg)
+    assert not vouches(None, msg)
+
+
+# ------------------------------------------- the verifier between the two ----
+
+
+class StubJudge:
+    """Answers each verification from a list and records what it was shown."""
+
+    model = "stub/judge"
+
+    def __init__(self, *answers):
+        self.answers = list(answers)
+        self.asked: list[list[dict]] = []
+
+    def complete_json(self, messages, schema, name="output"):
+        self.asked.append(messages)
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return Completion(answer, Usage(1, 400, 20, 0, 0.00002, reasoning_tokens=300))
+
+
+class Fixed:
+    """An extractor that proposes what it is given, per message."""
+
+    def __init__(self, *per_message):
+        self.per_message = list(per_message)
+
+    def extract(self, card, event):
+        return Extraction(tuple(self.per_message.pop(0)), usage=Usage(1, 1000, 100, 0, 0.0001))
+
+
+def test_only_proposals_that_would_close_an_open_promise_are_put_to_the_verifier():
+    t = Ticket()
+    refund, call = callback_and_refund(t)
+    judge = StubJudge({"verdict": "yes", "evidence_quote": "всё получила"})
+    fact = AssertFact("order.number", "4815", "заказ 4815")
+    close = ResolveCommitment(refund, "всё получила", "Вернём деньги")
+    stale = ResolveCommitment("no-such-promise", "всё получила", "Вернём деньги")
+    reader = VerifyingReader(Fixed([fact, close, stale], []), Verifier(judge, CAL))
+    msg = message(t, "Спасибо, всё получила! заказ 4815")
+    extraction = reader.extract(t.card, msg)
+    assert len(judge.asked) == 1
+    system, user = judge.asked[0]
+    # Fixed instructions first; then the commitment and the message alone.
+    assert system["role"] == "system" and "вернуть деньги" not in system["content"]
+    assert user["content"].index("COMMITMENT") < user["content"].index("NEW MESSAGE")
+    assert '"Вернём деньги до пятницы"' in user["content"]
+    assert "PROPOSED CHANGE: done" in user["content"] and "Иван" not in user["content"]
+    got_fact, got_close, got_stale = extraction.proposals
+    assert got_fact == fact and got_stale.verification is None
+    assert got_close.verification == Verification(Verdict.YES, "всё получила", "stub/judge")
+    # The verifier's cost is the extraction's too.
+    assert extraction.usage.calls == 2 and extraction.usage.reasoning_tokens == 300
+    out = apply(t.card, msg, extraction.proposals, CAL)
+    assert t.card.commitment(refund).unresolved
+    assert out.card.commitment(refund).state is CommitmentState.FULFILLED
+
+    # An ordinary message costs no verification.
+    quiet = message(t, "Жду.")
+    assert reader.extract(t.card, quiet).proposals == () and len(judge.asked) == 1
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [ModelError("timeout, not retried", Usage(1, 400, 0)), {"verdict": "maybe"}, {"nothing": 1}],
+)
+def test_a_verifier_that_fails_or_garbles_counts_as_unsure(answer):
+    t = Ticket()
+    refund, call = callback_and_refund(t)
+    close = ResolveCommitment(refund, "всё получила", "Вернём деньги")
+    reader = VerifyingReader(Fixed([close]), Verifier(StubJudge(answer), CAL))
+    msg = message(t, "Спасибо, всё получила!")
+    (got,) = reader.extract(t.card, msg).proposals
+    assert got.verification.verdict is Verdict.UNSURE and got.verification.error
+    assert reasons(apply(t.card, msg, [got], CAL)) == [Reason.NOT_ABOUT_TARGET]
+
+
+def test_a_verdict_is_stored_with_its_proposal_and_old_proposals_read_without_one():
+    close = ResolveCommitment("e2#0", "всё получила", "Вернём деньги", said("yes", "всё получила"))
+    renewed = MakeCommitment(Party.COMPANY, "вернуть", "вернём до среды", supersedes="e2#0",
+                             target_quote="Вернём", verification=said("unsure"))  # fmt: skip
+    assert decode_proposals(encode([close, renewed])) == (close, renewed)
+    old = encode([close, renewed])
+    for p in old:
+        del p["verification"]
+    assert all(p.verification is None for p in decode_proposals(old))
+
+
+def test_replaying_stored_proposals_reproduces_the_verified_card_without_a_model():
+    t, refund, call, _ = received_with_a_callback_open(said("yes", "всё получила"))
+    stored = [(e, decode_proposals(encode(list(p)))) for e, p in t.log]
+    assert replay("T-1", stored, CAL) == t.card
