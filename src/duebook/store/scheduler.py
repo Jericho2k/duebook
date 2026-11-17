@@ -26,10 +26,15 @@ from datetime import datetime, timedelta
 from .store import Store
 
 
-def run_due(store: Store, now: datetime, batch: int = 100) -> int:
-    """Handle every ticket due at ``now``. Returns how many were handled."""
+def run_due(
+    store: Store, now: datetime, batch: int = 100, stop: Callable[[], bool] = lambda: False
+) -> int:
+    """Handle every ticket due at ``now``. Returns how many were handled.
+
+    ``stop`` is checked between batches; each batch is one transaction.
+    """
     total = 0
-    while handled := store.wake(now, batch):
+    while not stop() and (handled := store.wake(now, batch)):
         total += handled
         if handled < batch:
             break
@@ -53,5 +58,7 @@ def run(
     stop: Callable[[], bool] = lambda: False,
 ) -> None:
     while not stop():
-        run_due(store, clock())
+        run_due(store, clock(), stop=stop)
+        if stop():
+            break
         sleep(idle_for(store, clock(), max_idle).total_seconds())

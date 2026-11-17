@@ -29,6 +29,9 @@ dev = [
 ]
 
 
+[project.scripts]
+duebook = "duebook.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/duebook"]
 

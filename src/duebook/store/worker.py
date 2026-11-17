@@ -61,9 +61,20 @@ class Worker:
     retry_base: timedelta = timedelta(seconds=30)
     retry_cap: timedelta = timedelta(hours=1)
 
-    def run_once(self, now: datetime) -> Round:
+    def run_once(self, now: datetime, stop: Callable[[], bool] = lambda: False) -> Round:
+        """Claim a batch and work through it.
+
+        ``stop`` is checked before each send. A worker asked to exit finishes
+        the alert in hand and gives the rest of its batch back to the queue
+        rather than leaving them leased until the lease goes stale.
+        """
         sent = discarded = failed = 0
-        for claim in self.store.outbox.claim(self.name, now, self.batch):
+        claims = self.store.outbox.claim(self.name, now, self.batch)
+        for index, claim in enumerate(claims):
+            if stop():
+                for left in claims[index:]:
+                    self.store.outbox.release(left)
+                break
             card = self.store.card(claim.notice.ticket_id)
             current = {n.key: n for n in notices(card, now, self.store.policy)}
             # Send the alert as the card derives it NOW, not as it was queued.
@@ -95,5 +106,5 @@ class Worker:
         stop: Callable[[], bool] = lambda: False,
     ) -> None:
         while not stop():
-            if not self.run_once(clock()).claimed:
+            if not self.run_once(clock(), stop).claimed:
                 sleep(idle.total_seconds())
