@@ -20,7 +20,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .extract.client import DEFAULT_MODEL, OPENROUTER_URL
+from .extract.client import DEFAULT_MODEL, OPENROUTER_URL, REASONING
+from .extract.verifier import DEFAULT_VERIFIER_REASONING
 from .lifecycle import AlertPolicy
 from .temporal import WorkCalendar
 
@@ -63,8 +64,13 @@ class Settings:
     port: int = 8000
     pool_min: int = 1
     pool_max: int = 10
+    verifier_enabled: bool = True
+    verifier_model: str = DEFAULT_MODEL
+    verifier_reasoning: str = DEFAULT_VERIFIER_REASONING
 
     def __post_init__(self) -> None:
+        if self.verifier_reasoning not in REASONING:
+            raise ConfigError(f"{PREFIX}VERIFIER_REASONING must be one of: {', '.join(REASONING)}")
         if self.alert_channel not in CHANNELS:
             raise ConfigError(f"{PREFIX}ALERT_CHANNEL must be one of: {', '.join(CHANNELS)}")
         if self.alert_channel == "webhook" and not self.alert_url:
@@ -99,6 +105,10 @@ class Settings:
         except ValueError as error:
             raise ConfigError(f"{PREFIX}ALERTS_SINCE is not an ISO 8601 time: {since!r}") from error
 
+        verifier_enabled = get("VERIFIER_ENABLED", "true").lower()
+        if verifier_enabled not in ("true", "false"):
+            raise ConfigError(f"{PREFIX}VERIFIER_ENABLED must be true or false")
+
         return cls(
             database_url=get("DATABASE_URL"),
             openrouter_base_url=get("OPENROUTER_BASE_URL", OPENROUTER_URL),
@@ -121,6 +131,9 @@ class Settings:
             port=int(number("PORT", 8000)),
             pool_min=int(number("POOL_MIN", 1)),
             pool_max=int(number("POOL_MAX", 10)),
+            verifier_enabled=verifier_enabled == "true",
+            verifier_model=get("VERIFIER_MODEL", DEFAULT_MODEL),
+            verifier_reasoning=get("VERIFIER_REASONING", DEFAULT_VERIFIER_REASONING),
         )
 
     def require_database(self) -> str:

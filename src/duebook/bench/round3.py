@@ -45,7 +45,7 @@ from ..card import Card
 from ..extract.client import DEFAULT_MODEL, ChatClient, ResponseCache
 from ..extract.cost import Usage
 from ..extract.extractor import JsonModel
-from ..extract.verifier import Verifier, VerifyingReader, target_of
+from ..extract.verifier import target_of, verifying_reader
 from ..proposals import Proposal
 from ..reducer import Guards, apply
 from ..store.codec import decode_proposals, encode
@@ -122,19 +122,21 @@ def replay_c(ticket: SimTicket, rec: dict[str, Any], cal: WorkCalendar) -> Metho
 
 
 def replay_b(
-    ticket: SimTicket, rec: dict[str, Any], verifier: JsonModel, ledger: Ledger,
+    ticket: SimTicket, rec: dict[str, Any], client: JsonModel, ledger: Ledger,
     cal: WorkCalendar,
 ) -> MethodRun:  # fmt: skip
     """Round 2's proposals, each destructive one put to the verifier as the fold reaches it."""
-    meter = Meter(verifier, ledger)
     answers = {e.id: tuple(p) for e, p in zip(ticket.events, rec["proposals"], strict=False)}
-    reader = VerifyingReader(Replayed(answers), Verifier(meter, cal))
+    reader = verifying_reader(Replayed(answers), client, cal, wrap_model=lambda m: Meter(m, ledger))
+    meter = reader.verifier.model
+    assert isinstance(meter, Meter)
     folded = fold(ticket, reader, [cp.seq for cp in checkpoints(ticket)], cal)
     spent = meter.tally.usage
     detail = {
         "providers": rec["providers"],
         "replayed_from": rec.get("source"),
-        "verifier": {"model": verifier.model, "reasoning": getattr(verifier, "reasoning", None),
+        "verifier": {"model": meter.model.model,
+                     "reasoning": getattr(meter.model, "reasoning", None),
                      "usage": asdict(spent), "usd": spent.usd(),
                      "providers": meter.tally.providers,
                      "answered_from_cache": meter.tally.cache_hits},  # fmt: skip
@@ -280,7 +282,6 @@ def main(argv: Sequence[str] | None = None) -> None:
                                 "usd": ledger.usd(),
                                 "reused_usd": ledger.reused.usd() or 0.0}) + "\n")  # fmt: skip
 
-    verifier = ChatClient(api_key="proxy-injected", reasoning="low", cache=cache, timeout=120)
     reader_low = ChatClient(api_key="proxy-injected", reasoning="low", cache=cache, timeout=120)
     runs: list[MethodRun] = []
     projections: dict[str, Any] = {}
@@ -293,7 +294,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                 calls = needs["destructive"]
                 print(f"  B: at most {calls} verifier calls; room ${ledger.cap_usd - before:.4f}",
                       file=sys.stderr)  # fmt: skip
-                runs += [replay_b(t, rec[t.ticket_id], verifier, ledger, cal) for t in tickets]
+                runs += [replay_b(t, rec[t.ticket_id], reader_low, ledger, cal) for t in tickets]
             else:
                 method = EventMemory(reader_low, ledger, cal, name="A")
                 p = project([method], tickets, {}, ledger, cal, args.sample_events)["A"]

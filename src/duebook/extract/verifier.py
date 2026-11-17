@@ -29,6 +29,7 @@ follow, so a provider's prompt cache can serve the fixed part.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -43,9 +44,11 @@ from ..proposals import (
     Verification,
 )
 from ..temporal import WorkCalendar
-from .client import ModelError
+from .client import DEFAULT_MODEL, ChatClient, ModelError
 from .cost import Usage
 from .extractor import Extraction, JsonModel, Reader
+
+DEFAULT_VERIFIER_REASONING = "low"
 
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -197,3 +200,18 @@ def _model_name(model: object) -> str:
         if isinstance(model, str):
             return model
     return ""
+
+
+def verifying_reader(
+    reader: Reader,
+    client: JsonModel,
+    cal: WorkCalendar,
+    *,
+    model: str = DEFAULT_MODEL,
+    reasoning: str = DEFAULT_VERIFIER_REASONING,
+    wrap_model: Callable[[JsonModel], JsonModel] = lambda client: client,
+) -> VerifyingReader:
+    """Reuse the connection options and route the verifier by its own model preset."""
+    if isinstance(client, ChatClient):
+        client = replace(client, model=model, reasoning=reasoning, settings=None)
+    return VerifyingReader(reader, Verifier(wrap_model(client), cal))

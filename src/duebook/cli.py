@@ -135,6 +135,7 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
 
 def extractor(settings: Settings):
     from .extract import ChatClient, Extractor
+    from .extract.verifier import verifying_reader
 
     if not settings.openrouter_api_key:
         raise ConfigError("DUEBOOK_OPENROUTER_API_KEY is not set: the processor calls a model")
@@ -143,7 +144,17 @@ def extractor(settings: Settings):
         model=settings.openrouter_model,
         base_url=settings.openrouter_base_url,
     )
-    return Extractor(client, settings.calendar())
+    cal = settings.calendar()
+    reader = Extractor(client, cal)
+    if settings.verifier_enabled:
+        return verifying_reader(
+            reader,
+            client,
+            cal,
+            model=settings.verifier_model,
+            reasoning=settings.verifier_reasoning,
+        )
+    return reader
 
 
 def process(settings: Settings, args: argparse.Namespace, stopper: Stopper, reader=None) -> int:
