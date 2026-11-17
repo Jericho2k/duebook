@@ -140,7 +140,11 @@ them planted, so harder than an average ticket), at temperature 0.8:
 | google/gemma-3-12b-it | 5 | 8 | 12 | 35 | 0.00181 |
 | google/gemma-3-27b-it | 46 | 0 | 9 | 5 | 0.00159 |
 | qwen/qwen3-30b-a3b-instruct-2507 | 5 | 31 | 5 | 19 | 0.00134 |
-| **~z-ai/glm-flash-latest**, reasoning off | 14 | 13 | 0 | **33** | 0.00172 |
+| **~z-ai/glm-flash-latest**, reasoning off | 14¹ | 13 | 0¹ | **33** | 0.00172 |
+
+¹ GLM was tried last, after the stricter check below existed, so its 14
+discards include rewrites that added content; the other rows were judged
+against that check afterwards, from the saved outputs.
 
 The discard rate alone misled: Mistral Nemo "kept every span" by returning
 the text unchanged. And the cheap writers that did reword added things a
