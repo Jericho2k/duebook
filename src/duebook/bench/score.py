@@ -1,31 +1,67 @@
-"""Scoring a card against a ticket's gold labels.
+"""Scoring a method's snapshot against a ticket's gold labels.
 
-Three things are measured, all of them about promises, because promises are
-what the system exists to keep track of.
+Every method answers in the same format (``result.Snapshot``) at the same
+checkpoints — each handoff and the end — and is judged by this code alone.
 
-* **Commitments** — precision, recall and F1 of the promises on the card
-  against the planted ones. A promise is identified by the message it was made
-  in and the side that owes it; the wording of the action is free text and is
-  not compared.
-* **Deadlines** — of the promises found, the share whose deadline is the
-  planted instant exactly (or correctly absent). A deadline an hour off is
-  wrong: an alert would fire at the wrong time.
-* **Breach alerts** — precision and recall of the "promise broken" alerts the
-  card produces at the end of the ticket, against the promises planted as
-  broken. This is the number an operator feels, and precision is the half of
-  it that matters most.
+**Promises** (RQ1)
 
-Counts add up across tickets, so a benchmark result is a micro-average:
-every promise weighs the same wherever it occurred.
+* *Commitments* — precision, recall and F1 of the promises found against the
+  ones planted so far. A promise is identified by the message it was made in
+  and the side that owes it; the wording of the action is not compared.
+* *Deadlines* — of the promises found, the share whose deadline is the planted
+  instant (within a minute, so "23:59" and "23:59:59" agree), or correctly
+  absent. An hour off is wrong: an alert would fire at the wrong time.
+* *Statuses* — of the promises found, the share whose done / not done agrees
+  with what had happened by the checkpoint.
+* *Breach alerts* — a company promise the method holds as open, with a
+  deadline it trusts, that has passed by the checkpoint is an alert. Precision
+  and recall against the promises planted as broken; every alert that is not
+  one is a false alert.
+
+**Context** (RQ2) — facts are matched by VALUE, because methods do not agree
+on names (see ``match``). For every fact a method presents as current that
+carries a planted value, the gold label at that checkpoint says whether the
+value is current, stale (it was changed, or lost a dispute) or contested.
+
+* *Freshness error* — the share of those facts that are stale or contested.
+  Lower is better.
+* *Fact changes* — after a planted change, the new value is presented as
+  current and the old one is not.
+* *Disputes* — precision and recall of the open disagreements a method reports
+  against the planted ones still open; one still reported after it was settled
+  is a false one.
+* *Failed steps* — precision and recall of the steps a method knows failed,
+  against the planted failed fixes. A step is recognised by any message it
+  rests on or by a word stem of the step.
+
+Counts add up across checkpoints and tickets, so a result is a micro-average.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass, field, fields
+from datetime import timedelta
 
-from ..card import Card, Commitment
-from ..lifecycle import AlertPolicy, NoticeKind, notices
-from .generate import Fate, GoldCommitment, SimTicket
+from ..card import Card
+from ..events import Side
+from ..lifecycle import AlertPolicy
+from .generate import GoldCommitment, GoldFact, SimTicket
+from .match import mentions, mentions_any
+from .result import (
+    Checkpoint,
+    Dispute,
+    FailedStep,
+    Moment,
+    Promise,
+    PromiseStatus,
+    Snapshot,
+    checkpoints,
+    from_card,
+)
+
+#: Two deadlines this close are the same deadline.
+TOLERANCE = timedelta(minutes=1)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,49 +90,136 @@ class Counts:
 @dataclass(frozen=True, slots=True)
 class Score:
     commitments: Counts = field(default_factory=Counts)
-    #: Found promises whose deadline is exactly right, and how many were found.
+    #: Found promises whose deadline is right, and how many were found.
     deadlines_right: int = 0
     deadlines_judged: int = 0
+    #: Found promises whose done / not done is right.
+    statuses_right: int = 0
+    statuses_judged: int = 0
     alerts: Counts = field(default_factory=Counts)
+    #: Presented facts that carry a planted value, and of those, the stale and
+    #: the contested ones. Facts with no planted value are counted, not judged.
+    facts_judged: int = 0
+    facts_stale: int = 0
+    facts_contested: int = 0
+    facts_unjudged: int = 0
+    changes_right: int = 0
+    changes_judged: int = 0
+    disputes: Counts = field(default_factory=Counts)
+    failed_steps: Counts = field(default_factory=Counts)
+    #: Checkpoints scored, and how many of them the method could not answer.
+    checkpoints: int = 0
+    errors: int = 0
 
     def __add__(self, other: Score) -> Score:
-        return Score(
-            self.commitments + other.commitments,
-            self.deadlines_right + other.deadlines_right,
-            self.deadlines_judged + other.deadlines_judged,
-            self.alerts + other.alerts,
-        )
+        return Score(*(getattr(self, f.name) + getattr(other, f.name) for f in fields(self)))
 
     @property
     def deadline_accuracy(self) -> float:
         return self.deadlines_right / self.deadlines_judged if self.deadlines_judged else 1.0
 
+    @property
+    def status_accuracy(self) -> float:
+        return self.statuses_right / self.statuses_judged if self.statuses_judged else 1.0
+
+    @property
+    def freshness_error(self) -> float:
+        """Share of judged current facts that are stale or contested. Lower is better."""
+        bad = self.facts_stale + self.facts_contested
+        return bad / self.facts_judged if self.facts_judged else 0.0
+
+    @property
+    def change_accuracy(self) -> float:
+        return self.changes_right / self.changes_judged if self.changes_judged else 1.0
+
+    def as_dict(self) -> dict:
+        out = {}
+        for f in fields(self):
+            value = getattr(self, f.name)
+            out[f.name] = [value.tp, value.fp, value.fn] if isinstance(value, Counts) else value
+        return out
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> Score:
+        return cls(
+            **{
+                k: Counts(*v) if isinstance(v, list) else v
+                for k, v in raw.items()
+                if k in {f.name for f in fields(cls)}
+            }
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class TicketScore:
+    """One ticket: the end of it, and all its handoffs added up."""
+
+    end: Score
+    handoffs: Score
+
+    @property
+    def all(self) -> Score:
+        return self.end + self.handoffs
+
+
+def score_ticket(ticket: SimTicket, snapshots: Sequence[Snapshot]) -> TicketScore:
+    end, handoffs = Score(), Score()
+    for snap in snapshots:
+        s = score_snapshot(ticket, snap)
+        if snap.checkpoint.kind is Moment.END:
+            end += s
+        else:
+            handoffs += s
+    return TicketScore(end, handoffs)
+
 
 def score(ticket: SimTicket, card: Card, policy: AlertPolicy | None = None) -> Score:
-    pairs, spurious, missed = match(ticket.gold.commitments, card.commitments)
+    """The event memory's card at the end of the ticket, scored."""
+    return score_snapshot(ticket, from_card(card, checkpoints(ticket)[-1], policy))
 
-    right = sum(1 for gold, found in pairs if _due_at(found) == gold.due_at)
 
-    alerted = {
-        n.commitment_id
-        for n in notices(card, ticket.end, policy)
-        if n.kind is NoticeKind.BREACHED
-    }  # fmt: skip
-    matched = {found.id: gold for gold, found in pairs}
-    true_alerts = sum(1 for i in alerted if i in matched and matched[i].fate is Fate.BROKEN)
-    broken = sum(1 for gold in ticket.gold.commitments if gold.fate is Fate.BROKEN)
+def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
+    cp, gold = snap.checkpoint, ticket.gold
+    planted = tuple(c for c in gold.commitments if c.seq <= cp.seq)
+    pairs, spurious, missed = match(planted, snap.promises)
+
+    deadlines = sum(1 for g, f in pairs if same_deadline(g.due_at, f.due_at))
+    statuses = sum(1 for g, f in pairs if f.status.done == _done(g, cp))
+
+    alerted = [f for f in snap.promises if alerted_at(f, cp)]
+    matched = {id(f): g for g, f in pairs}
+    true_alerts = sum(1 for f in alerted if id(f) in matched and _breached(matched[id(f)], cp))
+    breached = sum(1 for g in planted if _breached(g, cp))
+
+    judged, stale, contested, unjudged = _freshness(ticket, snap)
+    changes_right, changes_judged = _changes(ticket, snap)
 
     return Score(
         commitments=Counts(len(pairs), len(spurious), len(missed)),
-        deadlines_right=right,
+        deadlines_right=deadlines,
         deadlines_judged=len(pairs),
-        alerts=Counts(true_alerts, len(alerted) - true_alerts, broken - true_alerts),
+        statuses_right=statuses,
+        statuses_judged=len(pairs),
+        alerts=Counts(true_alerts, len(alerted) - true_alerts, breached - true_alerts),
+        facts_judged=judged,
+        facts_stale=stale,
+        facts_contested=contested,
+        facts_unjudged=unjudged,
+        changes_right=changes_right,
+        changes_judged=changes_judged,
+        disputes=_disputes(ticket, snap),
+        failed_steps=_failed_steps(ticket, snap),
+        checkpoints=1,
+        errors=int(snap.error is not None),
     )
 
 
+# ------------------------------------------------------------- promises ----
+
+
 def match(
-    gold: tuple[GoldCommitment, ...], found: tuple[Commitment, ...]
-) -> tuple[list[tuple[GoldCommitment, Commitment]], list[Commitment], list[GoldCommitment]]:
+    gold: Sequence[GoldCommitment], found: Sequence[Promise]
+) -> tuple[list[tuple[GoldCommitment, Promise]], list[Promise], list[GoldCommitment]]:
     """Pair planted promises with found ones: same message, same side, one to one.
 
     When one message holds several promises of one side, a found promise with
@@ -106,17 +229,139 @@ def match(
     remaining = list(found)
     pairs, missed = [], []
     for g in gold:
-        candidates = [
-            c for c in remaining if c.source.seq == g.seq and c.owner.side is g.owner.side
-        ]
+        candidates = [f for f in remaining if f.seq == g.seq and f.side is g.owner.side]
         if not candidates:
             missed.append(g)
             continue
-        best = next((c for c in candidates if _due_at(c) == g.due_at), candidates[0])
+        best = next((f for f in candidates if same_deadline(g.due_at, f.due_at)), candidates[0])
         remaining.remove(best)
         pairs.append((g, best))
     return pairs, remaining, missed
 
 
-def _due_at(c: Commitment):
-    return c.due.deadline.due_at if c.due else None
+def same_deadline(a, b) -> bool:
+    if a is None or b is None:
+        return a is None and b is None
+    return abs(a - b) <= TOLERANCE
+
+
+def alerted_at(p: Promise, cp: Checkpoint) -> bool:
+    """A company promise held open past a deadline the method trusts."""
+    return (
+        p.side is Side.COMPANY
+        and p.status is PromiseStatus.OPEN
+        and p.alertable
+        and p.due_at is not None
+        and p.due_at <= cp.at
+    )
+
+
+def _done(g: GoldCommitment, cp: Checkpoint) -> bool:
+    return g.resolved_seq is not None and g.resolved_seq <= cp.seq
+
+
+def _breached(g: GoldCommitment, cp: Checkpoint) -> bool:
+    return (
+        g.owner.side is Side.COMPANY
+        and g.due_at is not None
+        and g.due_at <= cp.at
+        and not _done(g, cp)
+    )
+
+
+# ---------------------------------------------------------------- facts ----
+
+
+def fact_status(ticket: SimTicket, fact: GoldFact, seq: int) -> str | None:
+    """What a planted value is after event ``seq``: current, stale or contested.
+
+    None when it had not been said yet.
+    """
+    if fact.seq > seq:
+        return None
+    gold = ticket.gold
+    if any(c.slot == fact.slot and c.old == fact.value and c.seq <= seq for c in gold.changes):
+        return "stale"
+    for d in gold.contradictions:
+        if d.slot != fact.slot or fact.value not in d.values:
+            continue
+        if d.open_at(seq):
+            return "contested"
+        if d.settled_seq is not None and d.settled_seq <= seq and d.winner != fact.value:
+            return "stale"
+    return "current"
+
+
+def presented(ticket: SimTicket, text: str, seq: int) -> dict[str, GoldFact]:
+    """Per slot, the planted value a piece of text presents.
+
+    When an item mentions several values of one slot ("was Лайт, now
+    Премиум"), it is taken to present the latest one said.
+    """
+    found: dict[str, GoldFact] = {}
+    for g in ticket.gold.facts:
+        newer = g.slot not in found or g.seq > found[g.slot].seq
+        if g.seq <= seq and newer and mentions(text, g.key):
+            found[g.slot] = g
+    return found
+
+
+def _freshness(ticket: SimTicket, snap: Snapshot) -> tuple[int, int, int, int]:
+    judged = stale = contested = unjudged = 0
+    for item in snap.facts:
+        values = presented(ticket, item.text, snap.checkpoint.seq)
+        if not values:
+            unjudged += 1
+        for g in values.values():
+            status = fact_status(ticket, g, snap.checkpoint.seq)
+            judged += 1
+            stale += status == "stale"
+            contested += status == "contested"
+    return judged, stale, contested, unjudged
+
+
+def _changes(ticket: SimTicket, snap: Snapshot) -> tuple[int, int]:
+    seq = snap.checkpoint.seq
+    shown = [g for item in snap.facts for g in presented(ticket, item.text, seq).values()]
+    values = {(g.slot, g.value) for g in shown}
+    judged = [c for c in ticket.gold.changes if c.seq <= seq]
+    right = sum(
+        1 for c in judged if (c.slot, c.new) in values and (c.slot, c.old) not in values
+    )  # fmt: skip
+    return right, len(judged)
+
+
+def _key(ticket: SimTicket, slot: str, value: str) -> tuple[str, ...]:
+    return next(f.key for f in ticket.gold.facts if f.slot == slot and f.value == value)
+
+
+def _disputes(ticket: SimTicket, snap: Snapshot) -> Counts:
+    seq = snap.checkpoint.seq
+    gold = [d for d in ticket.gold.contradictions if d.open_at(seq)]
+    remaining: list[Dispute] = list(snap.disputes)
+    tp = 0
+    for d in gold:
+        keys = [_key(ticket, d.slot, v) for v in d.values]
+        hit = next((x for x in remaining if all(mentions(x.text, k) for k in keys)), None)
+        if hit is not None:
+            remaining.remove(hit)
+            tp += 1
+    return Counts(tp, len(remaining), len(gold) - tp)
+
+
+def _failed_steps(ticket: SimTicket, snap: Snapshot) -> Counts:
+    seq = snap.checkpoint.seq
+    gold = [f for f in ticket.gold.repeated_fixes if f.failed_seq <= seq]
+    remaining: list[FailedStep] = list(snap.failed_steps)
+    tp = 0
+    for fix in gold:
+        seqs = {fix.suggested_seq, fix.failed_seq, fix.repeated_seq}
+
+        def recognised(step: FailedStep, fix=fix, seqs=seqs) -> bool:
+            return bool({step.seq, step.failed_seq} & seqs) or mentions_any(step.action, fix.key)
+
+        hit = next((s for s in remaining if recognised(s)), None)
+        if hit is not None:
+            remaining.remove(hit)
+            tp += 1
+    return Counts(tp, len(remaining), len(gold) - tp)

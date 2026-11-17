@@ -5,7 +5,7 @@ import httpx
 import pytest
 from helpers import ANNA, CAL, IVAN, MSK, Ticket
 
-from duebook import CommitmentState, Confidence, MessagePosted, Party, Reason, apply
+from duebook import CommitmentState, Confidence, MessagePosted, Party, Reason, StepOutcome, apply
 from duebook.extract import (
     PRICES,
     ChatClient,
@@ -17,9 +17,16 @@ from duebook.extract import (
     estimate,
     parse_output,
 )
-from duebook.extract.prompt import build_messages, render_card
+from duebook.extract.prompt import Bound, build_messages, render_card
 from duebook.extract.schema import OUTPUT_SCHEMA, parse_due_expr
-from duebook.proposals import AskQuestion, MakeCommitment, RecordStep, ResolveCommitment
+from duebook.proposals import (
+    AskQuestion,
+    AssertFact,
+    MakeCommitment,
+    RecordStep,
+    ResolveCommitment,
+    SetStepOutcome,
+)
 from duebook.temporal import DateRef, DayRef, Offset, Period, PeriodEnd, Unit, WeekdayRef
 
 NO_DUE = {
@@ -137,6 +144,62 @@ def test_the_model_sees_the_card_and_one_message_never_the_transcript():
     assert "Sent: Monday 2027-01-11 10:00 (Europe/Moscow)" in messages[1]["content"]
     assert messages[1]["content"].endswith("Заказ 4815")
     assert "СЕКРЕТНОЕ-СЛОВО" not in messages[1]["content"]
+
+
+def long_card():
+    """A card grown long: many settled steps, many open questions, many facts."""
+    t = Ticket()
+    t.assign(None, IVAN.id)
+    for n in range(1, 21):
+        t.say(ANNA, f"Заказ {n}000. Есть новости {n}?",
+              AssertFact(f"order.item_{n}", f"{n}000", f"Заказ {n}000"),
+              AskQuestion(f"Есть новости {n}?", f"Есть новости {n}?"))  # fmt: skip
+        t.say(IVAN, f"Попробуйте шаг {n}.", RecordStep(f"шаг {n}", f"Попробуйте шаг {n}"))
+        step = t.card.steps[-1].id
+        if n < 18:  # the last three stay pending
+            t.say(ANNA, "Не помогло.", SetStepOutcome(step, StepOutcome.FAILED, "Не помогло"))
+    t.say(IVAN, "Вернём деньги до пятницы.",
+          MakeCommitment(Party.COMPANY, "вернуть деньги", "Вернём деньги до пятницы"))  # fmt: skip
+    t.say(ANNA, "У меня тариф Лайт.", AssertFact("account.plan", "Лайт", "тариф Лайт"))
+    t.say(IVAN, "У вас тариф Про.", AssertFact("account.plan", "Про", "тариф Про"))
+    return t
+
+
+def test_a_bound_caps_history_and_says_how_much_it_left_out():
+    t = long_card()
+    full = render_card(t.card, t.now, CAL)
+    bounded = render_card(t.card, t.now, CAL, Bound(facts=5, settled_steps=4, questions=3))
+    assert len(bounded.text) < len(full.text) / 2
+    assert "(+17 older facts not shown)" in bounded.text  # 22 current, the 5 latest kept
+    assert "(+13 earlier steps with a known outcome not shown)" in bounded.text
+    assert "(+17 older open questions not shown)" in bounded.text
+
+
+def test_a_bound_never_hides_what_the_model_can_act_on_or_a_disputed_fact():
+    t = long_card()
+    bounded = render_card(t.card, t.now, CAL, Bound(facts=1, settled_steps=0, questions=1))
+    # Every unresolved commitment and every pending step keeps its handle.
+    commitment = next(c for c in t.card.commitments if c.unresolved)
+    assert bounded.aliases["C1"] == commitment.id
+    pending = [s for s in t.card.steps if s.outcome is StepOutcome.PENDING]
+    assert len(pending) == 3 and all(s.id in bounded.aliases.values() for s in pending)
+    # Both sides of the open dispute are shown, though only one fact fits.
+    assert "account.plan = Лайт" in bounded.text and "account.plan = Про" in bounded.text
+
+
+def test_a_handle_names_the_same_item_with_or_without_a_bound():
+    t = long_card()
+    full = render_card(t.card, t.now, CAL)
+    bounded = render_card(t.card, t.now, CAL, Bound(settled_steps=2, questions=2))
+    for alias, target in bounded.aliases.items():
+        assert full.aliases[alias] == target
+
+
+def test_without_a_bound_the_card_is_shown_whole():
+    t = long_card()
+    rendered = render_card(t.card, t.now, CAL)
+    assert "not shown" not in rendered.text
+    assert len([a for a in rendered.aliases if a.startswith("S")]) == 20
 
 
 # ------------------------------------------------------------ extractor ----
