@@ -115,6 +115,12 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
 
     from .api import create_app
 
+    # Both are optional so a local run needs no setup, which also means a
+    # deployment can come up wide open without anyone noticing. Say so loudly.
+    if not settings.webhook_secret:
+        log.warning("DUEBOOK_WEBHOOK_SECRET is not set: POST /events accepts unsigned events")
+    if not settings.api_key:
+        log.warning("DUEBOOK_API_KEY is not set: card, brief and status are readable by anyone")
     uvicorn.run(
         create_app(settings),
         host=args.host or settings.host,
@@ -140,9 +146,7 @@ def extractor(settings: Settings):
     return Extractor(client, settings.calendar())
 
 
-def process(
-    settings: Settings, args: argparse.Namespace, stopper: Stopper, reader=None
-) -> int:
+def process(settings: Settings, args: argparse.Namespace, stopper: Stopper, reader=None) -> int:
     from .pipeline import Pipeline
 
     reader = reader or extractor(settings)
@@ -198,9 +202,7 @@ def channel(settings: Settings):
     return LogChannel()
 
 
-def deliver(
-    settings: Settings, args: argparse.Namespace, stopper: Stopper, sink=None
-) -> int:
+def deliver(settings: Settings, args: argparse.Namespace, stopper: Stopper, sink=None) -> int:
     from .store import Worker
 
     sink = sink or channel(settings)

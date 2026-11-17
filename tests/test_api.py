@@ -117,6 +117,17 @@ def test_a_malformed_event_is_refused_before_it_reaches_the_append_only_log(
     assert conn.execute("select count(*) as n from events").fetchone()["n"] == 0
 
 
+def test_an_oversized_event_is_refused_before_it_is_read(client, conn):
+    from duebook.api.app import MAX_EVENT_BYTES
+
+    response = client.post(
+        "/events", content=b"{" + b" " * MAX_EVENT_BYTES + b"}",
+        headers={"content-type": "application/json"},
+    )  # fmt: skip
+    assert response.status_code == 413
+    assert conn.execute("select count(*) as n from events").fetchone()["n"] == 0
+
+
 def test_with_a_secret_configured_only_a_correctly_signed_event_is_accepted(secured, conn):
     event = story().log[0][0]
     assert post(secured, event).status_code == 401

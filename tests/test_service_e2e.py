@@ -59,8 +59,11 @@ def conversation() -> Ticket:
     t.assign(None, IVAN.id)
     t.say(ANNA, "Мне так и не перезвонили по заказу 4815.")
     t.wait(minutes=15)
-    t.say(IVAN, PROMISE + ".",
-          MakeCommitment(Party.AGENT, "перезвонить", PROMISE, due_quote="через 2 часа"))
+    t.say(
+        IVAN,
+        PROMISE + ".",
+        MakeCommitment(Party.AGENT, "перезвонить", PROMISE, due_quote="через 2 часа"),
+    )
     t.wait(minutes=30)
     t.assign(IVAN.id, OLGA.id)  # Ivan's shift ends; the promise passes to Olga
     return t  # fmt: skip
@@ -74,9 +77,7 @@ def deliver(client: TestClient, event) -> dict:
     return response.json()
 
 
-def test_a_promise_posted_through_the_webhook_is_alerted_once_to_its_holder_and_briefed(
-    conn, dsn
-):
+def test_a_promise_posted_through_the_webhook_is_alerted_once_to_its_holder_and_briefed(conn, dsn):
     ticket = conversation()
     events = [event for event, _ in ticket.log]
     clock = Clock(START + timedelta(hours=1))

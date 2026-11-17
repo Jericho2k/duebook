@@ -44,6 +44,10 @@ from ..store import Conflict, Store
 from ..store.codec import encode
 from .validation import Invalid, read_event
 
+#: The largest webhook body accepted. One ticket event is a few kilobytes; a
+#: limit keeps a misbehaving sender from filling memory or the append-only log.
+MAX_EVENT_BYTES = 256 * 1024
+
 
 def create_app(
     settings: Settings,
@@ -100,7 +104,15 @@ def create_app(
 
     @app.post("/events", status_code=202)
     async def receive(request: Request) -> dict[str, Any]:
-        body = await request.body()
+        declared = request.headers.get("content-length", "")
+        if declared.isdigit() and int(declared) > MAX_EVENT_BYTES:
+            raise HTTPException(413, f"an event must not exceed {MAX_EVENT_BYTES} bytes")
+        body = bytearray()
+        async for chunk in request.stream():
+            body += chunk
+            if len(body) > MAX_EVENT_BYTES:
+                raise HTTPException(413, f"an event must not exceed {MAX_EVENT_BYTES} bytes")
+        body = bytes(body)
         if settings.webhook_secret and not signing.verify(
             settings.webhook_secret, body, request.headers.get(signing.HEADER)
         ):
@@ -127,9 +139,7 @@ def create_app(
     # -------------------------------------------------------------- reads ----
 
     @app.get("/tickets/{ticket_id}/card", dependencies=guarded)
-    def card(
-        ticket_id: str, as_of: Annotated[int | None, Query(ge=1)] = None
-    ) -> dict[str, Any]:
+    def card(ticket_id: str, as_of: Annotated[int | None, Query(ge=1)] = None) -> dict[str, Any]:
         with store() as s:
             current = _known(s, ticket_id)
             if as_of is None:
@@ -146,9 +156,7 @@ def create_app(
             "as_of": shown.last_seq,
             "at": now.isoformat(),
             "card": encode(shown),
-            "commitment_status": {
-                c.id: status_at(c, now, policy).value for c in shown.commitments
-            },
+            "commitment_status": {c.id: status_at(c, now, policy).value for c in shown.commitments},
         }
 
     @app.get("/tickets/{ticket_id}/brief", dependencies=guarded, response_model=None)
