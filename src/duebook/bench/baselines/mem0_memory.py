@@ -14,7 +14,7 @@ Configuration, chosen to change nothing but the plumbing:
 
 * LLM: Mem0's own ``openai`` provider pointed at OpenRouter's
   OpenAI-compatible endpoint, with the same model, reasoning and provider
-  routing (``extract.client.MODELS``) as every other method;
+  routing (``extract.client.PRESETS``) as every other method;
 * embedder: Mem0's ``openai`` provider against OpenRouter's embeddings
   endpoint (``openai/text-embedding-3-small``);
 * vector store: Qdrant in local mode, a fresh store per ticket;

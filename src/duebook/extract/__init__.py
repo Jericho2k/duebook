@@ -2,12 +2,14 @@
 
 from .client import (
     DEFAULT_MODEL,
-    MODELS,
     OPENROUTER_URL,
+    PRESETS,
+    REASONING,
     ChatClient,
     Completion,
     ModelError,
     ModelSettings,
+    Preset,
     ResponseCache,
     settings_for,
 )
@@ -17,7 +19,6 @@ from .schema import OUTPUT_SCHEMA, Malformed, parse_output
 
 __all__ = [
     "DEFAULT_MODEL",
-    "MODELS",
     "OPENROUTER_URL",
     "OUTPUT_SCHEMA",
     "PRICES",
@@ -29,6 +30,9 @@ __all__ = [
     "Malformed",
     "ModelError",
     "ModelSettings",
+    "PRESETS",
+    "Preset",
+    "REASONING",
     "ResponseCache",
     "Pricing",
     "Reader",

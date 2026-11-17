@@ -85,11 +85,16 @@ Friday.
 The extractor shows the model the card and the one message that just arrived —
 never the whole transcript — and works against any OpenAI-compatible endpoint.
 The default reader is `deepseek/deepseek-v4.1-flash` with reasoning switched
-off (left at "low" it spends 1,000-2,300 hidden tokens a message) and its
-OpenRouter routing pinned so the fixed instructions hit the prompt cache; what
-a model needs sent lives in `extract.client.MODELS`. A `ResponseCache` keeps
-answers to temperature-0 requests on disk, so re-running unchanged input
-costs nothing.
+off (left at "low" it spends 1,000-2,300 hidden tokens a message) and locked
+to one OpenRouter host (DeepInfra, fp8, no fallbacks), so the fixed
+instructions hit one prompt cache and one host answers every call. What a
+model needs sent lives in a small presets table, `extract.client.PRESETS`
+(hosts and reasoning per model); `ChatClient(reasoning="low")` asks the same
+model to think. Every call records the host that answered, the prompt tokens
+served from cache and the hidden reasoning tokens. A 429 or 5xx is retried
+once, an empty or unreadable answer once, a timeout never — it may already
+have been generated and billed. A `ResponseCache` keeps answers to
+temperature-0 requests on disk, so re-running unchanged input costs nothing.
 
 ```python
 from duebook import apply
