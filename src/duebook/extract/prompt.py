@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from ..card import Card
+from ..card import Card, StepOutcome
 from ..events import MessagePosted
 from ..lifecycle import status_at
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
@@ -96,7 +96,35 @@ class Rendered:
     aliases: dict[str, str] = field(default_factory=dict)
 
 
-def render_card(card: Card, now: datetime, cal: WorkCalendar) -> Rendered:
+@dataclass(frozen=True, slots=True)
+class Bound:
+    """How much of the card the model is shown on a long ticket.
+
+    The card itself is never cut — this bounds only the prompt. What the model
+    can act on is always shown in full: every unresolved commitment (it may be
+    resolved, cancelled or renegotiated), every pending step (its outcome may
+    be reported) and every fact a dispute rests on. What is capped is history
+    the model only reads: steps whose outcome is known, the oldest open
+    questions, facts beyond the most recent. A capped list says how many items
+    it leaves out, so the model is not told the record is complete when it is
+    not.
+
+    Hiding an item removes its handle from the prompt, so the model cannot
+    refer to it; the reducer's rules are unchanged, and a reference to a
+    hidden handle is refused as an unknown target like any other.
+    """
+
+    #: Current facts shown, most recent first; disputed ones always.
+    facts: int = 12
+    #: Steps with a known outcome shown, most recent first; pending ones always.
+    settled_steps: int = 6
+    #: Open questions shown, most recent first.
+    questions: int = 6
+
+
+def render_card(
+    card: Card, now: datetime, cal: WorkCalendar, bound: Bound | None = None
+) -> Rendered:
     """The record so far, with short handles for anything the model may refer to."""
     aliases: dict[str, str] = {}
     lines = [
@@ -104,9 +132,16 @@ def render_card(card: Card, now: datetime, cal: WorkCalendar) -> Rendered:
         f"Assignee: {card.assignee or 'nobody'} | Status: {card.status or 'unknown'}",
     ]
 
-    facts = card.current_facts()
+    facts = list(card.current_facts())
+    hidden_facts = 0
+    if bound is not None and len(facts) > bound.facts:
+        disputed = {i for c in card.open_contradictions() for i in c.fact_ids}
+        keep = {f.id for f in sorted(facts, key=lambda f: f.valid_from)[-bound.facts :]}
+        shown = [f for f in facts if f.id in keep or f.id in disputed]
+        hidden_facts, facts = len(facts) - len(shown), shown
     lines.append("Facts:" if facts else "Facts: none")
     lines += [f"- {f.slot} = {f.value} (said by {f.source.side.value})" for f in facts]
+    lines += _more(hidden_facts, "older facts")
 
     commitments = [c for c in card.commitments if c.unresolved]
     lines.append("Unresolved commitments:" if commitments else "Unresolved commitments: none")
@@ -119,20 +154,39 @@ def render_card(card: Card, now: datetime, cal: WorkCalendar) -> Rendered:
             due = f" | due {local:%Y-%m-%d %H:%M}"
         lines.append(f"- {alias} [{c.owner.value}, {status_at(c, now).value}] {c.action}{due}")
 
-    lines.append("Steps:" if card.steps else "Steps: none")
-    for number, s in enumerate(card.steps, 1):
+    steps = list(enumerate(card.steps, 1))
+    hidden_steps = 0
+    if bound is not None:
+        settled = [n for n, s in steps if s.outcome is not StepOutcome.PENDING]
+        keep = set(settled[-bound.settled_steps :]) if bound.settled_steps else set()
+        shown = [(n, s) for n, s in steps if s.outcome is StepOutcome.PENDING or n in keep]
+        hidden_steps, steps = len(steps) - len(shown), shown
+    lines.append("Steps:" if steps else "Steps: none")
+    for number, s in steps:
+        # Handles keep their position in the full list, so a step is called
+        # the same whether or not older ones are shown.
         alias = f"S{number}"
         aliases[alias] = s.id
         lines.append(f"- {alias} [{s.outcome.value}] {s.action}")
+    lines += _more(hidden_steps, "earlier steps with a known outcome")
 
     questions = [q for q in card.questions if q.open]
+    hidden_questions = 0
+    if bound is not None and len(questions) > bound.questions:
+        hidden_questions = len(questions) - bound.questions
+        questions = questions[hidden_questions:]
     lines.append("Open questions:" if questions else "Open questions: none")
-    for number, q in enumerate(questions, 1):
+    for number, q in enumerate(questions, hidden_questions + 1):
         alias = f"Q{number}"
         aliases[alias] = q.id
         lines.append(f"- {alias} [waiting on {q.waiting_on.value}] {q.text}")
+    lines += _more(hidden_questions, "older open questions")
 
     return Rendered("\n".join(lines), aliases)
+
+
+def _more(count: int, what: str) -> list[str]:
+    return [f"- (+{count} {what} not shown)"] if count else []
 
 
 def render_message(event: MessagePosted, cal: WorkCalendar) -> str:
@@ -151,9 +205,13 @@ def render_message(event: MessagePosted, cal: WorkCalendar) -> str:
 
 
 def build_messages(
-    card: Card, event: MessagePosted, cal: WorkCalendar, vocab: Vocabulary = DEFAULT_VOCABULARY
+    card: Card,
+    event: MessagePosted,
+    cal: WorkCalendar,
+    vocab: Vocabulary = DEFAULT_VOCABULARY,
+    bound: Bound | None = None,
 ) -> tuple[list[dict[str, str]], dict[str, str]]:
-    rendered = render_card(card, event.at, cal)
+    rendered = render_card(card, event.at, cal, bound)
     user = f"{rendered.text}\n\n{render_message(event, cal)}"
     return (
         [{"role": "system", "content": system_prompt(vocab)}, {"role": "user", "content": user}],

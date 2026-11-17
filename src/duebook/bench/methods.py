@@ -16,8 +16,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from ..card import Card
+from ..events import Event, MessagePosted
 from ..extract.cost import Usage
-from ..extract.extractor import Extractor, JsonModel
+from ..extract.extractor import Extraction, Extractor, JsonModel
+from ..extract.prompt import Bound, build_messages
 from ..lifecycle import AlertPolicy
 from ..temporal import WorkCalendar
 from .generate import SimTicket
@@ -77,15 +80,39 @@ class EventMemory:
     ledger: Ledger
     cal: WorkCalendar = field(default_factory=WorkCalendar)
     policy: AlertPolicy = field(default_factory=AlertPolicy)
-    #: Passed to the extractor; see ``extract.prompt`` for what it bounds.
-    extractor_options: dict[str, Any] = field(default_factory=dict)
+    #: What the model is shown of a long card; None shows all of it.
+    bound: Bound | None = None
     name: str = "event_memory"
 
     def run(self, ticket: SimTicket) -> MethodRun:
         meter = Meter(self.model, self.ledger)
-        extractor = Extractor(meter, self.cal, **self.extractor_options)
+        extractor = _Sizing(Extractor(meter, self.cal, bound=self.bound))
         folded = fold(ticket, extractor, [cp.seq for cp in checkpoints(ticket)], self.cal)
         snaps = snapshots(ticket, folded, self.policy)
         failure = folded.failure[2] if folded.failure else None
-        detail = {"prompt_tokens": [list(p) for p in folded.prompts]}
+        detail = {
+            # (seq, prompt tokens the provider counted) for every model call.
+            "prompt_tokens": [list(p) for p in folded.prompts],
+            # (seq, characters of the prompt shown in full, and bounded) for
+            # every message: the same card rendered both ways, so the effect
+            # of the bound is measured on identical input.
+            "prompt_chars": extractor.sizes,
+        }
         return MethodRun.of(self.name, ticket, snaps, meter.tally, failure, detail)
+
+
+@dataclass(slots=True)
+class _Sizing:
+    """Notes how long the prompt would be with and without a bound, then extracts."""
+
+    extractor: Extractor
+    sizes: list[list[int]] = field(default_factory=list)
+
+    def extract(self, card: Card, event: Event) -> Extraction:
+        if isinstance(event, MessagePosted) and event.text.strip():
+            x = self.extractor
+            full, _ = build_messages(card, event, x.cal, x.vocab, None)
+            bounded, _ = build_messages(card, event, x.cal, x.vocab, Bound())
+            size = sum(len(m["content"]) for m in full), sum(len(m["content"]) for m in bounded)
+            self.sizes.append([event.seq, *size])
+        return self.extractor.extract(card, event)

@@ -334,3 +334,14 @@ def test_the_rewriter_is_told_who_is_speaking_and_which_spans_to_keep():
     request = next(r for r in model.requests if r[1]["content"] == promise.text)
     assert "real agent" in request[0]["content"]
     assert all(f"- {a}" in request[0]["content"] for a in ticket.anchors[promise.id])
+
+
+def test_a_rewrite_that_turned_into_a_dialogue_or_ballooned_is_not_accepted():
+    from duebook.bench.rewrite import acceptable
+
+    assert acceptable("Ладно.", "Ну ладно, поняла.", ())
+    assert not acceptable("Ладно.", "Клиент: у меня проблема.\nАгент: Сейчас уточню.", ())
+    assert not acceptable("Ладно.", "Ладно. Агент поддержки: уточню и вернусь с ответом.", ())
+    assert not acceptable("Ладно.", "Ладно, " + "очень " * 30 + "понятно.", ())
+    assert not acceptable("Вернём деньги до пятницы.", "Деньги вернём к пятнице.",
+                          ("Вернём деньги до пятницы",))  # fmt: skip

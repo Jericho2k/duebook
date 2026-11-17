@@ -22,7 +22,7 @@ from ..slots import Vocabulary
 from ..temporal import WorkCalendar
 from .client import Completion
 from .cost import Usage
-from .prompt import build_messages
+from .prompt import Bound, build_messages
 from .schema import OUTPUT_SCHEMA, Malformed, parse_output
 
 
@@ -53,13 +53,16 @@ class Extractor:
     model: JsonModel
     cal: WorkCalendar = field(default_factory=WorkCalendar)
     vocab: Vocabulary = DEFAULT_VOCABULARY
+    #: Caps what the model is shown of a long card (see ``prompt.Bound``).
+    #: None shows everything.
+    bound: Bound | None = None
 
     def extract(self, card: Card, event: Event) -> Extraction:
         """Read one event against the card. Raises ``ModelError`` on failure."""
         if not isinstance(event, MessagePosted) or not event.text.strip():
             # Assignee and status changes carry no text; the reducer handles them.
             return Extraction()
-        messages, aliases = build_messages(card, event, self.cal, self.vocab)
+        messages, aliases = build_messages(card, event, self.cal, self.vocab, self.bound)
         completion = self.model.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
         proposals, malformed = parse_output(completion.data, aliases)
         return Extraction(tuple(proposals), tuple(malformed), completion.usage, completion.retried)
