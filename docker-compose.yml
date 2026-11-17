@@ -1,0 +1,76 @@
+# duebook with its database: the API, one processor, one scheduler, one
+# delivery worker. Copy .env.example to .env and fill it in first.
+#
+#   docker compose up -d --build
+#
+# Processors and delivery workers can be scaled (docker compose up --scale
+# processor=3); they share the work safely. Run one scheduler: a second one is
+# harmless but does nothing useful.
+
+x-duebook: &duebook
+  build: .
+  image: duebook:latest
+  env_file: .env
+  environment:
+    DUEBOOK_DATABASE_URL: postgresql://duebook:${POSTGRES_PASSWORD:-duebook}@postgres:5432/duebook
+  restart: unless-stopped
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: duebook
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-duebook}
+      POSTGRES_DB: duebook
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U duebook -d duebook"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  # Brings the schema up to date, then exits; everything else waits for it.
+  migrate:
+    <<: *duebook
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *duebook
+    command: ["serve"]
+    ports:
+      - "${DUEBOOK_PORT:-8000}:8000"
+    environment:
+      DUEBOOK_DATABASE_URL: postgresql://duebook:${POSTGRES_PASSWORD:-duebook}@postgres:5432/duebook
+      DUEBOOK_PORT: "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  processor:
+    <<: *duebook
+    command: ["process"]
+    # A model call in flight is finished before the processor exits.
+    stop_grace_period: 2m
+
+  scheduler:
+    <<: *duebook
+    command: ["schedule"]
+
+  deliverer:
+    <<: *duebook
+    command: ["deliver"]
+    stop_grace_period: 30s
+
+volumes:
+  pgdata:
