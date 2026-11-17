@@ -192,6 +192,10 @@ the commitment and the message; 68% of its tokens were cached.
 
 ### Projected cost of the final run
 
+This projection used the original `main` profile. The current `test3` split
+uses `main2`, which keeps the same length range and adds three close cases
+per ticket.
+
 On a fresh seed, `test3` (seed 4343, 20 `main`-profile tickets), defined in
 `SPLITS` but **not generated, read or run**. Per-ticket costs are round 2's
 test2 measurements on the same profile, model and host. The upper bound adds

@@ -284,6 +284,7 @@ estimated pessimistically for Russian; pass a real tokenizer's counter as
 
 ```bash
 python -m duebook.bench --seed 1 --tickets 200        # self-check, no model called
+python -m duebook.bench --split dev3                 # self-check a fixed split
 python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
 python -m duebook.bench.round3 --max-usd 0.2   # round 3: dev only, configurations A, B, C
@@ -306,6 +307,21 @@ profile: 150-200 messages, 3-4 handoffs, about two weeks, and, besides all of
 the above, pairs of near-identical promises open at once (one kept, one
 broken), a renegotiation and a cancellation — what makes a close easy to pin
 on the wrong promise. Its splits are `dev2` (4 tickets) and `test2` (20).
+
+The `main2` profile uses the same length and handoff ranges and adds three
+cases per ticket. Use `dev3` (4 tickets, seed 4444) for tuning and `test3`
+(20 tickets, seed 4343) for evaluation.
+
+| Measure | What the method must show at the end of the ticket |
+|---|---|
+| `rescue_close_correct` | The twin identified by the preceding turn is fulfilled and its rival is still open. |
+| `ambiguous_close_refrained` | Both twins are still open when the reply leaves their identity unclear. |
+| `wrong_thing_not_closed` | The callback is still open after the customer confirms an unrelated refund. |
+
+Each measure is the share of its cases the method gets right. Omitting an
+affected promise counts as a failure. When the method supplies a closing
+message number for the rescue, it must point to the customer's confirmation.
+The oracle carries a planted affirmative verdict for that confirmation.
 
 Every method answers in one format at every handoff and at the end
 (`bench.result`): promises with the owing side, source message, due instant

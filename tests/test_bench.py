@@ -3,7 +3,8 @@ import os
 import subprocess
 import sys
 from dataclasses import replace
-from datetime import timedelta
+from datetime import time, timedelta
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,7 @@ from duebook.bench import (
     run_ticket,
     score,
 )
+from duebook.bench.experiment import to_json
 from duebook.bench.generate import TWINS, CloseCase
 from duebook.bench.match import mentions
 from duebook.bench.rewrite import acceptable
@@ -464,6 +466,24 @@ def test_round_two_splits_use_fresh_seeds():
     old = {SPLITS[n].seed for n in ("dev", "test", "long")}
     assert SPLITS["dev2"].seed not in old and SPLITS["test2"].seed not in old
     assert SPLITS["test2"].count >= 20 and SPLITS["test2"].profile is MAIN
+
+
+@pytest.mark.parametrize(
+    ("name", "digest"),
+    [
+        ("dev2", "520681e4fd3a392572990f0dce12affb159566c70461e2cc6a1c0e3c78e690b1"),
+        ("test2", "0289991ca7a6c7c16f029db5353198ed877c027d50539d2c890b25b1ce9d859f"),
+    ],
+)
+def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name, digest):
+    tickets = to_json(SPLITS[name].tickets())
+    for ticket in tickets:
+        # Compare the full round-2 record using its original schema.
+        assert ticket["gold"].pop("close_cases") == []
+    data = json.dumps(
+        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
+    )
+    assert sha256(data.encode("utf-8")).hexdigest() == digest
 
 
 def test_the_round_three_splits_use_main2_at_fresh_distinct_seeds():
