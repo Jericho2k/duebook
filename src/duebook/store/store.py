@@ -320,6 +320,27 @@ class Store:
         ).fetchone()
         return row["n"]
 
+    def known(self, ticket_id: str) -> bool:
+        """Whether any event of this ticket has been stored."""
+        row = self.conn.execute(
+            "select 1 from tickets where ticket_id = %s", (ticket_id,)
+        ).fetchone()
+        return row is not None
+
+    def authors(self, ticket_id: str) -> dict[str, str]:
+        """Display names of the ticket's message authors, as their latest message gives them."""
+        rows = self.conn.execute(
+            "select distinct on (body->'author'->>'id') body->'author'->>'id' as id,"
+            " body->'author'->>'name' as name from events"
+            " where ticket_id = %s and kind = 'MessagePosted'"
+            " order by body->'author'->>'id', seq desc",
+            (ticket_id,),
+        ).fetchall()
+        return {row["id"]: row["name"] for row in rows if row["name"]}
+
+    def held_count(self) -> int:
+        return self.conn.execute("select count(*) as n from holds").fetchone()["n"]
+
     def next_wake(self) -> datetime | None:
         """The earliest instant at which any ticket's alerts change."""
         row = self.conn.execute("select min(wake_at) as at from tickets").fetchone()
