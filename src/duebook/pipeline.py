@@ -42,15 +42,20 @@ every pass, and comes back when a new event arrives or its retry is due.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
+
+import psycopg
 
 from .card import Card
 from .events import Event
 from .extract.cost import Usage
 from .extract.extractor import Reader
 from .store.store import Hold, Store
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,10 +119,45 @@ class Pipeline:
             with self.store.try_exclusive(ticket_id) as mine:
                 if not mine:
                     continue
-                done.append(self._advance(ticket_id, new=False))
+                try:
+                    handled = self._advance(ticket_id, new=False)
+                except (psycopg.OperationalError, psycopg.InterfaceError):
+                    raise  # the connection is gone: the caller reconnects
+                except Exception as error:
+                    # A fault in one ticket must not starve the others, and must
+                    # not be retried on every pass either: the model call before
+                    # it may already have been paid for. The ticket is held,
+                    # with backoff, like a failed extraction.
+                    log.exception("advancing %s failed", ticket_id)
+                    if not self._hold_after_fault(ticket_id, error):
+                        continue
+                    handled = Handled(ticket_id, self.store.card(ticket_id), new=False,
+                                      held=self.store.held(ticket_id))  # fmt: skip
+                done.append(handled)
                 if seen is not None:
                     self.store.processed(ticket_id, seen)
         return done
+
+    def _hold_after_fault(self, ticket_id: str, error: Exception) -> bool:
+        """Hold the ticket at its next event after an unexpected fault. False if that failed too."""
+        try:
+            seq = self.store.card(ticket_id).last_seq + 1
+            if self.store.event(ticket_id, seq) is None:
+                return False
+            previous = self.store.held(ticket_id)
+            attempts = previous.attempts if previous is not None and previous.seq == seq else 0
+            now = self.clock()
+            self.store.hold(
+                ticket_id, seq, f"{type(error).__name__}: {error}", now=now,
+                retry_at=now + min(self.retry_base * 2**attempts, self.retry_cap),
+                usage=previous.usage if previous is not None else None,
+            )  # fmt: skip
+        except (psycopg.OperationalError, psycopg.InterfaceError):
+            raise
+        except Exception:
+            log.exception("could not hold %s either", ticket_id)
+            return False
+        return True
 
     def run(
         self,

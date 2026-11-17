@@ -161,3 +161,31 @@ def test_the_processor_loop_sleeps_only_when_a_pass_found_nothing(store):
     # The first pass did the work and went straight on; the next two were idle.
     assert store.card("T-1") == ticket.card
     assert sleeps == [1.0, 1.0]
+
+
+def test_a_ticket_that_cannot_be_advanced_is_held_and_does_not_starve_the_others(conn, caplog):
+    broken, fine = promise("T-broken"), promise("T-fine")
+
+    class Faulty(Store):
+        def record(self, event, *args, **kwargs):
+            if event.ticket_id == "T-broken" and event.seq == 2:
+                raise RuntimeError("corrupt row")
+            return Store.record(self, event, *args, **kwargs)
+
+    store = Faulty(conn, CAL)
+    reader = Scripted(broken, fine)
+    p = Pipeline(store, reader, clock=Clock())
+    ingest(store, broken)
+    ingest(store, fine)
+
+    done = {h.ticket_id: h for h in p.process()}
+    assert store.card("T-fine") == fine.card and done["T-fine"].held is None
+    assert "advancing T-broken failed" in caplog.text
+    hold = done["T-broken"].held
+    assert hold.seq == 2 and "corrupt row" in hold.error
+    # Backing off like a failed extraction: no model call on every pass.
+    calls = len(reader.calls)
+    assert p.process() == [] and len(reader.calls) == calls
+    p.clock.now = hold.retry_at
+    (again,) = p.process()
+    assert again.held.attempts == 2 and len(reader.calls) == calls + 1
