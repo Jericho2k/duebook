@@ -340,6 +340,7 @@ METRICS: dict[str, tuple[str, Callable[[Score, int], float]]] = {
     "false_alerts_per_ticket": ("end", lambda s, n: s.alerts.fp / n),
     "freshness_error": ("all", lambda s, n: s.freshness_error),
     "freshness_error_at_handoffs": ("handoffs", lambda s, n: s.freshness_error),
+    "fact_recall": ("all", lambda s, n: s.fact_recall),
     "fact_change_accuracy": ("all", lambda s, n: s.change_accuracy),
     "dispute_precision": ("all", lambda s, n: s.disputes.precision),
     "dispute_recall": ("all", lambda s, n: s.disputes.recall),

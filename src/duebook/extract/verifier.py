@@ -43,6 +43,7 @@ from ..proposals import (
     Verification,
 )
 from ..temporal import WorkCalendar
+from .client import ModelError
 from .cost import Usage
 from .extractor import Extraction, JsonModel, Reader
 
@@ -145,10 +146,10 @@ class Verifier:
             {"role": "system", "content": VERIFIER_PROMPT},
             {"role": "user", "content": render_request(target, proposal, event, self.cal)},
         ]
-        name = getattr(self.model, "model", "")
+        name = _model_name(self.model)
         try:
             completion = self.model.complete_json(messages, VERIFY_SCHEMA, name="verdict")
-        except Exception as error:  # fail safe: as if no verifier had been asked
+        except ModelError as error:  # fail safe: as if no verifier had been asked
             spent = getattr(error, "usage", None) or Usage()
             return Verification(Verdict.UNSURE, model=name,
                                 error=f"{type(error).__name__}: {error}"), spent  # fmt: skip
@@ -187,3 +188,12 @@ class VerifyingReader:
                 p, spent = replace(p, verification=verdict), spent + cost
             proposals.append(p)
         return replace(extraction, proposals=tuple(proposals), usage=extraction.usage + spent)
+
+
+def _model_name(model: object) -> str:
+    """The model's name, through any wrapper that holds the client as ``model``."""
+    for _ in range(4):
+        model = getattr(model, "model", "")
+        if isinstance(model, str):
+            return model
+    return ""

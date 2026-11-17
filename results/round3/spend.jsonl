@@ -1,0 +1,2 @@
+{"at": "2026-11-17T19:24:42.122384+00:00", "split": "none", "what": "probe: one verifier call, reasoning low, locked to DeepInfra", "usd": 0.00036442, "reused_usd": 0.0}
+{"at": "2026-11-17T19:26:04.334102+00:00", "split": "dev2", "what": "run", "configs": "C", "label": "sanity: C replay only", "usd": 0.0, "reused_usd": 0.0}
