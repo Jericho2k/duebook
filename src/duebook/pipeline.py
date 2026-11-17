@@ -25,6 +25,19 @@ retry time, and ``retry_held`` picks it up.
 ``handle`` reports a hold in its return value instead of raising. The event is
 already safe, so the caller should acknowledge it; a raise would make a queue
 redeliver it and hammer a model that is down.
+
+``handle`` does both halves in the caller's time. A service splits them: the
+webhook only calls ``Store.ingest`` and answers at once, because a helpdesk
+that waits seconds for a model call times out and redelivers; a processor
+calls ``process`` in a loop to apply whatever has been stored.
+
+Several processors may run at once. Each ticket is advanced under its
+advisory lock, as before, but a processor *tries* the lock and passes over a
+ticket another one holds, so two processors never queue behind each other on
+one ticket. After advancing, a processor records how many ingests it had seen
+(``Store.processed``); a ticket that is waiting on a gap or backing off after a
+failure therefore drops out of the work list instead of being picked up on
+every pass, and comes back when a new event arrives or its retry is due.
 """
 
 from __future__ import annotations
@@ -70,12 +83,54 @@ class Pipeline:
         new = self.store.ingest(event, self.clock())
         return self._advance(event.ticket_id, new=new)
 
+    def advance(self, ticket_id: str) -> Handled:
+        """Apply every stored event of the ticket that can be applied now, in order.
+
+        Waits for the ticket's lock if another worker has it.
+        """
+        return self._advance(ticket_id, new=False)
+
     def retry_held(self, limit: int = 100) -> list[Handled]:
         """Try again every held ticket whose retry time has come."""
         return [
             self._advance(hold.ticket_id, new=False)
             for hold in self.store.holds_due(self.clock(), limit)
         ]
+
+    def process(self, limit: int = 20, stop: Callable[[], bool] = lambda: False) -> list[Handled]:
+        """One pass of a processor: advance tickets with new events or a retry due.
+
+        Returns what was done; tickets another processor holds are skipped and
+        are not in the result. ``stop`` is checked between tickets, so a
+        processor asked to exit finishes the ticket in hand and no more.
+        """
+        work: dict[str, int | None] = dict(self.store.pending(limit))
+        for hold in self.store.holds_due(self.clock(), limit):
+            work.setdefault(hold.ticket_id, None)
+        done = []
+        for ticket_id, seen in work.items():
+            if stop():
+                break
+            with self.store.try_exclusive(ticket_id) as mine:
+                if not mine:
+                    continue
+                done.append(self._advance(ticket_id, new=False))
+                if seen is not None:
+                    self.store.processed(ticket_id, seen)
+        return done
+
+    def run(
+        self,
+        *,
+        sleep: Callable[[float], None],
+        idle: timedelta = timedelta(seconds=1),
+        limit: int = 20,
+        stop: Callable[[], bool] = lambda: False,
+    ) -> None:
+        """Process until ``stop`` says so, sleeping ``idle`` whenever a pass found nothing."""
+        while not stop():
+            if not self.process(limit, stop):
+                sleep(idle.total_seconds())
 
     def _advance(self, ticket_id: str, *, new: bool) -> Handled:
         applied: list[int] = []

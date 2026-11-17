@@ -104,6 +104,7 @@ class Store:
                 (event.ticket_id, event.seq, event.id, body["type"], event.at, Jsonb(body), now),
             ).fetchone()
             if row is not None:
+                self._mark_pending(event.ticket_id, now)
                 return True
             stored = self.conn.execute(
                 "select body from events where ticket_id = %s and seq = %s",
@@ -202,6 +203,36 @@ class Store:
             ).fetchone()
         return _hold(row)
 
+    def processed(self, ticket_id: str, seen: int) -> None:
+        """Note that the processor advanced the ticket as far as ``seen`` ingests allow.
+
+        ``seen`` is the ``ingested`` count read by ``pending`` BEFORE advancing.
+        An event that arrived meanwhile has raised the count past it, so the
+        ticket stays pending and is picked up again.
+        """
+        self.conn.execute(
+            "update tickets set processed = greatest(processed, %s) where ticket_id = %s",
+            (seen, ticket_id),
+        )
+
+    @contextmanager
+    def try_exclusive(self, ticket_id: str) -> Iterator[bool]:
+        """Like ``exclusive``, but yields False at once when another session has the ticket.
+
+        Lets several processors share the work: one that finds a ticket taken
+        moves on to the next instead of queueing behind the model call.
+        """
+        row = self.conn.execute(
+            "select pg_try_advisory_lock(hashtextextended(%s, 0)) as got", (ticket_id,)
+        ).fetchone()
+        try:
+            yield row["got"]
+        finally:
+            if row["got"]:
+                self.conn.execute(
+                    "select pg_advisory_unlock(hashtextextended(%s, 0))", (ticket_id,)
+                )
+
     @contextmanager
     def exclusive(self, ticket_id: str) -> Iterator[None]:
         """Hold the ticket for the duration of the block; wait if another worker has it.
@@ -267,6 +298,19 @@ class Store:
         ).fetchall()
         return [_hold(row) for row in rows]
 
+    def pending(self, limit: int = 100) -> list[tuple[str, int]]:
+        """Tickets with events ingested since the processor last looked: (ticket_id, ingested).
+
+        Longest-waiting first. Reads the partial index ``tickets_pending``, so
+        the cost grows with the work waiting, not with the number of tickets.
+        """
+        rows = self.conn.execute(
+            "select ticket_id, ingested from tickets where ingested > processed"
+            " order by ingested_at, ticket_id limit %s",
+            (limit,),
+        ).fetchall()
+        return [(row["ticket_id"], row["ingested"]) for row in rows]
+
     def backlog(self, ticket_id: str) -> int:
         """How many stored events have not been applied yet."""
         row = self.conn.execute(
@@ -282,6 +326,17 @@ class Store:
         return row["at"]
 
     # ----------------------------------------------------------- internal ----
+
+    def _mark_pending(self, ticket_id: str, now: datetime) -> None:
+        """Count a newly stored event against its ticket, creating the row if needed."""
+        self.conn.execute(
+            "insert into tickets (ticket_id, last_seq, card, updated_at, ingested, ingested_at)"
+            " values (%s, 0, %s, %s, 1, %s) on conflict (ticket_id) do update set"
+            " ingested_at = case when tickets.ingested > tickets.processed"
+            "  then tickets.ingested_at else excluded.ingested_at end,"
+            " ingested = tickets.ingested + 1",
+            (ticket_id, Jsonb(encode(Card(ticket_id))), now, now),
+        )
 
     def _lock(self, ticket_id: str, now: datetime, read: bool = True) -> Card | None:
         """Take the ticket's row lock, creating the row for a new ticket.
