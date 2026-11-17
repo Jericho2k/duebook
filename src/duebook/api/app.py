@@ -180,10 +180,12 @@ def create_app(
             current = _known(s, ticket_id)
             backlog = s.backlog(ticket_id)
             hold = s.held(ticket_id)
+            verification = s.verifier_counts(ticket_id)
         return {
             "ticket_id": ticket_id,
             "last_seq": current.last_seq,
             "backlog": backlog,
+            **verification,
             "hold": None
             if hold is None
             else {
@@ -200,7 +202,11 @@ def create_app(
         try:
             with store(timeout=2.0) as s:
                 s.conn.execute("select 1")
-                counts = {"pending_outbox": s.outbox.pending(), "held_tickets": s.held_count()}
+                counts = {
+                    "pending_outbox": s.outbox.pending(),
+                    "held_tickets": s.held_count(),
+                    **s.verifier_counts(),
+                }
         except (PoolTimeout, psycopg.Error):
             return JSONResponse({"database": "unreachable"}, status_code=503)
         return JSONResponse({"database": "ok", **counts})

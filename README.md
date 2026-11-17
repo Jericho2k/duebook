@@ -69,6 +69,9 @@ the message. The verdict rides on the proposal (`verification`) and is stored
 with it, so a replay reproduces the card without a model; the reducer stays
 pure.
 
+`duebook process` enables the verifier by default. It uses the same endpoint
+and API key as the extractor, with DeepSeek V4.1 Flash and low reasoning.
+
 The reducer weighs it in layers. **Hard**, never overridden: who may close
 (nobody binds or releases the other side), the span of the target's wording,
 ambiguity (the closing words — and the verifier's evidence — fit another open
@@ -148,6 +151,10 @@ quadratically.
 
 A failed extraction raises. It never returns "nothing found", so a message the
 model could not read is retried rather than silently skipped.
+Verifier timeouts, HTTP errors and unreadable answers are logged and stored as
+`unsure` verdicts. The event is applied using the deterministic checks.
+Each applied event records verifier usage separately from extraction, including
+the provider when reported, token counts and the reported charge.
 
 ## Storage: an event log, a snapshot, an outbox
 
@@ -407,8 +414,12 @@ connection pool.
 | `GET /tickets/{id}/card` | the card in the codec's JSON, and `commitment_status`: each commitment's status now |
 | `GET /tickets/{id}/card?as_of=<seq>` | the card replayed from the log up to that event, with statuses as of that event's time |
 | `GET /tickets/{id}/brief?budget=<tokens>&format=text\|json` | the handoff brief; as JSON, its sections and lines, each line with its sources (event id, seq, author, side, quote) |
-| `GET /tickets/{id}/status` | last applied seq, how many stored events wait, and the hold (error, attempts, retry time) if any |
-| `GET /health` | database reachable, pending alerts, held tickets; 503 when the database is not |
+| `GET /tickets/{id}/status` | last applied seq, backlog, hold details if any, and verifier call and failure counts for the ticket |
+| `GET /health` | database status, pending alerts, held tickets, and service-wide verifier call and failure counts |
+
+`verifier_calls` counts proposals sent to the verifier, including calls that
+fail. `verifier_failures` counts calls that end in an error. Both counts
+cover applied events and count a retried call once.
 
 `POST /events` takes one event in the format `duebook.store.codec` stores:
 
@@ -444,6 +455,9 @@ key.
 | `DUEBOOK_OPENROUTER_API_KEY` | — | model key; required by `process` |
 | `DUEBOOK_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | any OpenAI-compatible endpoint |
 | `DUEBOOK_OPENROUTER_MODEL` | `deepseek/deepseek-v4.1-flash` | the model that reads messages |
+| `DUEBOOK_VERIFIER_ENABLED` | `true` | set to `false` to skip model verification |
+| `DUEBOOK_VERIFIER_MODEL` | `deepseek/deepseek-v4.1-flash` | the model that verifies proposed closes |
+| `DUEBOOK_VERIFIER_REASONING` | `low` | verifier reasoning, `low` or `off` |
 | `DUEBOOK_WEBHOOK_SECRET` | empty: unsigned | HMAC secret for `POST /events` |
 | `DUEBOOK_API_KEY` | empty: open | bearer key for the read endpoints |
 | `DUEBOOK_ALERT_CHANNEL` | `log` | `log` or `webhook` |

@@ -445,6 +445,7 @@ def test_client_retries_a_429_once_and_a_bad_answer_once_and_counts_what_each_co
     [
         ([httpx.Response(503), httpx.Response(502)], "http 502"),
         ([chat_response(""), chat_response("not json")], "content is not valid JSON"),
+        ([httpx.Response(200, json=[]), chat_response([1])], "message content is not text"),
     ],
 )
 def test_client_retries_each_kind_of_fault_only_once(replies, why):
@@ -476,6 +477,7 @@ def test_client_gives_up_loudly_and_reports_the_spend():
         client_for(lambda _: chat_response("")).complete_json([], {})
     assert "empty content" in str(failure.value)
     assert failure.value.usage.calls == 2
+    assert failure.value.provider == "DeepInfra"
 
 
 def test_client_does_not_retry_a_request_that_can_never_succeed():
