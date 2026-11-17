@@ -55,6 +55,9 @@ other side said ("according to our data you were charged 2900", "we shipped \
 model X") — those are not changes.
 
 commitments — a party promises a future action.
+- "quote": the whole clause that makes the promise, with what it is about \
+("Уточню на складе и напишу вам до пятницы", not "напишу вам до пятницы"): \
+it is the promise's wording in the record from then on.
 - "owner": "agent" for a personal promise ("I will call you back"), "company" \
 for a promise on the company's behalf ("we will refund you"), "customer" for \
 the customer's own promise ("I'll send the screenshot").
@@ -76,22 +79,26 @@ yourself; describe what was said:
   "time" is "HH:MM" (24h) when a clock time was given, else null. Set every \
 field that does not apply to null.
 - "supersedes": the id of an unresolved commitment this one replaces (a new \
-date for the same promise), else null. "target_quote": when "supersedes" is \
+date for the same promise), else null. A promise about something else — \
+another item, another topic — is a new commitment even when it is worded \
+alike: "supersedes" null. "target_quote": when "supersedes" is \
 set, words copied from THAT commitment's "said" text in the record that show \
 which one it is; else null.
 
-Closing a commitment. A commitment closed by mistake is never followed up, so \
-close only what the message is clearly about. When unsure, report nothing.
 resolved — the message says a listed commitment's action WAS DONE, in words \
-that name the deed ("the money arrived", "got the replacement", "thanks for \
-calling back"). Bare thanks or acknowledgement ("thanks", "спасибо", "ok, \
-waiting", "thanks for keeping me posted") confirms nothing: report nothing.
+that name the deed: "the money arrived", "got the screenshot", "thanks for \
+calling back", "thanks for the call about the delivery". Either side may say \
+it: the customer confirming what the company did, the company confirming \
+what the customer sent. Bare thanks or acknowledgement ("thanks", \
+"спасибо", "ok, waiting", "thanks for keeping me posted") names no deed and \
+confirms nothing.
 cancelled — the message says a listed commitment is no longer needed.
 For both: "id" is the commitment; "target_quote" is copied character for \
 character from THAT commitment's "said" text in the record (not from the new \
 message) and shows which one it is; "quote" is the words of the new message \
-that say what was done or called off. If the message could be about more \
-than one listed commitment, report nothing for it.
+that name what was done or called off. Report every such statement: the \
+record checks each close against the commitment's own words before it \
+accepts it, so do not hold one back.
 
 steps — a fix or diagnostic action that was suggested or tried. "outcome" is \
 "pending" unless this same message says whether it worked.

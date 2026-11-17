@@ -76,7 +76,8 @@ _STOP_TEXT = """
 STOPWORDS = frozenset(_STOP_TEXT.split())
 
 #: Stems of verbs that nearly every promise or confirmation uses. They say
-#: THAT something happened, never WHAT, so they do not count as shared content.
+#: THAT something happened, rarely WHAT, so they count for less than a word
+#: that names a thing (see ``overlap``).
 GENERIC = frozenset(
     {
         "получ", "пришл", "присл", "отпра", "вышл", "высл", "сдела", "напиш", "сообщ",
@@ -84,6 +85,10 @@ GENERIC = frozenset(
         "сдел", "буде", "може", "обещ", "send", "sent", "recei", "arriv", "done",
         # Support's own vocabulary: every ticket is a "question" or a "request".
         "вопро", "пробл", "заявк", "обращ", "ситуа", "инфор",
+        # How a renegotiation says it: the date moves, the promise does not.
+        "срок", "сдвиг", "перен", "задер", "успев", "успее", "продл", "позже", "новый",
+        # Regret and apology carry no content either.
+        "сожал", "извин", "прост",
     }
 )  # fmt: skip
 
@@ -149,8 +154,11 @@ def stem(word: str) -> Stem:
     return Stem(word, word[:5], root)
 
 
-def content(text: str) -> list[Stem]:
-    """The content words of a text: no function words, thanks, dates or generic verbs."""
+def content(text: str, generic: bool = False) -> list[Stem]:
+    """The content words of a text: no function words, thanks or dates.
+
+    Generic verbs are left out unless ``generic`` is set.
+    """
     out = []
     for w in words(text):
         # Short numbers are days, hours and counts of days ("3 рабочих дня",
@@ -158,20 +166,48 @@ def content(text: str) -> list[Stem]:
         if w in STOPWORDS or len(w) < 3:
             continue
         s = stem(w)
-        if s.head in GENERIC or s.head[:4] in GENERIC:
+        if not generic and _generic(s):
             continue
         out.append(s)
     return out
 
 
+def _generic(s: Stem) -> bool:
+    return s.head in GENERIC or s.head[:4] in GENERIC
+
+
+#: What a shared word is worth: one that names the thing, and a generic verb.
+NAMING, GENERIC_WEIGHT = 2, 1
+
+
 def overlap(text: str, target: Iterable[str]) -> int:
-    """How many distinct content words of ``text`` occur, in some form, in ``target``."""
-    theirs = [s for t in target for s in content(t)]
-    seen: set[str] = set()
-    for s in content(text):
+    """How much of ``text`` occurs, in some form, in ``target``.
+
+    Each distinct shared word counts once: two points when it names something
+    ("деньги", "замену", "склад"), one when it is a generic verb ("напишу",
+    "отправим"). A generic verb alone can still tie a close to a promise that
+    was worded with nothing else — but never outweighs a word that names.
+    """
+    theirs = [s for t in target for s in content(t, generic=True)]
+    seen: dict[str, int] = {}
+    for s in content(text, generic=True):
         if s.head not in seen and any(s.meets(t) for t in theirs):
-            seen.add(s.head)
-    return len(seen)
+            seen[s.head] = GENERIC_WEIGHT if _generic(s) else NAMING
+    return sum(seen.values())
+
+
+def names_other(text: str, target: Iterable[str]) -> bool:
+    """Does ``text`` name something ``target`` does not, while ``target`` names something
+    ``text`` leaves out — "перезвоню насчёт рассрочки" against "перезвоню насчёт оплаты"?
+
+    A renegotiation restates its promise with a new date: it may add a detail
+    or drop one, but a promise about a different thing is a new promise.
+    """
+    mine = content(text)
+    theirs = [s for t in target for s in content(t)]
+    added = [s for s in mine if not any(s.meets(t) for t in theirs)]
+    dropped = [t for t in theirs if not any(t.meets(s) for s in mine)]
+    return bool(added) and bool(dropped)
 
 
 def confirms(text: str) -> bool:
@@ -180,9 +216,12 @@ def confirms(text: str) -> bool:
 
 
 def quote_identifies(target_quote: str, source_quote: str) -> bool:
-    """Is ``target_quote`` a span of the promise's original wording, with content in it?"""
+    """Is ``target_quote`` a span of the promise's original wording, with a word in it?
+
+    "вам" or "до пятницы" alone would match many promises and identify none.
+    """
     span, whole = _norm(target_quote), _norm(source_quote)
-    return bool(span) and span in whole and bool(content(span) or _has_number(span))
+    return bool(span) and span in whole and bool(content(span, generic=True) or _has_number(span))
 
 
 def _has_number(text: str) -> bool:

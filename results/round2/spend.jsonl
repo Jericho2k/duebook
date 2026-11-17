@@ -4,3 +4,7 @@
 {"what": "writer trial: ~z-ai/glm-flash-latest", "usd": 0.0017161309999999999, "trial": {"~z-ai/glm-flash-latest": {"messages": 60, "discarded": 14, "usd": 0.0017161309999999999, "unchanged": 12}}}
 {"at": "2026-11-17T16:20:28.156255+00:00", "split": "dev2", "what": "rewriting the tickets", "methods": "event_memory,full_context,rolling_summary,mem0", "label": "", "usd": 0.020327598500000005, "reused_usd": 0.0}
 {"at": "2026-11-17T16:21:33.366369+00:00", "split": "test2", "what": "rewriting the tickets", "methods": "event_memory,full_context,rolling_summary,mem0", "label": "", "usd": 0.09432608450000007, "reused_usd": 0.0}
+{"at": "2026-11-17T16:26:29.853608+00:00", "split": "dev2", "what": "run", "methods": "event_memory", "label": "dev run 1: event memory, guards on", "usd": 0.04260019680000003, "reused_usd": 0.0011974648}
+{"at": "2026-11-17T16:32:38.487048+00:00", "split": "dev2", "what": "run", "methods": "event_memory", "label": "dev run 2: extractor told to report every close it can quote", "usd": 0.04470335777200006, "reused_usd": 0.0014405884000000002}
+{"at": "2026-11-17T16:40:18.400657+00:00", "split": "dev2", "what": "run", "methods": "event_memory", "label": "dev run 3: whole promise clause as quote; generic verbs weigh 1", "usd": 0.04330099759999997, "reused_usd": 0.0014798504000000001}
+{"at": "2026-11-17T16:47:27.949757+00:00", "split": "dev2", "what": "run", "methods": "event_memory", "label": "dev run 4: renegotiation must name the same thing; prompt says so", "usd": 0.043536835999999975, "reused_usd": 0.0012977495999999997}

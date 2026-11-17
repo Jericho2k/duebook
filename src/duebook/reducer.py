@@ -54,7 +54,7 @@ from .card import (
     StepOutcome,
     Suggestion,
 )
-from .closing import confirms, overlap, quote_identifies
+from .closing import confirms, names_other, overlap, quote_identifies
 from .events import AssigneeChanged, Event, MessagePosted, Role, Side, StatusChanged
 from .proposals import (
     AnswerQuestion,
@@ -376,7 +376,7 @@ def _make_commitment(
             return card, [Reason.UNKNOWN_TARGET]
         if not old.unresolved:
             return card, [Reason.ALREADY_RESOLVED]
-        refused = _check_close(card, old, (p.quote, p.action), p.target_quote, guards)
+        refused = _check_close(card, old, (p.quote, p.action), p.target_quote, guards, True)
         if refused is not None:
             # The new promise was made and is kept; the old one is NOT retired
             # on this evidence, only marked as possibly replaced.
@@ -494,7 +494,12 @@ def _cancel_commitment(
 
 
 def _check_close(
-    card: Card, target: Commitment, said: Sequence[str], target_quote: str, guards: Guards
+    card: Card,
+    target: Commitment,
+    said: Sequence[str],
+    target_quote: str,
+    guards: Guards,
+    restates: bool = False,
 ) -> Reason | None:
     """Why a close of ``target`` on the words ``said`` must not be admitted, or None.
 
@@ -504,6 +509,10 @@ def _check_close(
     the only open commitment its side owes, at least say that something was
     done — and fit no other open commitment of that side as well. Bare thanks
     passes none of this, which is the point: "спасибо" closes nothing.
+
+    A renegotiation (``restates``) must also be about the same thing: a
+    promise naming something the old one did not, and leaving out something
+    it did, is a second promise, not a new date for the first.
     """
     if guards.target and not quote_identifies(target_quote, target.source.quote):
         return Reason.TARGET_MISMATCH
@@ -514,6 +523,8 @@ def _check_close(
     ]  # fmt: skip
     fit = overlap(text, _wording(target))
     if guards.relevance and fit == 0 and (rivals or not confirms(text)):
+        return Reason.NOT_ABOUT_TARGET
+    if guards.relevance and restates and names_other(text, _wording(target)):
         return Reason.NOT_ABOUT_TARGET
     if guards.ambiguity and any(overlap(text, _wording(r)) >= max(fit, 1) for r in rivals):
         return Reason.AMBIGUOUS_TARGET

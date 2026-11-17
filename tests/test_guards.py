@@ -235,6 +235,45 @@ def test_renegotiation_pointing_at_the_wrong_promise_keeps_both_and_retires_neit
     assert t.card.commitment(refund).state is CommitmentState.OPEN
 
 
+def test_a_second_similar_promise_read_as_a_renegotiation_of_the_first_retires_nothing():
+    # Found on dev: "I'll call about the instalments" taken to replace "I'll call about
+    # the payment" retired a promise that was later broken.
+    t = Ticket()
+    t.assign(None, IVAN.id)
+    said = "Я перезвоню вам насчёт оплаты до среды"
+    payment = promise(t, f"{said}.", said, "перезвонить насчёт оплаты", owner=Party.AGENT,
+                      due=WeekdayRef(2), due_quote="до среды")  # fmt: skip
+    second = MakeCommitment(
+        Party.AGENT, "перезвонить насчёт рассрочки", "Я перезвоню вам насчёт рассрочки до пятницы",
+        due=WeekdayRef(4), due_quote="до пятницы", supersedes=payment, target_quote=said,
+    )  # fmt: skip
+    out = t.say(IVAN, "Я перезвоню вам насчёт рассрочки до пятницы.", second)
+    assert reasons(out) == [Reason.NOT_ABOUT_TARGET]
+    assert t.card.commitment(payment).state is CommitmentState.OPEN
+    assert len(t.card.commitments) == 2
+
+
+@pytest.mark.parametrize(
+    "said",
+    [
+        "К сожалению, не успеваем: вернём деньги до среды",  # drops "за доставку"
+        "Сроки сдвигаются, вернём деньги за доставку до среды",  # says why
+        "Перенесём возврат денег за доставку до среды",  # another root for the same deed
+    ],
+)
+def test_a_renegotiation_may_add_or_drop_detail_and_still_replace_the_promise(said):
+    t = Ticket()
+    delivery, case = two_refunds(t)
+    arrived = ResolveCommitment(case, "Деньги за чехол пришли", "деньги за чехол")
+    t.wait(hours=1).say(ANNA, "Деньги за чехол пришли!", arrived)
+    renewed = MakeCommitment(Party.COMPANY, "вернуть деньги", said, due=WeekdayRef(2),
+                             due_quote="до среды", supersedes=delivery,
+                             target_quote="вернём вам деньги за доставку")  # fmt: skip
+    out = t.say(IVAN, f"{said}.", renewed)
+    assert out.rejections == ()
+    assert t.card.commitment(delivery).state is CommitmentState.SUPERSEDED
+
+
 def test_renegotiation_of_the_right_promise_replaces_it():
     t = Ticket()
     refund, call = callback_and_refund(t)
@@ -315,17 +354,34 @@ def test_a_suggestion_survives_storage_and_an_old_card_reads_without_one():
 
 
 def test_different_forms_and_roots_of_one_deed_are_recognised():
-    assert overlap("Спасибо, что перезвонили", ["Я перезвоню вам"]) == 1
-    assert overlap("Спасибо за звонок", ["перезвонить"]) == 1
-    assert overlap("Возврат уже не нужен", ["вернём деньги"]) == 1
-    assert overlap("Счёт получила", ["Пришлём исправленный счёт"]) == 1
+    assert overlap("Спасибо, что перезвонили", ["Я перезвоню вам"]) == 2
+    assert overlap("Спасибо за звонок", ["перезвонить"]) == 2
+    assert overlap("Возврат уже не нужен", ["вернём деньги"]) == 2
+    assert overlap("Счёт получила", ["Пришлём исправленный счёт"]) == 2
 
 
-def test_deadline_words_generic_verbs_and_short_numbers_are_not_content():
+def test_deadline_words_and_short_numbers_are_not_content_and_generic_verbs_count_less():
     assert overlap("Пришлю в течение 3 рабочих дней", ["Вернём в течение 3 рабочих дней"]) == 0
-    assert overlap("Деньги пришли", ["Пришлём исправленный счёт"]) == 0
     assert overlap("Доступ к кабинету появился", ["вернём деньги за доставку"]) == 0
-    assert overlap("Заказ 4815 пришёл", ["доставим заказ 4815"]) == 2
+    assert overlap("Заказ 4815 пришёл", ["доставим заказ 4815"]) == 4
+    # "пришли" (arrived) and "пришлём" (will send) share a stem and nothing else.
+    assert overlap("Деньги пришли", ["Пришлём исправленный счёт"]) == 1
+    assert overlap("Деньги пришли", ["Мы вернём вам деньги"]) == 2
+
+
+def test_a_promise_worded_only_in_generic_verbs_can_still_be_renegotiated():
+    t = Ticket()
+    t.assign(None, IVAN.id)
+    old = promise(t, "Напишу вам до пятницы.", "Напишу вам до пятницы", "написать",
+                  owner=Party.AGENT, due=WeekdayRef(4), due_quote="до пятницы")  # fmt: skip
+    renewed = MakeCommitment(
+        Party.AGENT, "написать позже", "напишу вам в течение 5 рабочих дней",
+        due=Offset(5, Unit.BUSINESS_DAY), due_quote="в течение 5 рабочих дней",
+        supersedes=old, target_quote="Напишу вам до пятницы",
+    )  # fmt: skip
+    out = t.say(IVAN, "Не успеваю, напишу вам в течение 5 рабочих дней.", renewed)
+    assert out.rejections == ()
+    assert t.card.commitment(old).state is CommitmentState.SUPERSEDED
 
 
 def test_thanks_is_not_a_confirmation_and_receipt_is():

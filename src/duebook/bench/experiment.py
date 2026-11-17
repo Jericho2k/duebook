@@ -568,6 +568,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--no-cache", action="store_true", help="do not use the response cache")
     parser.add_argument("--rewrite-only", action="store_true",
                         help="rewrite and save the split's tickets, then stop")
+    parser.add_argument("--project-only", action="store_true",
+                        help="print the cost projection (its sample is charged), then stop")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--out", type=Path, help="default: <results>/<split>.json")
     parser.add_argument("--label", default="", help="a note for the spend log")
@@ -628,6 +630,9 @@ def main(argv: Sequence[str] | None = None) -> None:
               file=sys.stderr)  # fmt: skip
     room = ledger.cap_usd - ledger.usd()
     print(f"  projected total ({judged}) ${total:.4f}; room ${room:.4f}", file=sys.stderr)
+    if args.project_only:
+        spend("cost projection only")
+        return
     if total > room:
         spend("cost projection only: the run would not fit")
         raise SystemExit(f"projected ${total:.4f} exceeds the ${room:.4f} left: not run")
