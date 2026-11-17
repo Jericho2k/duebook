@@ -116,7 +116,11 @@ def test_an_alert_that_stopped_being_true_is_retired_instead_of_sent(store, conn
     ticket = promise("T-1")
     persist(store, ticket, now=LATE)  # the breach alert is queued...
     ticket.now = LATE
-    ticket.say(ANNA, "Мне перезвонили, спасибо", ResolveCommitment("e2#0", "Мне перезвонили"))
+    ticket.say(
+        ANNA,
+        "Мне перезвонили, спасибо",
+        ResolveCommitment("e2#0", "Мне перезвонили", "Перезвоню вам"),
+    )
     store.record(*ticket.log[-1], now=LATE)  # ...and the customer confirms the call
     channel = Recording()
     done = Worker(store, channel, "w1").run_once(LATE)

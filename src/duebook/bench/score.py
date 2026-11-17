@@ -11,12 +11,25 @@ checkpoints — each handoff and the end — and is judged by this code alone.
 * *Deadlines* — of the promises found, the share whose deadline is the planted
   instant (within a minute, so "23:59" and "23:59:59" agree), or correctly
   absent. An hour off is wrong: an alert would fire at the wrong time.
-* *Statuses* — of the promises found, the share whose done / not done agrees
-  with what had happened by the checkpoint.
+* *Statuses* — of the promises found, the share whose state agrees with what
+  had happened by the checkpoint: still owed, done, or dropped (cancelled or
+  replaced by a renegotiated promise). Round 1 judged done / not done only;
+  its tickets planted no cancellation or renegotiation, so there the two agree
+  except that a promise wrongly called cancelled or replaced now counts as
+  wrong, as it should.
 * *Breach alerts* — a company promise the method holds as open, with a
   deadline it trusts, that has passed by the checkpoint is an alert. Precision
   and recall against the promises planted as broken; every alert that is not
   one is a false alert.
+* *Closes* — of the promises found, which the method holds as closed (done,
+  claimed, cancelled or replaced). A *false close* is one closed while the
+  label says it is still owed — the costliest error, because a promise closed
+  by mistake is never alerted on again. A *wrong-target close* is closed when
+  the label is too, but by a different message than the one that closed it:
+  the right outcome reached through the wrong evidence. A *missed close* is
+  still held open when the label is closed. *Suggestions* are closes the event
+  memory held back for a person to confirm; one is right when it names the
+  message that really closed the promise.
 
 **Context** (RQ2) — facts are matched by VALUE, because methods do not agree
 on names (see ``match``). For every fact a method presents as current that
@@ -97,6 +110,15 @@ class Score:
     statuses_right: int = 0
     statuses_judged: int = 0
     alerts: Counts = field(default_factory=Counts)
+    #: Found promises the method closed rightly, closed while still owed,
+    #: closed on the wrong message, and left open although closed.
+    closes_right: int = 0
+    closes_false: int = 0
+    closes_wrong_target: int = 0
+    closes_missed: int = 0
+    #: Held-back closes that name the message that closed the promise, and others.
+    suggestions_right: int = 0
+    suggestions_wrong: int = 0
     #: Presented facts that carry a planted value, and of those, the stale and
     #: the contested ones. Facts with no planted value are counted, not judged.
     facts_judged: int = 0
@@ -127,6 +149,17 @@ class Score:
         """Share of judged current facts that are stale or contested. Lower is better."""
         bad = self.facts_stale + self.facts_contested
         return bad / self.facts_judged if self.facts_judged else 0.0
+
+    @property
+    def closes_judged(self) -> int:
+        """Found promises whose label says they were closed by the checkpoint."""
+        return self.closes_right + self.closes_wrong_target + self.closes_missed
+
+    @property
+    def close_precision(self) -> float:
+        """Of the closes a method made, the share both due and on the right message."""
+        made = self.closes_right + self.closes_false + self.closes_wrong_target
+        return self.closes_right / made if made else 1.0
 
     @property
     def change_accuracy(self) -> float:
@@ -184,7 +217,8 @@ def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
     pairs, spurious, missed = match(planted, snap.promises)
 
     deadlines = sum(1 for g, f in pairs if same_deadline(g.due_at, f.due_at))
-    statuses = sum(1 for g, f in pairs if f.status.done == _done(g, cp))
+    statuses = sum(1 for g, f in pairs if _state(f.status) == _gold_state(g, cp))
+    closes = _closes(pairs, cp)
 
     alerted = [f for f in snap.promises if alerted_at(f, cp)]
     matched = {id(f): g for g, f in pairs}
@@ -201,6 +235,7 @@ def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
         statuses_right=statuses,
         statuses_judged=len(pairs),
         alerts=Counts(true_alerts, len(alerted) - true_alerts, breached - true_alerts),
+        **closes,
         facts_judged=judged,
         facts_stale=stale,
         facts_contested=contested,
@@ -256,8 +291,35 @@ def alerted_at(p: Promise, cp: Checkpoint) -> bool:
     )
 
 
-def _done(g: GoldCommitment, cp: Checkpoint) -> bool:
-    return g.resolved_seq is not None and g.resolved_seq <= cp.seq
+def _state(status: PromiseStatus) -> str:
+    if status is PromiseStatus.OPEN:
+        return "owed"
+    return "done" if status.done else "dropped"
+
+
+def _gold_state(g: GoldCommitment, cp: Checkpoint) -> str:
+    if not g.closed(cp.seq):
+        return "owed"
+    return "done" if g.done(cp.seq) else "dropped"
+
+
+def _closes(pairs, cp: Checkpoint) -> dict[str, int]:
+    out = dict.fromkeys(("closes_right", "closes_false", "closes_wrong_target", "closes_missed",
+                         "suggestions_right", "suggestions_wrong"), 0)  # fmt: skip
+    for g, f in pairs:
+        closed, due = f.status is not PromiseStatus.OPEN, g.closed(cp.seq)
+        if closed and not due:
+            out["closes_false"] += 1
+        elif closed and f.closed_seq is not None and f.closed_seq != g.resolved_seq:
+            out["closes_wrong_target"] += 1
+        elif closed:
+            out["closes_right"] += 1
+        elif due:
+            out["closes_missed"] += 1
+        for seq in f.suggested:
+            right = due and seq == g.resolved_seq
+            out["suggestions_right" if right else "suggestions_wrong"] += 1
+    return out
 
 
 def _breached(g: GoldCommitment, cp: Checkpoint) -> bool:
@@ -265,7 +327,7 @@ def _breached(g: GoldCommitment, cp: Checkpoint) -> bool:
         g.owner.side is Side.COMPANY
         and g.due_at is not None
         and g.due_at <= cp.at
-        and not _done(g, cp)
+        and not g.closed(cp.seq)
     )
 
 

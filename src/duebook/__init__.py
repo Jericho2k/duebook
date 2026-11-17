@@ -3,7 +3,7 @@
 from .card import Card, Commitment, CommitmentState, Confidence, Fact, Party, StepOutcome
 from .events import Actor, AssigneeChanged, MessagePosted, Role, Side, StatusChanged
 from .lifecycle import AlertPolicy, Notice, NoticeKind, Status, next_wakeup, notices, status_at
-from .reducer import Outcome, Reason, Rejection, apply, replay
+from .reducer import UNGUARDED, Guards, Outcome, Reason, Rejection, apply, replay
 from .slots import Vocabulary
 from .temporal import WorkCalendar, parse_due, resolve
 
@@ -22,6 +22,8 @@ __all__ = [
     "Outcome",
     "Party",
     "Reason",
+    "Guards",
+    "UNGUARDED",
     "Rejection",
     "Role",
     "Side",

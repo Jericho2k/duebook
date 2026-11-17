@@ -7,6 +7,12 @@ language model in production, a hand-written list in tests — emits these, and
 Every proposal carries a ``quote``: the literal span of the message it rests
 on. A proposal whose quote is not in the message is the model talking, not the
 ticket, and is refused on that ground alone.
+
+A proposal that closes or replaces a commitment names it twice: by id, and by
+``target_quote``, a span copied from that commitment's original wording. The
+two must agree before anything is closed (see ``closing``). They default to
+empty only so that proposals stored before the field existed can be read; an
+empty ``target_quote`` closes nothing.
 """
 
 from __future__ import annotations
@@ -38,6 +44,8 @@ class MakeCommitment:
     due_quote: str = ""
     #: Set when this renegotiates an earlier commitment.
     supersedes: str | None = None
+    #: A span of the superseded commitment's original wording.
+    target_quote: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,12 +54,16 @@ class ResolveCommitment:
 
     commitment_id: str
     quote: str
+    #: A span of the commitment's original wording, naming it a second time.
+    target_quote: str = ""
 
 
 @dataclass(frozen=True, slots=True)
 class CancelCommitment:
     commitment_id: str
     quote: str
+    #: A span of the commitment's original wording, naming it a second time.
+    target_quote: str = ""
 
 
 @dataclass(frozen=True, slots=True)

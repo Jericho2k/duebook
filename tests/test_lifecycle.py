@@ -54,17 +54,25 @@ def test_a_short_promise_does_not_warn_the_moment_it_is_made():
 def test_lateness_is_judged_when_the_debtor_delivered_not_when_it_was_confirmed():
     t = refund_ticket()
     cid = t.card.commitments[0].id
-    t.wait(days=3).say(IVAN, "Деньги отправили", ResolveCommitment(cid, "Деньги отправили"))
+    t.wait(days=3).say(
+        IVAN,
+        "Деньги отправили",
+        ResolveCommitment(cid, "Деньги отправили", target_quote="вернём деньги"),
+    )
     assert status_at(t.card.commitment(cid), FRIDAY_END + timedelta(days=9)) is Status.CLAIMED
 
-    t.wait(days=10).say(ANNA, "Деньги пришли", ResolveCommitment(cid, "Деньги пришли"))
+    t.wait(days=10).say(
+        ANNA, "Деньги пришли", ResolveCommitment(cid, "Деньги пришли", target_quote="вернём деньги")
+    )
     assert status_at(t.card.commitment(cid), t.now) is Status.FULFILLED
 
 
 def test_fulfilled_after_the_deadline_is_fulfilled_late():
     t = refund_ticket()
     cid = t.card.commitments[0].id
-    t.wait(days=7).say(ANNA, "Деньги пришли", ResolveCommitment(cid, "Деньги пришли"))
+    t.wait(days=7).say(
+        ANNA, "Деньги пришли", ResolveCommitment(cid, "Деньги пришли", target_quote="вернём деньги")
+    )
     assert status_at(t.card.commitment(cid), t.now) is Status.FULFILLED_LATE
 
 
@@ -106,7 +114,8 @@ def test_settled_commitments_are_silent():
     for proposal, author in ((ResolveCommitment, IVAN), (CancelCommitment, ANNA)):
         t = refund_ticket()
         cid = t.card.commitments[0].id
-        t.say(author, "вопрос закрыт", proposal(cid, "вопрос закрыт"))
+        said = "Деньги вернули, вопрос закрыт"
+        t.say(author, said, proposal(cid, said, target_quote="вернём деньги"))
         assert notices(t.card, FRIDAY_END + timedelta(days=1)) == []
 
 

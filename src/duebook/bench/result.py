@@ -61,6 +61,12 @@ class Promise:
     #: False when the method itself would not raise an alert on this deadline
     #: (the event memory withholds alerts on low-confidence deadlines).
     alertable: bool = True
+    #: The message that closed it (confirmed, claimed, cancelled or replaced
+    #: it), when the method says. None while open, or when not stated.
+    closed_seq: int | None = None
+    #: Messages that may have closed it, held back for a person to confirm.
+    #: Only the event memory raises these; the promise is still open.
+    suggested: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +155,15 @@ def from_card(
     yet.
     """
     policy = policy or AlertPolicy()
+    by_id = {c.id: c for c in card.commitments}
+
+    def closed_seq(c) -> int | None:
+        if c.state is CommitmentState.SUPERSEDED and c.superseded_by in by_id:
+            return by_id[c.superseded_by].source.seq
+        if c.state is not CommitmentState.OPEN and c.resolution is not None:
+            return c.resolution.seq
+        return None
+
     promises = tuple(
         Promise(
             side=c.owner.side,
@@ -157,6 +172,8 @@ def from_card(
             due_at=c.due.deadline.due_at if c.due else None,
             status=_STATUS[c.state],
             alertable=c.due is not None and c.due.confidence >= policy.min_confidence,
+            closed_seq=closed_seq(c),
+            suggested=tuple(s.source.seq for s in c.suggestions),
         )
         for c in card.commitments
     )

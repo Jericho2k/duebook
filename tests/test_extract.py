@@ -17,11 +17,12 @@ from duebook.extract import (
     estimate,
     parse_output,
 )
-from duebook.extract.prompt import Bound, build_messages, render_card
+from duebook.extract.prompt import SYSTEM_PROMPT, Bound, build_messages, render_card
 from duebook.extract.schema import OUTPUT_SCHEMA, parse_due_expr
 from duebook.proposals import (
     AskQuestion,
     AssertFact,
+    CancelCommitment,
     MakeCommitment,
     RecordStep,
     ResolveCommitment,
@@ -97,6 +98,25 @@ def test_a_malformed_entry_is_dropped_and_the_rest_is_kept():
     assert [m.section for m in malformed] == ["facts", "commitments", "commitments"]
 
 
+def test_a_close_names_its_target_twice_by_handle_and_by_its_wording():
+    raw = output(
+        resolved=[{"id": "C1", "target_quote": "вернём деньги", "quote": "деньги пришли"}],
+        cancelled=[{"id": "C2", "target_quote": "замену", "quote": "не нужно"}],
+    )
+    proposals, malformed = parse_output(raw, {"C1": "e1#0", "C2": "e2#0"})
+    assert malformed == [] and proposals == [
+        ResolveCommitment("e1#0", "деньги пришли", "вернём деньги"),
+        CancelCommitment("e2#0", "не нужно", "замену"),
+    ]
+    required = OUTPUT_SCHEMA["properties"]["resolved"]["items"]["required"]
+    assert required == ["id", "target_quote", "quote"]
+
+
+def test_the_instructions_say_bare_thanks_confirms_nothing():
+    assert "Bare thanks" in SYSTEM_PROMPT and "confirms nothing" in SYSTEM_PROMPT
+    assert "thanks that imply" not in SYSTEM_PROMPT
+
+
 def test_handles_shown_to_the_model_map_back_to_real_ids():
     raw = output(resolved=[{"id": "c1", "quote": "готово"}, {"id": "C9", "quote": "готово"}])
     proposals, _ = parse_output(raw, {"C1": "e1#0"})
@@ -135,6 +155,8 @@ def test_the_model_sees_the_card_and_one_message_never_the_transcript():
     assert set(rendered.aliases) == {"C1", "S1", "Q1"}
     assert rendered.aliases["C1"] == t.card.commitments[0].id
     assert "C1 [company, open] вернуть деньги | due 2027-01-15 23:59" in rendered.text
+    # The words it was made in, for the model to copy when it closes it.
+    assert '| said: "вернём деньги до пятницы"' in rendered.text
 
     event = MessagePosted(
         id="e9", ticket_id="T-1", seq=9, at=t.now, author=ANNA, text="Заказ 4815", public=True
@@ -220,7 +242,9 @@ def test_extraction_flows_through_the_reducer_end_to_end():
             },
         ]
     )  # fmt: skip
-    confirmation = output(resolved=[{"id": "C1", "quote": "деньги пришли"}])
+    confirmation = output(
+        resolved=[{"id": "C1", "target_quote": "вернём деньги", "quote": "деньги пришли"}]
+    )
     extractor = Extractor(FakeModel(promise, confirmation), CAL)
 
     t = Ticket()
