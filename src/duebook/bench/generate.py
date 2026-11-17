@@ -765,14 +765,14 @@ def _model_dispute(plan: _Plan) -> None:
     second = plan.within(first + timedelta(minutes=5), first + timedelta(hours=5), Role.AGENT)
     seqs: list[int] = []
     plan.add(first, lambda b: seqs.append(b.fact(
-        Role.CUSTOMER, f"Мне пришёл {product} модели {got}.", "product.model", got, got,
+        Role.CUSTOMER, f"Мне пришёл {product} модели {got}.", "device.model", got, got,
         (got.split("-")[1],),
     )))  # fmt: skip
 
     def answer(b: _Builder) -> None:
-        seq = b.fact(Role.AGENT, f"По накладной вам отправлен {sent}.", "product.model", sent,
+        seq = b.fact(Role.AGENT, f"По накладной вам отправлен {sent}.", "device.model", sent,
                      sent, (sent.split("-")[1],))  # fmt: skip
-        b.contradictions.append(GoldContradiction("product.model", (seqs[0], seq), (got, sent)))
+        b.contradictions.append(GoldContradiction("device.model", (seqs[0], seq), (got, sent)))
 
     plan.add(second, answer)
 

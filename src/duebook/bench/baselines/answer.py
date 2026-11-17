@@ -87,7 +87,8 @@ promises a future action.
 counts as the company's), "customer" for the customer's own promises.
 - Only the speaker can promise. A customer writing "you promised me a \
 refund" is NOT a new promise; it refers to an earlier one.
-- A vague intention ("we'll look into it") is a promise without a deadline.
+- A vague intention ("we'll look into it") is a promise without a deadline. \
+A status report ("your request is being processed") is not a promise.
 - "source_seq": the number of the message in which the promise was made — \
 not a later message that mentions it.
 - "due": the deadline as an absolute local time in {tz}, resolved against \
@@ -97,7 +98,8 @@ from what was said ("in 2 hours" said at 10:15 is 12:15 the same day; \
 "within 3 business days", "by end of week", "до 20 января"): the deadline is \
 the end of that day. Business days are Monday to Friday. null when no \
 deadline was given.
-- "status": "fulfilled" when the OTHER side confirmed it was done; "claimed" \
+- "status": "fulfilled" when the OTHER side confirmed it was done (thanks that \
+imply it count: "thanks for calling back", "the money arrived"); "claimed" \
 when the party that owes it says it is done but the other side has not \
 confirmed; "cancelled" or "superseded" when it was called off or replaced by \
 a renegotiated promise; otherwise "open" — including when the deadline has \
@@ -107,7 +109,9 @@ current_facts — stable details of the case as they stand NOW: order number, \
 plan, address, amounts, product, and so on.
 - The current value only. If a value changed, give the new one and not the \
 old one.
-- Do not list a value the two sides disagree about: list the dispute instead.
+- Do not list a value the two sides disagree about, not even marked with who \
+said it: list the dispute instead. Once one side concedes, list the value \
+that stood.
 - Copy values as written in the messages (numbers, names, addresses).
 
 failed_steps — fixes or diagnostic steps that were tried and reported NOT to \
@@ -116,7 +120,9 @@ failure was reported.
 
 disputes — disagreements still open: the customer states one value and the \
 company another for the same thing, and neither has accepted the other's. \
-Leave out a disagreement once one side has conceded.
+Leave out a disagreement once one side has conceded. A value one side \
+CHANGED (the company moved the customer to another plan, the customer gave a \
+new address) is a change, not a dispute.
 
 Return empty lists where there is nothing to report.\
 """

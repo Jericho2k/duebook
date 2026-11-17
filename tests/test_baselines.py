@@ -1,5 +1,6 @@
 """The baselines: what they are shown, how their answers are read, what they cost."""
 
+import json
 import os
 import subprocess
 import sys
@@ -248,3 +249,20 @@ def test_the_baselines_import_without_mem0_installed():
     check = "import sys, duebook.bench.baselines; sys.exit('mem0' in sys.modules)"
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
     assert subprocess.run([sys.executable, "-c", check], env=env).returncode == 0
+
+
+def test_mem0_is_given_its_memory_list_as_objects_when_the_model_wrote_strings():
+    from types import SimpleNamespace
+
+    from duebook.bench.baselines.mem0_memory import _repair
+
+    raw = '```json\n{"memory": ["Клиент ждёт возврат", 3, {"id": "1", "text": "x"}]}\n```'
+    message = SimpleNamespace(content=raw)
+    _repair(SimpleNamespace(choices=[SimpleNamespace(message=message)]))
+    assert json.loads(message.content)["memory"] == [
+        {"id": "0", "text": "Клиент ждёт возврат"},
+        {"id": "1", "text": "x"},
+    ]
+    fine = SimpleNamespace(content='{"memory": [{"id": "0", "text": "y"}]}')
+    _repair(SimpleNamespace(choices=[SimpleNamespace(message=fine)]))
+    assert fine.content == '{"memory": [{"id": "0", "text": "y"}]}'

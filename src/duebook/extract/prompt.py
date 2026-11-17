@@ -40,8 +40,15 @@ is broken, current state of the problem).
 the same thing, use exactly that slot. Otherwise use one from this list when \
 it fits: {slots}. Only when none fits, make a short lowercase English key in \
 the same "object.attribute" form. Never use two slots for one thing.
-- "change": true only when the message says the value CHANGED ("I've upgraded \
-you to Pro"). false when it just states or disputes a value.
+- When the message gives a different value for something the record already \
+holds — even from the other side, or "according to our records" — use the \
+record's slot for it. A disagreement is only visible if both values share a \
+slot.
+- "change": true only when the speaker says the value was MADE different \
+("I've upgraded you to Pro", "I've moved, my new address is..."). false when \
+the message states a value, reports what records show, or disputes what the \
+other side said ("according to our data you were charged 2900", "we shipped \
+model X") — those are not changes.
 
 commitments — a party promises a future action.
 - "owner": "agent" for a personal promise ("I will call you back"), "company" \
@@ -49,7 +56,9 @@ for a promise on the company's behalf ("we will refund you"), "customer" for \
 the customer's own promise ("I'll send the screenshot").
 - Only the speaker can promise. A customer writing "you promised a refund" is \
 NOT a company commitment — report nothing for it.
-- A vague intention ("we'll look into it") is a commitment without a deadline.
+- A vague intention ("we'll look into it") is a commitment without a deadline. \
+A status report ("your request is being processed", "we are working on it") \
+is not a promise.
 - "due_quote": the deadline phrase copied from the message, or null.
 - "due": the deadline in structured form. NEVER compute a calendar date \
 yourself; describe what was said:
@@ -65,7 +74,9 @@ field that does not apply to null.
 - "supersedes": the id of an unresolved commitment this one replaces (a new \
 date for the same promise), else null.
 
-resolved — the message says a listed commitment's action WAS DONE. Use its id.
+resolved — the message says a listed commitment's action WAS DONE, including \
+thanks that imply it ("thanks for calling back", "the money arrived"). Use its \
+id.
 cancelled — the message says a listed commitment is no longer needed.
 
 steps — a fix or diagnostic action that was suggested or tried. "outcome" is \

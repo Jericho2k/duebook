@@ -29,10 +29,20 @@ Metering wraps the OpenAI client inside Mem0's LLM and embedder, adding the
 provider's charged amount for every call to the run's ledger. Nothing about
 what Mem0 sends is changed except the OpenRouter-specific request fields that
 ask for usage accounting and low reasoning effort.
+
+Two repairs, both about form, not content, and both found on the dev split:
+
+* the model sometimes returns Mem0's ``memory`` list as plain strings instead
+  of objects; Mem0 2.2.1 then crashes on ``.get``. The adapter wraps such
+  strings into the object form Mem0 expects (and drops entries that are
+  neither), before Mem0 reads the response;
+* a failed ``add`` is retried twice, as every other method's model calls are
+  retried, before the ticket is stopped.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import tempfile
 import time
@@ -45,12 +55,14 @@ from ...extract.cost import Usage
 from ...extract.extractor import JsonModel
 from ...temporal import WorkCalendar
 from ..generate import SimTicket
-from ..meter import Ledger, Meter
+from ..meter import Ledger, Meter, OverBudget
 from ..methods import MethodRun
 from ..result import Snapshot, checkpoints
 from .answer import ANSWER_SCHEMA, parse_answer, question, render_event
 
 EMBEDDER = "openai/text-embedding-3-small"
+#: Tries per event, as ChatClient tries each call.
+ATTEMPTS = 3
 EMBEDDING_DIMS = 1536
 
 CUSTOM_INSTRUCTIONS = """\
@@ -116,10 +128,16 @@ class Mem0Memory:
             for event in ticket.events:
                 if failure is None:
                     meter.answering = False
-                    try:
-                        added += self._add(memory, ticket, event)
-                    except Exception as error:
-                        failure = f"seq {event.seq}: {type(error).__name__}: {error}"
+                    for attempt in range(ATTEMPTS):
+                        try:
+                            added += self._add(memory, ticket, event)
+                            break
+                        except OverBudget as error:
+                            failure = f"seq {event.seq}: {type(error).__name__}: {error}"
+                            break
+                        except Exception as error:
+                            if attempt == ATTEMPTS - 1:
+                                failure = f"seq {event.seq}: {type(error).__name__}: {error}"
                 cp = stops.get(event.seq)
                 if cp is None:
                     continue
@@ -200,6 +218,8 @@ class Mem0Memory:
                 started = time.perf_counter()
                 response = create(*args, **params, extra_body=body)
                 meter.spend(_usage(response), time.perf_counter() - started)
+                if chat:
+                    _repair(response)
                 return response
 
             return metered
@@ -228,6 +248,34 @@ class Mem0Memory:
         items = list((found or {}).get("results") or [])
         return sorted(items, key=lambda m: ((m.get("metadata") or {}).get("seq") or 0,
                                             m.get("created_at") or ""))  # fmt: skip
+
+
+def _repair(response) -> None:
+    """Give Mem0 its ``memory`` list as objects when the model wrote plain strings."""
+    try:
+        message = response.choices[0].message
+        data = json.loads(_unfence(message.content or ""))
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return
+    if not isinstance(data, dict) or not isinstance(data.get("memory"), list):
+        return
+    items = data["memory"]
+    if all(isinstance(m, dict) for m in items):
+        return
+    fixed = []
+    for n, m in enumerate(items):
+        if isinstance(m, dict):
+            fixed.append(m)
+        elif isinstance(m, str) and m.strip():
+            fixed.append({"id": str(n), "text": m.strip()})
+    message.content = json.dumps({**data, "memory": fixed}, ensure_ascii=False)
+
+
+def _unfence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
+    return text
 
 
 def _line(memory: dict) -> str:
