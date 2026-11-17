@@ -95,7 +95,7 @@ def rewritten(
         if stored["writer"] != writer or stored["seed"] != split.seed:
             raise SystemExit(f"{path} was written by {stored['writer']} for another split")
     else:
-        # Rephrasing needs no reasoning: ``client.MODELS`` switches it off for
+        # Rephrasing needs no reasoning: ``client.PRESETS`` switches it off for
         # a writer that has it. At this temperature nothing is cached.
         client = ChatClient(api_key="proxy-injected", model=writer, temperature=0.8)
 
@@ -340,6 +340,7 @@ METRICS: dict[str, tuple[str, Callable[[Score, int], float]]] = {
     "false_alerts_per_ticket": ("end", lambda s, n: s.alerts.fp / n),
     "freshness_error": ("all", lambda s, n: s.freshness_error),
     "freshness_error_at_handoffs": ("handoffs", lambda s, n: s.freshness_error),
+    "fact_recall": ("all", lambda s, n: s.fact_recall),
     "fact_change_accuracy": ("all", lambda s, n: s.change_accuracy),
     "dispute_precision": ("all", lambda s, n: s.disputes.precision),
     "dispute_recall": ("all", lambda s, n: s.disputes.recall),
@@ -365,6 +366,9 @@ COSTS: dict[str, Callable[[MethodRun, SimTicket], float]] = {
     "ingest_seconds_per_message": lambda r, t: r.ingest_seconds / t.messages,
     "answer_seconds_per_checkpoint": lambda r, t: r.answer_seconds / len(checkpoints(t)),
     "model_seconds_per_ticket": lambda r, t: r.ingest_seconds + r.answer_seconds,
+    "reasoning_tokens_per_ticket": lambda r, t: r.usage.reasoning_tokens,
+    # The share of prompt tokens the provider served from its prompt cache.
+    "prompt_cache_share": lambda r, t: r.usage.cache_share,
 }
 
 

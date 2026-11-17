@@ -33,7 +33,7 @@ from duebook.extract import Completion, Usage
 from duebook.extract.extractor import Extraction
 from duebook.extract.schema import OUTPUT_SCHEMA
 from duebook.proposals import ResolveCommitment
-from duebook.store.codec import encode
+from duebook.store.codec import decode_proposals, encode
 from duebook.temporal import WorkCalendar
 
 TICKETS = generate(seed=5, count=6)
@@ -227,3 +227,42 @@ def test_the_guards_are_measured_by_folding_the_same_proposals_without_them():
     effects = guard_effects([t], [run])
     assert effects["verdicts"]["false_close_prevented"] == 1
     assert effects["by_reason"] == {"target_mismatch": {"false_close_prevented": 1}}
+
+
+# ---------------------------------------------------------------- round 3 ----
+
+
+class Judge:
+    """A verifier that says yes to every close, quoting the close's own words."""
+
+    model = "stub/judge"
+
+    def complete_json(self, messages, schema, name="output"):
+        text = messages[-1]["content"].split("Text:\n", 1)[1]
+        answer = {"verdict": "yes", "evidence_quote": text}
+        return Completion(answer, Usage(1, 400, 30, 0, 1e-5))
+
+
+def test_round_three_replays_recorded_proposals_and_audits_every_verdict():
+    from duebook.bench.round3 import audit, replay_b, replay_c, verdict_table
+
+    cal = WorkCalendar()
+    t = MAIN_TICKETS[0]
+    rec = {"proposals": list(t.proposals), "usage": Usage(170, 300_000, 12_000, 270_000, 0.01),
+           "seconds": 1.0, "providers": {"DeepInfra": 170}}  # fmt: skip
+    c = replay_c(t, rec, cal)
+    assert score_ticket(t, c.snapshots).end.commitments.f1 == 1.0 and c.usage == rec["usage"]
+    ledger = Ledger(cap_usd=1.0)
+    b = replay_b(t, rec, Judge(), ledger, cal)
+    verifier = b.detail["verifier"]
+    destructive = sum(1 for ps in t.proposals for p in ps if getattr(p, "target_quote", ""))
+    assert verifier["usage"]["calls"] == destructive > 0 and ledger.spent.calls == destructive
+    # The extraction half costs what it was charged; the verifier is added.
+    assert b.usage.calls == 170 + destructive
+    rows = audit(t, [decode_proposals(p) for p in b.detail["proposals"]], cal)
+    assert len(rows) == destructive and {r["truth"] for r in rows} == {"true"}
+    assert all(r["admitted"] for r in rows)
+    summary = verdict_table(rows)
+    assert summary["by_verdict"] == {"yes": {"true": destructive}} and summary["errors"] == 0
+    # The planted closes need no rescue: the words alone admit them.
+    assert summary["rescued"] == {}

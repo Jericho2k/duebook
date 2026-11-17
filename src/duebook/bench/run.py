@@ -69,6 +69,8 @@ class Report:
             f"at every handoff and the end ({every.checkpoints} checkpoints):",
             f"  freshness error: {every.freshness_error:.3f} (stale {every.facts_stale}, "
             f"contested {every.facts_contested} of {every.facts_judged} facts judged)",
+            f"  fact recall: {every.fact_recall:.3f} "
+            f"({every.facts_recalled}/{every.facts_current})",
             f"  fact changes right: {every.change_accuracy:.3f} "
             f"({every.changes_right}/{every.changes_judged})",
             f"  disputes: precision {every.disputes.precision:.3f}  "

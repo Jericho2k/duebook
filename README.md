@@ -56,6 +56,40 @@ still fire, and the brief says "возможно, выполнено по соо
 подтвердите". `apply(..., guards=UNGUARDED)` switches the checks off, for
 measuring what they do.
 
+### A second opinion on destructive changes
+
+The lexical checks also stop some true closes: "Спасибо, всё получила" shares
+no word with "вернём деньги за доставку" and, with a callback also open, is
+refused. `extract.VerifyingReader` puts every proposal that would resolve,
+cancel or replace an open commitment — a few per ticket, never an ordinary
+message — to a separate model call (`extract.Verifier`). It sees only that
+commitment (owner, action, original words, deadline) and the new message with
+its author, and answers yes / no / unsure with `evidence_quote`, copied from
+the message. The verdict rides on the proposal (`verification`) and is stored
+with it, so a replay reproduces the card without a model; the reducer stays
+pure.
+
+The reducer weighs it in layers. **Hard**, never overridden: who may close
+(nobody binds or releases the other side), the span of the target's wording,
+ambiguity (the closing words — and the verifier's evidence — fit another open
+commitment of that side as well), a renegotiation that names a different
+thing. **Soft**: lexical relevance. A close is admitted when relevance passes
+OR the verifier said yes with evidence that is literally, word for word, in
+the message and is more than thanks or acknowledgement. Any other verdict —
+no, unsure, a quote not in the message, a verifier that could not be asked —
+leaves the close to the deterministic checks, and what they refuse becomes a
+suggestion, as before. Bare thanks still closes nothing, whatever the
+verifier says. `Guards(verifier=False)` ignores verdicts, for measurement.
+
+```python
+from duebook.extract import ChatClient, Extractor, Verifier, VerifyingReader
+
+reader = VerifyingReader(
+    Extractor(ChatClient(api_key=key)),                   # reasoning off
+    Verifier(ChatClient(api_key=key, reasoning="low")),   # thinks, only on closes
+)
+```
+
 ## One name for one thing
 
 In live runs the model filed a refund under `order.refund` in one message and
@@ -85,11 +119,16 @@ Friday.
 The extractor shows the model the card and the one message that just arrived —
 never the whole transcript — and works against any OpenAI-compatible endpoint.
 The default reader is `deepseek/deepseek-v4.1-flash` with reasoning switched
-off (left at "low" it spends 1,000-2,300 hidden tokens a message) and its
-OpenRouter routing pinned so the fixed instructions hit the prompt cache; what
-a model needs sent lives in `extract.client.MODELS`. A `ResponseCache` keeps
-answers to temperature-0 requests on disk, so re-running unchanged input
-costs nothing.
+off (left at "low" it spends 1,000-2,300 hidden tokens a message) and locked
+to one OpenRouter host (DeepInfra, fp8, no fallbacks), so the fixed
+instructions hit one prompt cache and one host answers every call. What a
+model needs sent lives in a small presets table, `extract.client.PRESETS`
+(hosts and reasoning per model); `ChatClient(reasoning="low")` asks the same
+model to think. Every call records the host that answered, the prompt tokens
+served from cache and the hidden reasoning tokens. A 429 or 5xx is retried
+once, an empty or unreadable answer once, a timeout never — it may already
+have been generated and billed. A `ResponseCache` keeps answers to
+temperature-0 requests on disk, so re-running unchanged input costs nothing.
 
 ```python
 from duebook import apply
@@ -247,6 +286,7 @@ estimated pessimistically for Russian; pass a real tokenizer's counter as
 python -m duebook.bench --seed 1 --tickets 200        # self-check, no model called
 python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
+python -m duebook.bench.round3 --max-usd 0.2   # round 3: dev only, configurations A, B, C
 ```
 
 `duebook.bench` builds simulated tickets the other way round: the events are
@@ -309,8 +349,8 @@ The baselines (`bench.baselines`) read with the same model as the event
 memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`). The comparison, its
 numbers with 95% bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (round 1 and round 2); the raw record is
-under `results/` and `results/round2/`.
+[docs/results.md](docs/results.md) (rounds 1, 2 and 3); the raw record is
+under `results/`, `results/round2/` and `results/round3/`.
 
 ## Running the service
 
@@ -426,25 +466,33 @@ Implemented, with tests: the domain core, the extractor, and the PostgreSQL
 event store with its alert outbox, scheduler and delivery worker, the
 per-ticket pipeline that ties them together, the handoff brief, slot
 normalisation, the close guards (`duebook.closing`, with an adversarial
-suite in `tests/test_guards.py`), the benchmark with its three baselines and
+suite in `tests/test_guards.py`) and the verifier of destructive changes
+(`extract.verifier`), the benchmark with its three baselines and
 the experiment runner, and the service around them: the HTTP API, the processor, scheduler
 and delivery loops, log and webhook alert channels, and an end-to-end test
 from webhook to delivered alert. `scripts/smoke.py` runs a short ticket
 through a real model and prints the proposals, the refusals, the final card
 and the charged cost.
 
-Measured against a real model, in two rounds (see docs/results.md): round 1
+Measured against a real model, in three rounds (see docs/results.md): round 1
 with GLM 5.3 Flash on 50-64 message tickets; round 2 with DeepSeek V4.1 Flash
 on 150-200 message tickets, where the event memory made no false close on the
-20 test tickets.
+20 test tickets; round 3, on dev only, compared a reasoning extractor and the
+verifier with round 2's configuration and kept round 2's: no configuration
+made a false close, the verifier agreed with the guards on all 119 closes it
+was asked about but changed no outcome, and reasoning cost 2.3 times as much
+and read three deadlines wrong. A final run on a fresh seed (`test3`) is
+projected, not run.
 
 Each service command has been run against a local PostgreSQL with uvicorn and
 a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
 checked with `docker compose config` but not yet built or started.
 
-Next: a helpdesk adapter; real tickets; more than one extracting model; a
-word-by-word comparison of `target_quote` that tolerates a skipped function
-word (round 2's one blocked true close).
+Next: the final run on `test3` once its budget is approved; a helpdesk
+adapter; real tickets, which are what would show whether the verifier's
+rescue of wordless confirmations is worth its cost; a verifier from another
+model family; a word-by-word comparison of `target_quote` that tolerates a
+skipped function word (round 2's one blocked true close).
 
 ## Development
 

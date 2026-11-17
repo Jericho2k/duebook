@@ -1,0 +1,9 @@
+{"at": "2026-11-17T19:24:42.122384+00:00", "split": "none", "what": "probe: one verifier call, reasoning low, locked to DeepInfra", "usd": 0.00036442, "reused_usd": 0.0}
+{"at": "2026-11-17T19:26:04.334102+00:00", "split": "dev2", "what": "run", "configs": "C", "label": "sanity: C replay only", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-17T19:27:10.042453+00:00", "split": "dev2", "what": "cost projection only", "configs": "A", "label": "A projection: 30-event sample", "usd": 0.0021990192000000005, "reused_usd": 0.0}
+{"at": "2026-11-17T19:28:06.883611+00:00", "split": "dev2", "what": "run", "configs": "C,B,A", "label": "round 3 dev comparison: C, B, A", "usd": 0.08281462559999996, "reused_usd": 0.0043980384}
+{"at": "2026-11-17T19:39:36.287867+00:00", "split": "dev2", "what": "run", "configs": "C,B,A", "label": "round 3 dev comparison, resumed after A's connection reset on M0001 (cache reused)", "usd": 0.0, "reused_usd": 0.0053702544000000015}
+{"at": "2026-11-17T19:39:44.977091+00:00", "split": "dev2", "what": "run", "configs": "C,B,A", "label": "round 3 dev comparison, resumed after A's connection reset on M0001 (cache reused)", "usd": 0.018137750400000003, "reused_usd": 0.0854452255999999}
+{"at": "2026-11-17T19:46:28.112958+00:00", "split": "dev2", "what": "run", "configs": "C,B", "label": "verifier stress: round 2 dev run 1 proposals", "usd": 0.001878744, "reused_usd": 0.0008487472}
+{"at": "2026-11-17T19:47:10.637507+00:00", "split": "dev2", "what": "run", "configs": "C,B", "label": "verifier stress: round 2 dev run 2 proposals", "usd": 0.0006870416, "reused_usd": 0.0022628480000000005}
+{"at": "2026-11-17T19:47:28.953831+00:00", "split": "dev2", "what": "run", "configs": "C,B", "label": "verifier stress: round 2 dev run 3 proposals", "usd": 0.0006141912, "reused_usd": 0.0029450623999999993}

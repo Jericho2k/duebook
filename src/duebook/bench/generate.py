@@ -273,6 +273,9 @@ SPLITS = {
         # Round 2: long tickets are the main test. Fresh seeds.
         Split("dev2", seed=4141, count=4, profile=MAIN),
         Split("test2", seed=4242, count=20, profile=MAIN),
+        # Round 3's final run, on a seed nobody has read: NOT run. Its cost is
+        # projected in docs/results.md and waits for the owner's approval.
+        Split("test3", seed=4343, count=20, profile=MAIN),
     )
 }
 

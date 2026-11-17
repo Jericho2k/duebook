@@ -32,7 +32,7 @@ PRICES: dict[str, Pricing] = {
     # List price. The hosts that honour strict structured output charge more;
     # a measured run came to about $0.0002 per ticket message.
     "z-ai/glm-5.3-flash": Pricing(0.04, 0.078, 0.03),
-    # DeepInfra's fp8 endpoint, where ``client.MODELS`` routes it.
+    # DeepInfra's fp8 endpoint, where ``client.PRESETS`` locks it.
     "deepseek/deepseek-v4.1-flash": Pricing(0.14, 0.42, 0.0042),
 }
 
@@ -46,6 +46,8 @@ class Usage:
     cached_tokens: int = 0
     #: What the provider says it charged, when it says.
     reported_usd: float | None = None
+    #: The part of ``completion_tokens`` spent reasoning, never shown.
+    reasoning_tokens: int = 0
 
     def __add__(self, other: Usage) -> Usage:
         if self.reported_usd is None and other.reported_usd is None:
@@ -58,7 +60,13 @@ class Usage:
             completion_tokens=self.completion_tokens + other.completion_tokens,
             cached_tokens=self.cached_tokens + other.cached_tokens,
             reported_usd=reported,
+            reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
         )
+
+    @property
+    def cache_share(self) -> float:
+        """The share of prompt tokens served from the provider's prompt cache."""
+        return self.cached_tokens / self.prompt_tokens if self.prompt_tokens else 0.0
 
     def usd(self, pricing: Pricing | None = None) -> float | None:
         """The charged cost if reported, else computed, else unknown."""

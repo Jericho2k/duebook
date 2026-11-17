@@ -7,6 +7,7 @@ from helpers import ANNA, CAL, IVAN, MSK, Ticket
 
 from duebook import CommitmentState, Confidence, MessagePosted, Party, Reason, StepOutcome, apply
 from duebook.extract import (
+    PRESETS,
     PRICES,
     ChatClient,
     Completion,
@@ -286,12 +287,12 @@ def test_events_without_text_cost_nothing():
 # --------------------------------------------------------------- client ----
 
 
-def chat_response(content, cost=0.00012):
+def chat_response(content, cost=0.00012, provider="DeepInfra", reasoning=0):
     usage = {"prompt_tokens": 1000, "completion_tokens": 50, "cost": cost}
     usage["prompt_tokens_details"] = {"cached_tokens": 800}
-    return httpx.Response(
-        200, json={"choices": [{"message": {"content": content}}], "usage": usage}
-    )
+    usage["completion_tokens_details"] = {"reasoning_tokens": reasoning}
+    body = {"choices": [{"message": {"content": content}}], "usage": usage, "provider": provider}
+    return httpx.Response(200, json=body)
 
 
 def client_for(handler, **options):
@@ -311,14 +312,15 @@ def test_client_sends_a_strict_schema_and_reads_usage():
     completion = client_for(handler).complete_json([{"role": "user", "content": "x"}], {"a": 1})
     assert completion.data == {"facts": []}
     assert completion.usage == Usage(1, 1000, 50, 800, 0.00012)
+    assert completion.provider == "DeepInfra" and completion.usage.cache_share == 0.8
     assert seen["url"] == "https://openrouter.ai/api/v1/chat/completions"
     assert seen["auth"] == "Bearer test-key"
     assert seen["body"]["response_format"]["json_schema"]["strict"] is True
     assert seen["body"]["usage"] == {"include": True}
-    # The default reader, with reasoning off and its routing pinned.
+    # The default reader, with reasoning off and locked to one host.
     assert seen["body"]["model"] == "deepseek/deepseek-v4.1-flash"
     assert seen["body"]["provider"] == {
-        "require_parameters": True, "order": ["deepinfra/fp8"], "allow_fallbacks": True,
+        "require_parameters": True, "order": ["deepinfra/fp8"], "allow_fallbacks": False,
     }  # fmt: skip
     assert seen["body"]["reasoning"] == {"enabled": False}
     assert seen["body"]["temperature"] == 0.0
@@ -334,13 +336,41 @@ def test_each_model_carries_its_own_reasoning_and_routing():
     for model in ("z-ai/glm-5.3-flash", "some/other-model"):
         client_for(handler, model=model).complete_json([{"role": "user", "content": "x"}], {})
     glm, other = bodies
-    assert glm["reasoning"] == {"effort": "low"} and glm["provider"] == {"require_parameters": True}
+    assert glm["reasoning"] == {"effort": "low", "exclude": True}
+    assert glm["provider"] == {"require_parameters": True}
     assert "reasoning" not in other and other["provider"] == {"require_parameters": True}
     custom = ModelSettings(reasoning={"effort": "high"}, provider={"order": ["x"]})
     client_for(handler, settings=custom).complete_json([{"role": "user", "content": "x"}], {})
     assert bodies[-1]["reasoning"] == {"effort": "high"}
     assert bodies[-1]["provider"] == {"require_parameters": True, "order": ["x"]}
     assert settings_for("deepseek/deepseek-v4.1-flash").reasoning == {"enabled": False}
+
+
+def test_one_model_can_be_asked_at_another_reasoning_effort_and_stays_locked():
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return chat_response("{}", reasoning=900)
+
+    completion = client_for(handler, reasoning="low").complete_json([], {})
+    assert bodies[0]["reasoning"] == {"effort": "low", "exclude": True}
+    assert bodies[0]["provider"]["order"] == ["deepinfra/fp8"]
+    assert bodies[0]["provider"]["allow_fallbacks"] is False
+    assert completion.usage.reasoning_tokens == 900
+    client_for(handler, reasoning="off").complete_json([], {})
+    assert bodies[1]["reasoning"] == {"enabled": False}
+    with pytest.raises(ValueError, match="unknown reasoning"):
+        client_for(handler, reasoning="medium").complete_json([], {})
+
+
+def test_the_writer_is_locked_to_its_three_hosts():
+    writer = settings_for("~z-ai/glm-flash-latest")
+    assert dict(writer.provider) == {
+        "order": ("gmicloud/fp8", "tenstorrent/fp8", "novita/fp8"), "allow_fallbacks": False,
+    }  # fmt: skip
+    assert writer.reasoning == {"enabled": False}
+    assert set(PRESETS) >= {"deepseek/deepseek-v4.1-flash", "~z-ai/glm-flash-latest"}
 
 
 def test_a_deterministic_request_is_answered_from_disk_the_second_time(tmp_path):
@@ -376,7 +406,8 @@ def test_a_request_at_a_higher_temperature_is_never_cached(tmp_path):
 def test_a_failed_request_is_not_cached(tmp_path):
     answers = iter([httpx.Response(200, json={"choices": [{"message": {"content": "no"}}]}),
                     chat_response("{}")] * 2)  # fmt: skip
-    client = client_for(lambda request: next(answers), cache=ResponseCache(tmp_path), attempts=1)
+    client = client_for(lambda request: next(answers), cache=ResponseCache(tmp_path),
+                        content_retries=0)  # fmt: skip
     with pytest.raises(ModelError):
         client.complete_json([], {})
     assert not any(tmp_path.iterdir())
@@ -399,29 +430,50 @@ def test_client_works_against_any_compatible_endpoint():
     assert not {"usage", "provider", "reasoning"} & set(seen["body"])
 
 
-def test_client_retries_faults_and_counts_what_every_attempt_cost():
-    replies = iter(
-        [
-            httpx.Response(429, text="slow down"),
-            chat_response(""),
-            chat_response("not json"),
-            chat_response('{"ok": true}'),
-        ]
-    )
-    completion = client_for(lambda _: next(replies), attempts=4).complete_json([], {})
+def test_client_retries_a_429_once_and_a_bad_answer_once_and_counts_what_each_cost():
+    replies = iter([httpx.Response(429, text="slow down"), chat_response(""),
+                    chat_response('{"ok": true}')])  # fmt: skip
+    completion = client_for(lambda _: next(replies)).complete_json([], {})
     assert completion.data == {"ok": True}
-    assert completion.usage.calls == 3
-    assert [p.split(":")[0] for p in completion.retried] == [
-        "http 429",
-        "empty content",
-        "content is not valid JSON",
-    ]
-    assert completion.usage.reported_usd == pytest.approx(0.00036)
+    assert completion.usage.calls == 2
+    assert [p.split(":")[0] for p in completion.retried] == ["http 429", "empty content"]
+    assert completion.usage.reported_usd == pytest.approx(0.00024)
+
+
+@pytest.mark.parametrize(
+    ("replies", "why"),
+    [
+        ([httpx.Response(503), httpx.Response(502)], "http 502"),
+        ([chat_response(""), chat_response("not json")], "content is not valid JSON"),
+    ],
+)
+def test_client_retries_each_kind_of_fault_only_once(replies, why):
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return replies[len(calls) - 1]
+
+    with pytest.raises(ModelError, match=why):
+        client_for(handler).complete_json([], {})
+    assert len(calls) == 2
+
+
+def test_client_never_retries_a_timeout_which_may_already_be_billed():
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        raise httpx.ReadTimeout("too slow", request=request)
+
+    with pytest.raises(ModelError, match="timeout, not retried"):
+        client_for(handler).complete_json([], {})
+    assert len(calls) == 1
 
 
 def test_client_gives_up_loudly_and_reports_the_spend():
     with pytest.raises(ModelError) as failure:
-        client_for(lambda _: chat_response(""), attempts=2).complete_json([], {})
+        client_for(lambda _: chat_response("")).complete_json([], {})
     assert "empty content" in str(failure.value)
     assert failure.value.usage.calls == 2
 

@@ -1,7 +1,242 @@
 # Results: event memory against three baselines
 
-Two rounds, both run on 2026-11-17. Round 2 comes first; round 1 follows as
-it was written.
+Three rounds, all run on 2026-11-17. Round 3 (dev only) comes first, then
+round 2; round 1 follows as it was written.
+
+## Round 3 (dev only): verifier and reasoning
+
+Round 2 left one question open: its guards prevented 5 false closes on dev
+and none on test, where the model made no wrong close for them to catch. And
+they cost something. A lexical check cannot tell "Спасибо, всё получила" from
+bare thanks when two promises are open. Round 3 asks whether either of two
+ways of spending more on the risky step pays off: a stronger *extractor*
+(reasoning on), or a *verifier* that is asked only about proposals that would
+close, cancel or replace a promise. It also locks the reader to one provider.
+**Only the dev split was used.** No test split was run. Raw records:
+`results/round3/`.
+
+### Short version
+
+- **Chosen: C, round 2's configuration** (extractor reasoning off, the
+  deterministic guards, no verifier). On dev2 all three configurations made
+  **0 false closes** and 0 wrong-target closes. C and B tie on every accuracy
+  measure (commitment F1 0.981, deadlines 1.000). A is worse (F1 0.972,
+  deadlines 0.943). C is the cheapest, at $0.011 a ticket. By the rule
+  (fewest false closes, then F1, then cost), C wins. B costs 7% more and
+  bought nothing measurable on these tickets.
+- **The verifier is accurate but had nothing to do.** It made 31 calls on dev2
+  (7.75 per ticket, $0.0008 per ticket) and said yes to all 31, every one a
+  true close. Over the proposals of round 2's earlier dev runs, which still
+  had the twin trap, it made 119 calls. It said yes 114 times, all true, and
+  no 5 times, all false. Those 5 are exactly the 5 false closes round 2's
+  guards refused, so two independent mechanisms agree case by case. It
+  rescued no close: none of these tickets has a true close that the lexical
+  check refuses and the hard checks allow. The case it exists for ("всё
+  получила" with a second promise open) does not occur in dev2, and round 2's
+  one blocked true close on test failed the *hard* span check, which no
+  verdict may override.
+- **Reasoning on the extractor costs more and reads worse.** Reasoning low
+  spent 196 hidden tokens a message and 2.3× C's cost ($0.025 a ticket). It
+  added a spurious promise. Three times it turned "до среды" (by Wednesday)
+  into Saturday. The rule parser disagreed, so those deadlines were marked low
+  confidence and raised no alert, but they are wrong on the card. It also
+  proposed one false close, which the guards refused.
+- **Spent:** $0.107 of the $1.00 allowed for the session.
+- **Projected final run** on a fresh seed (`test3`, 20 main-profile tickets,
+  not run): event memory (C) about $0.23 (upper $0.30). The full set of
+  baselines on all 20 tickets is about $4.5 (upper $5.6). With round 2's
+  subsets it is about $1.2 (upper $1.6). See
+  [the projection](#projected-cost-of-the-final-run).
+
+### What changed
+
+1. **The reader is locked to one host.** DeepSeek V4.1 Flash is sent with
+   `provider: {"order": ["deepinfra/fp8"], "allow_fallbacks": false,
+   "require_parameters": true}`. Round 2 allowed fallbacks; all its calls
+   happened to be served by DeepInfra. Per-model settings live in a small
+   presets table, `extract.client.PRESETS` (model → hosts, reasoning). The
+   GLM writer is locked to `gmicloud/fp8, tenstorrent/fp8, novita/fp8`.
+   Reasoning is named: off = `{"enabled": false}`, low = `{"effort": "low",
+   "exclude": true}`. The extractor and the verifier choose their reasoning
+   separately.
+2. **Every call records** the host that answered, the prompt tokens served
+   from cache and the hidden reasoning tokens. **Retries:** one after a 429
+   or 5xx, one after an empty or unreadable answer, none after a timeout or a
+   connection broken mid-response, because it may already have been
+   generated and billed.
+3. **A verifier of destructive changes** (`extract.Verifier`,
+   `VerifyingReader`). It runs between extraction and the reducer, only on a
+   proposal that would resolve, cancel or replace an open commitment. It sees
+   that commitment (owner, action, original words, deadline) and the new
+   message with its author, and answers yes, no or unsure, with
+   `evidence_quote` copied from the message. The verdict travels on the
+   proposal and is stored with it, so replay needs no model and the reducer
+   stays pure. The reducer layers it:
+   - **Hard, never overridden:** who may close, the span of the target's
+     wording (`target_quote`), ambiguity (the closing words *and the
+     evidence* fit another open promise of that side as well), and a
+     renegotiation that names a different thing.
+   - **Soft:** lexical relevance. It is passed by shared words, or by a yes
+     whose evidence is in the message word for word and is more than
+     thanks, acknowledgement or waiting.
+   - **Anything else** (no, unsure, a quote not in the message, a verifier
+     that failed) leaves the close to the deterministic checks, and a refused
+     close stays a suggestion.
+
+   Two choices go beyond the brief, both in the fail-safe direction. The
+   renegotiation check ("names another thing") is treated as hard, because
+   it is evidence against a close, not a lack of evidence for one. And a yes
+   that quotes only thanks or "жду" never counts, so bare thanks still closes
+   nothing, whatever the verifier says.
+4. **Fact recall** joins the scorer: of the planted values current at a
+   checkpoint, the share a method presents.
+
+### What was run
+
+| | |
+|---|---|
+| Split | `dev2` (seed 4141, 4 tickets of 168–186 messages), the text round 2 rewrote |
+| A | extractor `deepseek/deepseek-v4.1-flash`, reasoning low (`exclude`), guards on, no verifier. New calls: 703 extraction calls, locked to DeepInfra |
+| B | round 2's frozen dev proposals (`results/round2/dev2-4.json`, reasoning off) replayed through today's reducer; the verifier (`deepseek/deepseek-v4.1-flash`, reasoning low, locked to DeepInfra) asked as the fold reaches each destructive proposal |
+| C | the same proposals replayed, no verifier: round 2's configuration |
+| Record check | all 31 recorded destructive proposals carry `target_quote`, so nothing was re-extracted for B |
+| Verifier stress | B's verifier also run over the proposals of round 2's dev runs 1–3 (`results/round3/stress-dev2-*.json`), made with earlier instructions that still fell for the twin trap |
+| Response cache | every temperature-0 answer kept on disk; re-runs reuse it |
+| Charged | $0.107 in total by `results/round3/spend.jsonl`: a $0.0004 probe, $0.0022 for A's projection sample, $0.0032 for B's verifier, $0.098 for A, $0.0032 for the stress runs |
+
+A's ticket M0001 stopped at event 39 on its first pass. The connection was
+reset while the answer was being read, and under the new policy that is not
+retried. In production the pipeline would hold the ticket and retry later, so
+the run was resumed: the 38 answered events came from the response cache and
+only the rest was charged. The first pass is kept as
+`results/round3/dev2-attempt1.json`.
+
+### Dev comparison (4 tickets)
+
+At the end of each ticket. Intervals are 95% bootstrap over tickets, so with
+4 tickets they are wide.
+
+| | **C** off + guards | **B** off + guards + verifier | **A** low + guards |
+|---|---|---|---|
+| **false closes** | **0** | **0** | **0** |
+| false closes at any checkpoint | 0 | 0 | 0 |
+| wrong-target closes | 0 | 0 | 0 |
+| missed closes | 0 of 31 | 0 of 31 | 0 of 30 |
+| suggestions (right / other) | 0 / 0 | 0 / 0 | 0 / 1 (a false close the guards refused) |
+| **commitment F1** | **0.981** [0.962, 1.000] | **0.981** [0.962, 1.000] | 0.972 [0.963, 0.991] |
+| commitment precision / recall | 0.981 / 0.981 | 0.981 / 0.981 | 0.964 / 0.981 |
+| deadline accuracy | 1.000 (53/53) | 1.000 (53/53) | 0.943 (50/53) |
+| status accuracy | 1.000 | 1.000 | 1.000 |
+| breach-alert recall / false alerts | 0.933 / 0 | 0.933 / 0 | 0.933 / 0 |
+| fact recall (all checkpoints) | 1.000 (47/47) | 1.000 | 1.000 |
+| freshness error / dispute recall | 0.000 / 1.000 | 0.000 / 1.000 | 0.000 / 1.000 |
+| verifier calls per ticket | — | 7.75 | — |
+| model calls per ticket | 175.8 | 183.5 | 175.8 |
+| reasoning tokens per ticket | 0 | 1,299 (verifier) | 34,529 |
+| **USD per ticket** | **0.0109** | 0.0117 | 0.0246 |
+| USD per message | 0.000062 | 0.000066 | 0.000140 |
+| prompt cache hit rate (tokens served from cache) | 89.9% | 89.7% (verifier alone 68.1%) | 91.0% |
+| hosts that answered | DeepInfra (all) | DeepInfra (all) | DeepInfra (all) |
+
+C's and B's extraction cost is what round 2 was charged for those calls. B
+adds $0.0032 for 31 verifier calls ($0.0001 each, about 170 reasoning
+tokens a call).
+
+**The choice.** The rule ranks fewest false closes first, then the highest
+commitment F1, then the lowest cost. All three tie at 0 false closes. On F1,
+C and B tie at 0.981 and A is lower. C is cheaper than B and no worse on
+false closes or F1, so **C is chosen**. The evidence against A is its F1, its
+three wrong weekdays, and its cost. The evidence against B is cost alone: it
+was right every time but changed no outcome.
+
+### What the verifier did
+
+| run of proposals | calls | yes (true / false) | no (true / false) | unsure | rescued a close | a veto would have blocked |
+|---|---|---|---|---|---|---|
+| dev2 run 4 (frozen; = B) | 31 | 31 / 0 | 0 / 0 | 0 | 0 | 0 |
+| dev2 run 1 (stress) | 26 | 24 / 0 | 0 / 2 | 0 | 0 | 0 |
+| dev2 run 2 (stress) | 29 | 29 / 0 | 0 / 0 | 0 | 0 | 0 |
+| dev2 run 3 (stress) | 33 | 30 / 0 | 0 / 3 | 0 | 0 | 0 |
+| **all** | **119** | **114 / 0** | **0 / 5** | 0 | 0 | 0 |
+
+"True" means the message is the one that closed the target. "False" means the
+target was still owed. Every "no" fell on a false close that the guards also
+refused, for example "Я перезвоню вам насчёт рассрочки до конца недели"
+proposed as a new date for "...насчёт оплаты". No quote was missing from the
+message, and no call failed. "A veto would have blocked" counts the closes
+the words admitted on which the verifier said no. There were none, so a
+"no"-as-veto rule would have changed nothing here either.
+
+So on this evidence the verifier and the lexical guards agree everywhere they
+overlap. What it would add is the soft rescue, and these tickets give it
+nothing to rescue. Whether it earns its 7% depends on how often real tickets
+confirm a deed in words that share nothing with the promise while another
+promise is open. The simulated tickets plant almost no such confirmations,
+and real tickets are needed to answer it.
+
+### Cache-friendly prompt order
+
+The extractor's prompt already has the order the owner's practice asks for.
+The fixed instructions come first, as the system message. Then comes the
+card, with each list in the order it was written (oldest first, never
+re-sorted). Last comes the per-turn part: the message, its author and its
+time. Measured on the dev tickets, 89.9% of prompt tokens were served from
+DeepInfra's cache (91.0% for A). About 180 tokens a call are not cached:
+roughly the new message and the end of the card that changed. The one
+per-turn value inside the card is each open promise's status (open, due
+soon, breached), which changes a few times per promise. It was left in
+place: moving it would change the extractor's input, which would invalidate
+the replay of round 2's proposals that B and C rest on, for at most a few
+percent of cache. The verifier's prompt is fixed instructions first, then
+the commitment and the message; 68% of its tokens were cached.
+
+### Projected cost of the final run
+
+On a fresh seed, `test3` (seed 4343, 20 `main`-profile tickets), defined in
+`SPLITS` but **not generated, read or run**. Per-ticket costs are round 2's
+test2 measurements on the same profile, model and host. The upper bound adds
+about 25–30% for a fresh seed's longer tickets and for retries. **The owner
+approves this budget before anyone runs it.**
+
+| what | basis (USD per ticket) | expected, 20 tickets | upper |
+|---|---|---|---|
+| rewriting the tickets (GLM writer, now locked to 3 hosts) | test2: $0.094 for 20 | $0.09 | $0.15 |
+| **event memory, configuration C** | test2: 0.0115; dev2: 0.0109 | **$0.23** | **$0.30** |
+| + B as a replay of C's proposals (verifier only) | dev2: 0.0008 | $0.02 | $0.03 |
+| full context (asked at checkpoints) | test2: 0.0040 | $0.08 | $0.10 |
+| Mem0 | test2: 0.052 | $1.03 | $1.30 |
+| rolling summary | test2: 0.147, extrapolated from 3 tickets cut at 90–100% of their events | $2.94 | $3.70 |
+| projection samples (20 events per method, mostly reused) | — | $0.01 | $0.02 |
+| **every method on all 20 tickets** | | **≈ $4.4** | **≈ $5.6** |
+| round 2's shape: rolling summary and Mem0 on the first 4 | | ≈ $1.2 | ≈ $1.6 |
+
+```bash
+python -m duebook.bench.experiment --split test3 --results results/round3 \
+    --session-cap <approved> --max-usd <approved> --sample-events 20 \
+    [--subset rolling_summary=4,mem0=4]       # once, after approval
+```
+
+### Threats to validity (round 3)
+
+- **Four tickets.** The intervals are wide. A's F1 interval overlaps C's, so
+  "A reads worse" rests on the point estimates and on the three wrong
+  weekdays, which are a concrete failure.
+- **B and C are replays.** Their extraction is round 2's recorded output,
+  which was tuned on these same dev tickets. A was read fresh with
+  instructions tuned for reasoning off. That favours C and B over A.
+- **B's replay approximation.** In a live B run, a close the verifier admits
+  would change the card the extractor sees next. Here the verifier admitted
+  nothing the guards did not, so B's cards are identical to C's and the
+  approximation did not matter.
+- **The verifier was tested on the authors' own traps.** Its 5 correct "no"
+  verdicts fell on the twin trap that round 2 found on dev. The adversarial
+  suite checks what the reducer does with each kind of verdict, not how
+  often a real model gives it.
+- **One model, one host.** Both the extractor and the verifier are DeepSeek
+  V4.1 Flash on DeepInfra. "A cheap extractor plus a stronger verifier" was
+  tested only as "the same model, thinking a little"; a different verifier
+  model was not tried.
+
 
 ## Round 2: long tickets, DeepSeek V4.1 Flash, and closes that fail safe
 

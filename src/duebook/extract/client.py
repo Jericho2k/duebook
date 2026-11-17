@@ -4,12 +4,19 @@ Configured by a base URL, a key and a model name, and nothing else — so the
 same code talks to OpenRouter, to a vendor directly, or to a local server
 inside a closed network.
 
-What a particular model needs sent with every request lives in ``MODELS``,
-not in the caller. The default reader, DeepSeek V4.1 Flash, is a reasoning
-model: left at a low reasoning effort it spends 1,000-2,300 hidden tokens per
-message, five to ten times the cost of the answer, so reasoning is switched
-off. And a provider's prompt cache only helps when every request of a run
-goes to the same provider, so its routing is pinned.
+What a particular model needs sent with every request lives in ``PRESETS``,
+not in the caller: which hosts may serve it, and how hard it reasons. The
+default reader, DeepSeek V4.1 Flash, is a reasoning model: left at a low
+reasoning effort it spends 1,000-2,300 hidden tokens per message, five to ten
+times the cost of the answer, so reasoning is off unless a caller asks for it
+(``ChatClient.reasoning``). A provider's prompt cache only helps when every
+request of a run goes to the same host, and the same model on another host
+may answer differently, so a preset LOCKS the model to its hosts: no
+fallback to anyone else.
+
+Retries are few and deliberate. A 429 or a 5xx is retried once, and so is an
+empty or unreadable answer. A timeout is never retried: the answer may have
+been generated, and billed, after the client stopped waiting.
 
 A ``ResponseCache`` keeps answers to deterministic requests (temperature 0)
 on disk, keyed by the whole request body: a method re-run on unchanged input
@@ -36,12 +43,22 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 
 
+#: OpenRouter's ``reasoning`` field, by name. "low" keeps the reasoning out
+#: of the answer (it is still generated, and billed).
+REASONING: Mapping[str, Mapping[str, Any]] = MappingProxyType(
+    {
+        "off": MappingProxyType({"enabled": False}),
+        "low": MappingProxyType({"effort": "low", "exclude": True}),
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ModelSettings:
-    """What one model needs sent with every request to OpenRouter."""
+    """What one request to OpenRouter carries for its model."""
 
     #: OpenRouter's ``reasoning`` field: ``{"enabled": False}``, ``{"effort":
-    #: "low"}``... None leaves the provider's default in place.
+    #: "low", "exclude": True}``... None leaves the provider's default in place.
     reasoning: Mapping[str, Any] | None = None
     #: OpenRouter's ``provider`` routing field. ``require_parameters`` is
     #: always added: the same model is served by several hosts, and only those
@@ -49,33 +66,53 @@ class ModelSettings:
     provider: Mapping[str, Any] | None = None
 
 
-#: Per-model settings. A model not listed gets the provider's defaults.
-MODELS: Mapping[str, ModelSettings] = MappingProxyType(
+@dataclass(frozen=True, slots=True)
+class Preset:
+    """How one model is called: the hosts that may serve it and how hard it reasons."""
+
+    #: OpenRouter provider slugs, in order of preference. Empty: any host.
+    providers: tuple[str, ...] = ()
+    #: A key of ``REASONING``, or None for the provider's default.
+    reasoning: str | None = None
+    #: False locks the model to ``providers``: if none of them can answer,
+    #: the request fails rather than going to a host nobody chose.
+    allow_fallbacks: bool = False
+
+    def settings(self, reasoning: str | None = None) -> ModelSettings:
+        """The request settings, with ``reasoning`` (a key of ``REASONING``) overriding."""
+        effort = reasoning or self.reasoning
+        if effort is not None and effort not in REASONING:
+            raise ValueError(f"unknown reasoning {effort!r}: one of {', '.join(REASONING)}")
+        provider = None
+        if self.providers:
+            provider = MappingProxyType(
+                {"order": self.providers, "allow_fallbacks": self.allow_fallbacks}
+            )
+        return ModelSettings(REASONING[effort] if effort else None, provider)
+
+
+#: Per-model presets. A model not listed gets the provider's defaults.
+PRESETS: Mapping[str, Preset] = MappingProxyType(
     {
         # Reasoning off: with it at "low" the model spent 1,000-2,300 hidden
-        # tokens per message ($0.0007-0.0027); off, it answers the same schema
-        # correctly in about 300. Routing pinned so the fixed instructions hit
-        # the prompt cache: DeepInfra's fp8 endpoint, the cheapest for output
-        # and for cached input among the hosts that honour strict JSON schema
-        # (there is no "deepseek" host for this model on OpenRouter).
-        "deepseek/deepseek-v4.1-flash": ModelSettings(
-            reasoning=MappingProxyType({"enabled": False}),
-            provider=MappingProxyType({"order": ("deepinfra/fp8",), "allow_fallbacks": True}),
-        ),
+        # tokens per message; off, it answers the same schema correctly in
+        # about 300. Locked to DeepInfra's fp8 endpoint, the cheapest for
+        # output and for cached input among the hosts that honour strict JSON
+        # schema (there is no "deepseek" host for this model on OpenRouter), so
+        # the fixed instructions hit one prompt cache and one host answers.
+        "deepseek/deepseek-v4.1-flash": Preset(("deepinfra/fp8",), "off"),
         # Round 1's reader.
-        "z-ai/glm-5.3-flash": ModelSettings(reasoning=MappingProxyType({"effort": "low"})),
-        # Round 2's writer: the alias is served as z-ai/glm-5.3-flash. Rephrasing
-        # needs no reasoning; with it on, the writer cost six times as much.
-        "~z-ai/glm-flash-latest": ModelSettings(reasoning=MappingProxyType({"enabled": False})),
+        "z-ai/glm-5.3-flash": Preset(reasoning="low", allow_fallbacks=True),
+        # The writer (served as z-ai/glm-5.3-flash). Rephrasing needs no
+        # reasoning; with it on, the writer cost six times as much.
+        "~z-ai/glm-flash-latest": Preset(("gmicloud/fp8", "tenstorrent/fp8", "novita/fp8"), "off"),
     }
 )
 
 
-def settings_for(model: str) -> ModelSettings:
-    return MODELS.get(model, ModelSettings())
-
-
-_RETRYABLE = {408, 409, 425, 429, 500, 502, 503, 504}
+def settings_for(model: str, reasoning: str | None = None) -> ModelSettings:
+    """A model's request settings, from its preset; ``reasoning`` overrides the preset's."""
+    return PRESETS.get(model, Preset(allow_fallbacks=True)).settings(reasoning)
 
 
 class ModelError(RuntimeError):
@@ -145,11 +182,17 @@ class ChatClient:
     structured: str = "json_schema"
     temperature: float = 0.0
     max_tokens: int = 4_000
-    #: Reasoning and routing for this model; None takes them from ``MODELS``.
+    #: Reasoning and routing for this model; None takes them from ``PRESETS``.
     settings: ModelSettings | None = None
+    #: A key of ``REASONING`` ("off", "low") overriding the preset's, so one
+    #: model can be called at two efforts. Ignored when ``settings`` is given.
+    reasoning: str | None = None
     #: Where answers to temperature-0 requests are kept; None keeps none.
     cache: ResponseCache | None = None
-    attempts: int = 3
+    #: Retries after a 429 or a 5xx (or a refused connection: nothing was sent).
+    http_retries: int = 1
+    #: Retries after an empty or unreadable answer.
+    content_retries: int = 1
     timeout: float = 60.0
     #: Extra request fields, merged last. Provider routing, reasoning effort, etc.
     extra: dict[str, Any] = field(default_factory=dict)
@@ -159,7 +202,13 @@ class ChatClient:
     def complete_json(
         self, messages: list[dict[str, str]], schema: dict[str, Any], name: str = "output"
     ) -> Completion:
-        """Ask for a JSON object. Retries transport faults and unreadable output."""
+        """Ask for a JSON object.
+
+        A 429 or a 5xx is retried ``http_retries`` times, an empty or
+        unreadable answer ``content_retries`` times. A timeout is never
+        retried: the model may have generated the answer, and the provider
+        billed it, after the client stopped waiting; the caller decides.
+        """
         body: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
@@ -176,7 +225,7 @@ class ChatClient:
         if "openrouter.ai" in self.base_url:
             # Ask OpenRouter to report what it actually charged.
             body["usage"] = {"include": True}
-            body |= openrouter_fields(self.settings or settings_for(self.model))
+            body |= openrouter_fields(self.settings or settings_for(self.model, self.reasoning))
         body.update(self.extra)
 
         cache = self.cache if self.temperature == 0 else None
@@ -189,50 +238,63 @@ class ChatClient:
 
         spent = Usage()
         problems: list[str] = []
-        problem = ""
-        for attempt in range(self.attempts):
-            if attempt:
-                problems.append(problem)
-                self.sleep(min(2.0**attempt, 20.0))
+        left = {"http": self.http_retries, "content": self.content_retries}
+
+        def again(kind: str, problem: str) -> None:
+            """Note the problem, and raise unless a retry of its kind is left."""
+            problems.append(problem)
+            if left[kind] <= 0:
+                tried = "; ".join(problems)
+                raise ModelError(f"gave up after {len(problems)} attempts: {tried}", spent)
+            left[kind] -= 1
+            if kind == "http":
+                self.sleep(2.0)
+
+        while True:
             try:
                 response = self._post(body)
+            except httpx.TimeoutException as error:
+                raise ModelError(f"timeout, not retried (it may have been billed): {error!r}",
+                                 spent) from error  # fmt: skip
+            except httpx.ConnectError as error:
+                again("http", f"connect: {error!r}")
+                continue
             except httpx.TransportError as error:
-                problem = f"transport: {error!r}"
+                # The request went out; an answer may have been generated.
+                raise ModelError(f"transport, not retried: {error!r}", spent) from error
+            status = response.status_code
+            if status == 429 or status >= 500:
+                again("http", f"http {status}")
                 continue
-            if response.status_code in _RETRYABLE:
-                problem = f"http {response.status_code}"
-                continue
-            if response.status_code >= 400:
-                raise ModelError(f"http {response.status_code}: {response.text[:300]}", spent)
+            if status >= 400:
+                raise ModelError(f"http {status}: {response.text[:300]}", spent)
 
             try:
                 payload = response.json()
             except ValueError:
-                problem = "response body is not JSON"
+                again("content", "response body is not JSON")
                 continue
             spent += _usage(payload)
             try:
                 content = payload["choices"][0]["message"]["content"]
             except (KeyError, IndexError, TypeError):
-                problem = "response has no message"
+                again("content", "response has no message")
                 continue
             if not content:
                 # Typically a reasoning model that spent its budget thinking.
-                problem = "empty content"
+                again("content", "empty content")
                 continue
             try:
                 data = json.loads(_strip_fence(content))
             except ValueError:
-                problem = f"content is not valid JSON: {content[:200]!r}"
+                again("content", f"content is not valid JSON: {content[:200]!r}")
                 continue
             if not isinstance(data, dict):
-                problem = "content is not a JSON object"
+                again("content", "content is not a JSON object")
                 continue
             if cache is not None:
                 cache.put(body, payload)
             return Completion(data, spent, tuple(problems), provider=payload.get("provider"))
-
-        raise ModelError(f"gave up after {self.attempts} attempts: {problem}", spent)
 
     def _post(self, body: dict[str, Any]) -> httpx.Response:
         http = self.http or httpx
@@ -273,6 +335,7 @@ def _content(payload: dict[str, Any]) -> Any:
 def _usage(payload: dict[str, Any]) -> Usage:
     raw = payload.get("usage") or {}
     details = raw.get("prompt_tokens_details") or {}
+    completion = raw.get("completion_tokens_details") or {}
     cost = raw.get("cost")
     return Usage(
         calls=1,
@@ -280,6 +343,7 @@ def _usage(payload: dict[str, Any]) -> Usage:
         completion_tokens=int(raw.get("completion_tokens") or 0),
         cached_tokens=int(details.get("cached_tokens") or 0),
         reported_usd=float(cost) if isinstance(cost, int | float) else None,
+        reasoning_tokens=int(completion.get("reasoning_tokens") or 0),
     )
 
 

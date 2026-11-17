@@ -38,6 +38,9 @@ value is current, stale (it was changed, or lost a dispute) or contested.
 
 * *Freshness error* — the share of those facts that are stale or contested.
   Lower is better.
+* *Fact recall* — of the planted values current at the checkpoint (said,
+  not changed since, not lost or still in a dispute), the share the method
+  presents among its facts.
 * *Fact changes* — after a planted change, the new value is presented as
   current and the old one is not.
 * *Disputes* — precision and recall of the open disagreements a method reports
@@ -132,6 +135,9 @@ class Score:
     #: Checkpoints scored, and how many of them the method could not answer.
     checkpoints: int = 0
     errors: int = 0
+    #: Planted values current at the checkpoint, and how many were presented.
+    facts_current: int = 0
+    facts_recalled: int = 0
 
     def __add__(self, other: Score) -> Score:
         return Score(*(getattr(self, f.name) + getattr(other, f.name) for f in fields(self)))
@@ -160,6 +166,10 @@ class Score:
         """Of the closes a method made, the share both due and on the right message."""
         made = self.closes_right + self.closes_false + self.closes_wrong_target
         return self.closes_right / made if made else 1.0
+
+    @property
+    def fact_recall(self) -> float:
+        return self.facts_recalled / self.facts_current if self.facts_current else 1.0
 
     @property
     def change_accuracy(self) -> float:
@@ -227,6 +237,7 @@ def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
 
     judged, stale, contested, unjudged = _freshness(ticket, snap)
     changes_right, changes_judged = _changes(ticket, snap)
+    current, recalled = _recall(ticket, snap)
 
     return Score(
         commitments=Counts(len(pairs), len(spurious), len(missed)),
@@ -246,6 +257,8 @@ def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
         failed_steps=_failed_steps(ticket, snap),
         checkpoints=1,
         errors=int(snap.error is not None),
+        facts_current=current,
+        facts_recalled=recalled,
     )
 
 
@@ -380,6 +393,15 @@ def _freshness(ticket: SimTicket, snap: Snapshot) -> tuple[int, int, int, int]:
             stale += status == "stale"
             contested += status == "contested"
     return judged, stale, contested, unjudged
+
+
+def _recall(ticket: SimTicket, snap: Snapshot) -> tuple[int, int]:
+    """Planted values current at the checkpoint, and how many the snapshot presents."""
+    seq = snap.checkpoint.seq
+    current = [g for g in ticket.gold.facts if fact_status(ticket, g, seq) == "current"]
+    shown = {(g.slot, g.value) for item in snap.facts
+             for g in presented(ticket, item.text, seq).values()}  # fmt: skip
+    return len(current), sum(1 for g in current if (g.slot, g.value) in shown)
 
 
 def _changes(ticket: SimTicket, snap: Snapshot) -> tuple[int, int]:

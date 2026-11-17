@@ -24,7 +24,7 @@ from duebook import (
     notices,
     status_at,
 )
-from duebook.extract import DEFAULT_MODEL, PRICES, ChatClient, Extractor, ModelSettings, Usage
+from duebook.extract import DEFAULT_MODEL, PRICES, ChatClient, Extractor, Usage
 
 MSK = ZoneInfo("Europe/Moscow")
 ANNA = Actor("cust-1", Role.CUSTOMER, "Анна")
@@ -55,8 +55,7 @@ def main() -> None:
     cal = WorkCalendar(tz=MSK)
     effort = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--reasoning=")), None)
     key = os.environ.get("OPENROUTER_API_KEY", "proxy-injected")
-    settings = ModelSettings(reasoning={"effort": effort}) if effort else None
-    client = ChatClient(api_key=key, model=model, settings=settings)
+    client = ChatClient(api_key=key, model=model, reasoning=effort)
     extractor = Extractor(client, cal)
     card, spent, at = Card("T-1"), Usage(), START
 

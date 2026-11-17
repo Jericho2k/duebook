@@ -152,6 +152,8 @@ def test_the_planted_proposals_through_the_real_reducer_score_exactly_one():
     assert s.commitments.tp == sum(len(t.gold.commitments) for t in TICKETS) > 200
     assert s.deadline_accuracy == 1.0 and s.commitments.f1 == 1.0
     assert s.alerts.tp == sum(c.fate is Fate.BROKEN for t in TICKETS for c in t.gold.commitments)
+    every = s + evaluate(TICKETS, Oracle.of(TICKETS)).handoffs
+    assert every.fact_recall == 1.0 and every.facts_current > 100
 
 
 def test_each_label_describes_what_the_card_really_ends_up_holding():
@@ -453,3 +455,6 @@ def test_round_two_splits_use_fresh_seeds():
     old = {SPLITS[n].seed for n in ("dev", "test", "long")}
     assert SPLITS["dev2"].seed not in old and SPLITS["test2"].seed not in old
     assert SPLITS["test2"].count >= 20 and SPLITS["test2"].profile is MAIN
+    fresh = SPLITS["test3"]
+    assert fresh.seed not in old | {SPLITS["dev2"].seed, SPLITS["test2"].seed}
+    assert fresh.count == 20 and fresh.profile is MAIN
