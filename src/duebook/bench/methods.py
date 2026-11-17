@@ -22,6 +22,7 @@ from ..extract.cost import Usage
 from ..extract.extractor import Extraction, Extractor, JsonModel
 from ..extract.prompt import Bound, build_messages
 from ..lifecycle import AlertPolicy
+from ..store.codec import encode
 from ..temporal import WorkCalendar
 from .generate import SimTicket
 from .meter import Ledger, Meter, Tally
@@ -97,6 +98,13 @@ class EventMemory:
             # every message: the same card rendered both ways, so the effect
             # of the bound is measured on identical input.
             "prompt_chars": extractor.sizes,
+            # Every proposal, stored, so the run can be folded again under
+            # other rules (the reducer without its guards) without a model.
+            "proposals": [encode(list(p)) for p in folded.proposals],
+            # Closes the guards refused: (seq, reason, kind, target's seq).
+            "refused": [[r.seq, r.reason, r.kind, r.target_seq] for r in folded.refused],
+            "cache_hits": meter.tally.cache_hits,
+            "providers": meter.tally.providers,
         }
         return MethodRun.of(self.name, ticket, snaps, meter.tally, failure, detail)
 

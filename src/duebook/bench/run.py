@@ -9,6 +9,11 @@ reading, and the store adds nothing to that but time.
 The card is read at every checkpoint (each handoff and the end) through
 ``result.from_card`` and scored by the same code that scores the baselines.
 
+The fold keeps what the extractor proposed for every event, so the same
+proposals can be folded again under other rules — the reducer without its
+closing guards, say — at no cost and on exactly the same model output. It also
+keeps every close the guards refused.
+
 A ticket whose extraction fails is stopped at that event, as in production,
 and scored on the card it reached: the promises it never got to count as
 missed. Failures are reported alongside the score, not folded into it
@@ -26,7 +31,8 @@ from ..events import Event
 from ..extract.cost import Usage
 from ..extract.extractor import Extraction, Reader
 from ..lifecycle import AlertPolicy
-from ..reducer import apply
+from ..proposals import CancelCommitment, MakeCommitment, Proposal, ResolveCommitment
+from ..reducer import GUARDED, Guards, apply
 from ..temporal import WorkCalendar
 from .generate import SimTicket
 from .result import Snapshot, checkpoints, from_card
@@ -118,6 +124,23 @@ class Folded:
     seconds: float = 0.0
     #: (seq, prompt tokens) for every model call, to see how the prompt grows.
     prompts: tuple[tuple[int, int], ...] = ()
+    #: What the extractor proposed, per event read, in order.
+    proposals: tuple[tuple[Proposal, ...], ...] = ()
+    #: Every close the guards refused.
+    refused: tuple[Refused, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class Refused:
+    """A close the reducer's guards did not admit."""
+
+    #: The message that would have closed it.
+    seq: int
+    reason: str
+    #: "resolved", "cancelled" or "superseded".
+    kind: str
+    #: The message the target commitment was made in.
+    target_seq: int
 
 
 def fold(
@@ -125,12 +148,15 @@ def fold(
     extractor: Reader,
     stops: Iterable[int] = (),
     cal: WorkCalendar | None = None,
+    guards: Guards | None = None,
 ) -> Folded:
     """Read a ticket event by event, keeping the card at each of ``stops``."""
     wanted = set(stops)
     card, spent, seconds = Card(ticket.ticket_id), Usage(), 0.0
     cards: dict[int, Card] = {}
     prompts: list[tuple[int, int]] = []
+    read: list[tuple[Proposal, ...]] = []
+    refused: list[Refused] = []
     failure = None
     for event in ticket.events:
         started = time.perf_counter()
@@ -145,13 +171,52 @@ def fold(
         spent += extraction.usage
         if extraction.usage.calls:
             prompts.append((event.seq, extraction.usage.prompt_tokens))
-        card = apply(card, event, extraction.proposals, cal).card
+        read.append(extraction.proposals)
+        outcome = apply(card, event, extraction.proposals, cal, guards=guards)
+        refused += [_refused(card, event.seq, r.proposal, r.reason)
+                    for r in outcome.rejections if r.reason in GUARDED]  # fmt: skip
+        card = outcome.card
         if event.seq in wanted:
             cards[event.seq] = card
     # A ticket that stopped early is judged on the card it reached.
     for seq in wanted - set(cards):
         cards[seq] = card
-    return Folded(card, cards, spent, failure, seconds, tuple(prompts))
+    return Folded(card, cards, spent, failure, seconds, tuple(prompts), tuple(read),
+                  tuple(refused))  # fmt: skip
+
+
+def _refused(card: Card, seq: int, proposal: Proposal, reason) -> Refused:
+    match proposal:
+        case ResolveCommitment():
+            kind, target = "resolved", proposal.commitment_id
+        case CancelCommitment():
+            kind, target = "cancelled", proposal.commitment_id
+        case MakeCommitment():
+            kind, target = "superseded", proposal.supersedes
+    found = card.commitment(target)
+    return Refused(seq, reason.value, kind, found.source.seq if found else 0)
+
+
+@dataclass(frozen=True, slots=True)
+class Replayed:
+    """Proposals already made, read again: no model is asked."""
+
+    answers: dict[str, tuple[Proposal, ...]]
+
+    def extract(self, card: Card, event: Event) -> Extraction:
+        return Extraction(self.answers.get(event.id, ()))
+
+
+def refold(
+    ticket: SimTicket,
+    proposals: Sequence[Sequence[Proposal]],
+    guards: Guards | None = None,
+    cal: WorkCalendar | None = None,
+) -> Folded:
+    """Fold a ticket again from the proposals a run made, under other rules."""
+    answers = {e.id: tuple(p) for e, p in zip(ticket.events, proposals, strict=False)}
+    stops = [cp.seq for cp in checkpoints(ticket)]
+    return fold(ticket, Replayed(answers), stops, cal, guards)
 
 
 def run_ticket(

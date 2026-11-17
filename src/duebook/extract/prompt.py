@@ -8,6 +8,10 @@ something, which is a defect to find rather than to paper over with context.
 
 The instructions come first and never change, so a provider's prompt cache can
 serve them.
+
+Each unresolved commitment is shown with the words it was made in. A close
+must name its target twice — by handle and by a span copied from those words
+— and the reducer admits it only when the two agree (see ``closing``).
 """
 
 from __future__ import annotations
@@ -51,6 +55,9 @@ other side said ("according to our data you were charged 2900", "we shipped \
 model X") — those are not changes.
 
 commitments — a party promises a future action.
+- "quote": the whole clause that makes the promise, with what it is about \
+("Уточню на складе и напишу вам до пятницы", not "напишу вам до пятницы"): \
+it is the promise's wording in the record from then on.
 - "owner": "agent" for a personal promise ("I will call you back"), "company" \
 for a promise on the company's behalf ("we will refund you"), "customer" for \
 the customer's own promise ("I'll send the screenshot").
@@ -72,12 +79,26 @@ yourself; describe what was said:
   "time" is "HH:MM" (24h) when a clock time was given, else null. Set every \
 field that does not apply to null.
 - "supersedes": the id of an unresolved commitment this one replaces (a new \
-date for the same promise), else null.
+date for the same promise), else null. A promise about something else — \
+another item, another topic — is a new commitment even when it is worded \
+alike: "supersedes" null. "target_quote": when "supersedes" is \
+set, words copied from THAT commitment's "said" text in the record that show \
+which one it is; else null.
 
-resolved — the message says a listed commitment's action WAS DONE, including \
-thanks that imply it ("thanks for calling back", "the money arrived"). Use its \
-id.
+resolved — the message says a listed commitment's action WAS DONE, in words \
+that name the deed: "the money arrived", "got the screenshot", "thanks for \
+calling back", "thanks for the call about the delivery". Either side may say \
+it: the customer confirming what the company did, the company confirming \
+what the customer sent. Bare thanks or acknowledgement ("thanks", \
+"спасибо", "ok, waiting", "thanks for keeping me posted") names no deed and \
+confirms nothing.
 cancelled — the message says a listed commitment is no longer needed.
+For both: "id" is the commitment; "target_quote" is copied character for \
+character from THAT commitment's "said" text in the record (not from the new \
+message) and shows which one it is; "quote" is the words of the new message \
+that name what was done or called off. Report every such statement: the \
+record checks each close against the commitment's own words before it \
+accepts it, so do not hold one back.
 
 steps — a fix or diagnostic action that was suggested or tried. "outcome" is \
 "pending" unless this same message says whether it worked.
@@ -163,7 +184,10 @@ def render_card(
         if c.due is not None:
             local = c.due.deadline.due_at.astimezone(cal.tz)
             due = f" | due {local:%Y-%m-%d %H:%M}"
-        lines.append(f"- {alias} [{c.owner.value}, {status_at(c, now).value}] {c.action}{due}")
+        said = f' | said: "{c.source.quote}"'
+        lines.append(
+            f"- {alias} [{c.owner.value}, {status_at(c, now).value}] {c.action}{due}{said}"
+        )
 
     steps = list(enumerate(card.steps, 1))
     hidden_steps = 0

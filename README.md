@@ -25,10 +25,36 @@ event stream, so it can be rebuilt, audited, and inspected as of any moment.
 | Nobody can bind the other side | "You promised me a refund" is a customer's claim, not a company promise |
 | The debtor's "done" is a *claim*; only the other side or a system of record *verifies* | "We sent the refund" and "the refund arrived" are different facts |
 | The debtor cannot cancel their own promise, only renegotiate it | A dropped promise must stay visible |
+| A close (done, cancelled, renegotiated) must name its promise twice and be about it; if not, the promise stays open and the close becomes a suggestion | A promise closed by mistake is never alerted on again; one left open still is |
 | One side updating its own statement *supersedes*; two sides disagreeing is a *contradiction* | A change is history, a disagreement is an open problem |
 | A promise follows the ticket on handoff and is marked *inherited*; with no assignee it is *orphaned* | Handoff is where promises are lost |
 | The model never computes a date | It emits a structured expression; code resolves it against the message time, timezone and working calendar |
 | The model does not get to name a fact's slot freely | One thing must have one slot, or an update looks like a second fact and a disagreement goes unnoticed |
+
+## Closing fails safe
+
+The extractor can attach "done" to the wrong promise: two refunds are open,
+the customer writes "деньги пришли", and the model picks one. Checking WHO may
+close a promise does not catch that; round 1 of the evaluation lost 5 of 32
+broken promises this way. So a proposal that closes or replaces a commitment
+carries two independent references — the handle (C2) and `target_quote`, a
+span copied from that commitment's original wording, which the card shows the
+model — and `duebook.closing` decides, deterministically, whether to admit it:
+
+* the span must be in the target's original wording;
+* the closing words must share content with the target (crude Russian and
+  English stems; thanks, function words and deadline words do not count;
+  generic verbs such as "напишу" count for less than words that name a thing),
+  or plainly confirm a deed when the target is the only open promise of its
+  side;
+* no other open promise of that side may fit the closing words as well;
+* a renegotiation may add or drop detail, but not name a different thing.
+
+Bare thanks passes none of this: "спасибо" closes nothing. A refused close is
+kept on the commitment as a `Suggestion`; the promise stays open, its alerts
+still fire, and the brief says "возможно, выполнено по сообщению №N —
+подтвердите". `apply(..., guards=UNGUARDED)` switches the checks off, for
+measuring what they do.
 
 ## One name for one thing
 
@@ -57,7 +83,13 @@ Friday.
 ## Extraction and what it costs
 
 The extractor shows the model the card and the one message that just arrived —
-never the whole transcript — and works against any OpenAI-compatible endpoint:
+never the whole transcript — and works against any OpenAI-compatible endpoint.
+The default reader is `deepseek/deepseek-v4.1-flash` with reasoning switched
+off (left at "low" it spends 1,000-2,300 hidden tokens a message) and its
+OpenRouter routing pinned so the fixed instructions hit the prompt cache; what
+a model needs sent lives in `extract.client.MODELS`. A `ResponseCache` keeps
+answers to temperature-0 requests on disk, so re-running unchanged input
+costs nothing.
 
 ```python
 from duebook import apply
@@ -213,8 +245,8 @@ estimated pessimistically for Russian; pass a real tokenizer's counter as
 
 ```bash
 python -m duebook.bench --seed 1 --tickets 200        # self-check, no model called
-python -m duebook.bench.experiment --split dev --max-usd 1.0
-python -m duebook.bench.report results/test.json --long results/long.json
+python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
+python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
 ```
 
 `duebook.bench` builds simulated tickets the other way round: the events are
@@ -229,7 +261,11 @@ over an amount (half later settled) and a product model; a fix that failed,
 suggested again by the operator who took the ticket over. Generation is
 seeded, and `SPLITS` fixes the seeds: `dev` (6 tickets) for tuning, `test`
 (20 tickets) run once for the reported numbers, `long` (2 tickets of 200+
-messages) for cost scaling.
+messages) for cost scaling — round 1. Round 2's main test is the `main`
+profile: 150-200 messages, 3-4 handoffs, about two weeks, and, besides all of
+the above, pairs of near-identical promises open at once (one kept, one
+broken), a renegotiation and a cancellation — what makes a close easy to pin
+on the wrong promise. Its splits are `dev2` (4 tickets) and `test2` (20).
 
 Every method answers in one format at every handoff and at the end
 (`bench.result`): promises with the owing side, source message, due instant
@@ -237,7 +273,9 @@ and status; the facts it presents as current; failed steps; open disputes.
 One scorer (`bench.score`) judges them all: commitment precision/recall/F1,
 deadline accuracy, status accuracy, breach-alert precision/recall and false
 alerts per ticket, freshness error (the share of presented facts that are
-stale or contested), fact changes, disputes and failed steps. Facts are
+stale or contested), fact changes, disputes and failed steps, and closes:
+false closes (closed while still owed), wrong-target closes (closed by the
+wrong message), missed closes and the event memory's suggestions. Facts are
 matched by planted value, not slot name, because methods name things
 differently.
 
@@ -257,14 +295,22 @@ through the real reducer they score exactly 1.0 on every measure:
       failed steps: precision 1.000  recall 1.000
 
 Tickets are rewritten by a different model than the one that reads them
-(`deepseek/deepseek-v4.1-flash`); a rewrite that loses a planted span, or
-turns into something other than one message, is discarded.
+(round 2: GLM Flash, reading with DeepSeek); a rewrite that loses a planted
+span, turns into something other than one message, or adds a number, a
+question, a negation or a promise-like verb, is discarded and the template
+text kept.
+
+The experiment runner keeps every run inside a session budget: answers are
+cached on disk, every run logs its charge to `spend.jsonl`, and a run first
+projects its cost from a sample and refuses to start if it would not fit. A
+method too expensive for every ticket runs on a disclosed subset.
 
 The baselines (`bench.baselines`) read with the same model as the event
 memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`). The comparison, its
 numbers with 95% bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md); the raw record is under `results/`.
+[docs/results.md](docs/results.md) (round 1 and round 2); the raw record is
+under `results/` and `results/round2/`.
 
 ## Running the service
 
@@ -357,7 +403,7 @@ key.
 | `DUEBOOK_DATABASE_URL` | — | PostgreSQL connection string (required) |
 | `DUEBOOK_OPENROUTER_API_KEY` | — | model key; required by `process` |
 | `DUEBOOK_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | any OpenAI-compatible endpoint |
-| `DUEBOOK_OPENROUTER_MODEL` | `z-ai/glm-5.3-flash` | the model that reads messages |
+| `DUEBOOK_OPENROUTER_MODEL` | `deepseek/deepseek-v4.1-flash` | the model that reads messages |
 | `DUEBOOK_WEBHOOK_SECRET` | empty: unsigned | HMAC secret for `POST /events` |
 | `DUEBOOK_API_KEY` | empty: open | bearer key for the read endpoints |
 | `DUEBOOK_ALERT_CHANNEL` | `log` | `log` or `webhook` |
@@ -379,21 +425,26 @@ key.
 Implemented, with tests: the domain core, the extractor, and the PostgreSQL
 event store with its alert outbox, scheduler and delivery worker, the
 per-ticket pipeline that ties them together, the handoff brief, slot
-normalisation, the benchmark with its three baselines and the experiment
-runner, and the service around them: the HTTP API, the processor, scheduler
+normalisation, the close guards (`duebook.closing`, with an adversarial
+suite in `tests/test_guards.py`), the benchmark with its three baselines and
+the experiment runner, and the service around them: the HTTP API, the processor, scheduler
 and delivery loops, log and webhook alert channels, and an end-to-end test
 from webhook to delivered alert. `scripts/smoke.py` runs a short ticket
 through a real model and prints the proposals, the refusals, the final card
 and the charged cost.
 
-Measured against a real model: the extractor and all three baselines on the
-dev, test and long splits (see docs/results.md).
+Measured against a real model, in two rounds (see docs/results.md): round 1
+with GLM 5.3 Flash on 50-64 message tickets; round 2 with DeepSeek V4.1 Flash
+on 150-200 message tickets, where the event memory made no false close on the
+20 test tickets.
 
 Each service command has been run against a local PostgreSQL with uvicorn and
 a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
 checked with `docker compose config` but not yet built or started.
 
-Next: a helpdesk adapter; real tickets; more than one extracting model.
+Next: a helpdesk adapter; real tickets; more than one extracting model; a
+word-by-word comparison of `target_quote` that tolerates a skipped function
+word (round 2's one blocked true close).
 
 ## Development
 

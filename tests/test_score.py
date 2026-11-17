@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 from duebook import Side, notices
-from duebook.bench import Fate, Oracle, generate
+from duebook.bench import MAIN, Fate, Oracle, generate
 from duebook.bench.match import mentions, tokens
 from duebook.bench.result import (
     Dispute,
@@ -132,6 +132,69 @@ def test_a_deadline_the_method_does_not_trust_raises_no_alert():
     doubted = tuple(replace(p, alertable=False) for p in snap.promises)
     s = score_snapshot(t, replace(snap, promises=doubted))
     assert s.alerts.tp == 0 and s.alerts.fp == 0 and s.alerts.fn > 0
+
+
+# --------------------------------------------------------------- closes ----
+
+MAIN_TICKETS = generate(seed=17, count=4, profile=MAIN)
+
+
+def broken_and_kept(t):
+    """The end snapshot, a promise planted as broken in it, and one planted as kept."""
+    snap = end_of(t)
+    by_seq = {p.seq: p for p in snap.promises}
+    broken = next(c for c in t.gold.commitments if c.fate is Fate.BROKEN)
+    kept = next(c for c in t.gold.commitments if c.fate is Fate.KEPT)
+    return snap, by_seq[broken.seq], by_seq[kept.seq], kept
+
+
+def test_closing_a_promise_that_is_still_owed_is_a_false_close_and_silences_its_alert():
+    t = MAIN_TICKETS[0]
+    snap, broken, _, _ = broken_and_kept(t)
+    closed = replace(broken, status=PromiseStatus.FULFILLED, closed_seq=broken.seq + 1)
+    s = score_snapshot(t, replace(snap, promises=tuple(
+        closed if p is broken else p for p in snap.promises)))  # fmt: skip
+    assert s.closes_false == 1 and s.alerts.fn == 1 and s.close_precision < 1.0
+
+
+def test_a_close_on_the_wrong_message_is_a_wrong_target_close_and_none_is_missed_close():
+    t = MAIN_TICKETS[0]
+    snap, _, kept, gold = broken_and_kept(t)
+    wrong = replace(kept, closed_seq=gold.resolved_seq - 1)
+    reopened = replace(kept, status=PromiseStatus.OPEN, closed_seq=None)
+    for found, field in ((wrong, "closes_wrong_target"), (reopened, "closes_missed")):
+        promises = tuple(found if p is kept else p for p in snap.promises)
+        s = score_snapshot(t, replace(snap, promises=promises))
+        assert getattr(s, field) == 1 and s.closes_false == 0
+
+
+def test_a_close_with_no_message_given_is_judged_by_outcome_alone():
+    t = MAIN_TICKETS[0]
+    snap = end_of(t)
+    vague = tuple(replace(p, closed_seq=None) for p in snap.promises)
+    s = score_snapshot(t, replace(snap, promises=vague))
+    assert s.closes_wrong_target == 0
+    assert s.closes_right == score_snapshot(t, snap).closes_right > 0
+
+
+def test_a_suggestion_is_right_when_it_names_the_message_that_closed_the_promise():
+    t = MAIN_TICKETS[0]
+    snap, broken, kept, gold = broken_and_kept(t)
+    held = replace(kept, status=PromiseStatus.OPEN, closed_seq=None, suggested=(gold.resolved_seq,))
+    stray = replace(broken, suggested=(gold.resolved_seq,))
+    promises = tuple(held if p is kept else stray if p is broken else p for p in snap.promises)
+    s = score_snapshot(t, replace(snap, promises=promises))
+    assert (s.suggestions_right, s.suggestions_wrong, s.closes_missed) == (1, 1, 1)
+
+
+def test_a_dropped_promise_must_be_reported_dropped_not_done_or_owed():
+    t = next(t for t in MAIN_TICKETS if any(c.fate is Fate.CANCELLED for c in t.gold.commitments))
+    snap = end_of(t)
+    gold = next(c for c in t.gold.commitments if c.fate is Fate.CANCELLED)
+    for status in (PromiseStatus.FULFILLED, PromiseStatus.OPEN):
+        promises = tuple(replace(p, status=status) if p.seq == gold.seq else p
+                         for p in snap.promises)  # fmt: skip
+        assert score_snapshot(t, replace(snap, promises=promises)).status_accuracy < 1.0
 
 
 # ---------------------------------------------------------------- facts ----

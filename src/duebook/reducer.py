@@ -12,7 +12,16 @@ The extractor proposes; this decides. A proposal is admitted only if
 * it rests on a literal quote from the message it claims to come from;
 * the speaker is entitled to make it — nobody can bind the other side, and the
   debtor cannot verify or cancel their own obligation;
-* it is consistent with what the card already holds.
+* it is consistent with what the card already holds;
+* if it closes or replaces a commitment, it is about THAT commitment: the
+  model named it twice and both names agree, the closing words share content
+  with the commitment's own, and they fit no other open commitment as well.
+
+Closing is where a wrong admission costs most. A commitment closed by mistake
+raises no alert and drops out of the brief, so nobody is ever reminded of it;
+one left open by mistake still alerts, and a person looks. Closes therefore
+fail safe: a close that does not pass is refused, the commitment stays open,
+and the evidence is kept on it as a ``Suggestion`` for a person to confirm.
 
 It also decides what a proposal is ABOUT. A fact's slot is normalised against a
 controlled vocabulary and the slots already on the card, so that a model
@@ -31,6 +40,7 @@ from enum import StrEnum
 
 from .card import (
     Card,
+    Closure,
     Commitment,
     CommitmentState,
     Confidence,
@@ -42,7 +52,9 @@ from .card import (
     Source,
     Step,
     StepOutcome,
+    Suggestion,
 )
+from .closing import confirms, names_other, overlap, quote_identifies
 from .events import AssigneeChanged, Event, MessagePosted, Role, Side, StatusChanged
 from .proposals import (
     AnswerQuestion,
@@ -77,9 +89,35 @@ class Reason(StrEnum):
     DEADLINE_UNGROUNDED = "deadline_ungrounded"
     DEADLINE_INVALID = "deadline_invalid"
     DEADLINE_IN_PAST = "deadline_in_past"
+    # The three below refuse a CLOSE and keep it as a suggestion on the target.
+    #: The id and the span of the target's wording name different things.
+    TARGET_MISMATCH = "target_mismatch"
+    #: The closing words have nothing to do with the target.
+    NOT_ABOUT_TARGET = "not_about_target"
+    #: The closing words fit another open commitment at least as well.
+    AMBIGUOUS_TARGET = "ambiguous_target"
 
 
 PARTIAL = frozenset({Reason.DEADLINE_UNGROUNDED, Reason.DEADLINE_INVALID, Reason.DEADLINE_IN_PAST})
+#: Refusals of a close that leave a suggestion behind.
+GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMBIGUOUS_TARGET})
+
+
+@dataclass(frozen=True, slots=True)
+class Guards:
+    """The checks a close must pass. All on; switched off only to measure what they do."""
+
+    #: The span of the target's wording must be in the target's source quote.
+    target: bool = True
+    #: The closing words must share content with the target, or plainly
+    #: confirm a deed when the target is the only open commitment of its side.
+    relevance: bool = True
+    #: No other open commitment of the same side may fit the closing words as well.
+    ambiguity: bool = True
+
+
+#: The reducer as it was before the guards: who may close, never what.
+UNGUARDED = Guards(target=False, relevance=False, ambiguity=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +127,10 @@ class Rejection:
 
     @property
     def partial(self) -> bool:
+        """The proposal was admitted in part: a commitment without its deadline, or a
+        renegotiated commitment admitted without retiring the one it named."""
+        if self.reason in GUARDED:
+            return isinstance(self.proposal, MakeCommitment)
         return self.reason in PARTIAL
 
 
@@ -110,6 +152,7 @@ def apply(
     proposals: Sequence[Proposal] = (),
     cal: WorkCalendar | None = None,
     vocab: Vocabulary | None = None,
+    guards: Guards | None = None,
 ) -> Outcome:
     if event.ticket_id != card.ticket_id:
         raise ValueError(f"event {event.id} belongs to ticket {event.ticket_id}")
@@ -120,6 +163,7 @@ def apply(
 
     cal = cal or WorkCalendar()
     vocab = vocab or DEFAULT_VOCABULARY
+    guards = guards or Guards()
     card = replace(card, last_seq=event.seq)
     rejections: list[Rejection] = []
 
@@ -139,7 +183,7 @@ def apply(
             continue
         source = Source(event.id, event.seq, event.author.id, event.author.side, proposal.quote)
         new_id = f"{event.id}#{index}"
-        card, reasons = _admit(card, event, proposal, source, new_id, text, cal, vocab)
+        card, reasons = _admit(card, event, proposal, source, new_id, text, cal, vocab, guards)
         rejections += [Rejection(proposal, reason) for reason in reasons]
 
     return Outcome(card, tuple(rejections))
@@ -150,11 +194,12 @@ def replay(
     stream: Iterable[tuple[Event, Sequence[Proposal]]],
     cal: WorkCalendar | None = None,
     vocab: Vocabulary | None = None,
+    guards: Guards | None = None,
 ) -> Card:
     """Fold a whole ticket. Stop the stream early to get the card as of that point."""
     card = Card(ticket_id)
     for event, proposals in stream:
-        card = apply(card, event, proposals, cal, vocab).card
+        card = apply(card, event, proposals, cal, vocab, guards).card
     return card
 
 
@@ -203,16 +248,17 @@ def _admit(
     text: str,
     cal: WorkCalendar,
     vocab: Vocabulary,
+    guards: Guards,
 ) -> tuple[Card, list[Reason]]:
     match proposal:
         case AssertFact():
             return _assert_fact(card, event, proposal, source, new_id, vocab)
         case MakeCommitment():
-            return _make_commitment(card, event, proposal, source, new_id, text, cal)
+            return _make_commitment(card, event, proposal, source, new_id, text, cal, guards)
         case ResolveCommitment():
-            return _resolve_commitment(card, event, proposal, source)
+            return _resolve_commitment(card, event, proposal, source, guards)
         case CancelCommitment():
-            return _cancel_commitment(card, event, proposal, source)
+            return _cancel_commitment(card, event, proposal, source, guards)
         case RecordStep():
             return _record_step(card, proposal, source, new_id)
         case SetStepOutcome():
@@ -308,6 +354,7 @@ def _make_commitment(
     new_id: str,
     text: str,
     cal: WorkCalendar,
+    guards: Guards,
 ) -> tuple[Card, list[Reason]]:
     if not p.action.strip():
         return card, [Reason.EMPTY]
@@ -322,14 +369,24 @@ def _make_commitment(
     ):  # fmt: skip
         return card, [Reason.DUPLICATE]
 
+    retired, refused = p.supersedes, None
     if p.supersedes is not None:
         old = card.commitment(p.supersedes)
         if old is None or old.owner.side is not p.owner.side:
             return card, [Reason.UNKNOWN_TARGET]
         if not old.unresolved:
             return card, [Reason.ALREADY_RESOLVED]
+        refused = _check_close(card, old, (p.quote, p.action), p.target_quote, guards, True)
+        if refused is not None:
+            # The new promise was made and is kept; the old one is NOT retired
+            # on this evidence, only marked as possibly replaced.
+            retired = None
+            hint = Suggestion(Closure.SUPERSEDED, source, refused.value, replacement=new_id)
+            card = _put_commitment(card, _suggest(old, hint))
 
     due, reasons = _due(event, p, text, cal)
+    if refused is not None:
+        reasons = [refused, *reasons]
 
     if p.owner is Party.CUSTOMER:
         responsible = None
@@ -351,7 +408,7 @@ def _make_commitment(
     )
     commitments = tuple(
         replace(c, state=CommitmentState.SUPERSEDED, resolved_at=event.at, superseded_by=new_id)
-        if c.id == p.supersedes
+        if retired is not None and c.id == retired
         else c
         for c in card.commitments
     )
@@ -394,13 +451,17 @@ def _due(
 
 
 def _resolve_commitment(
-    card: Card, event: MessagePosted, p: ResolveCommitment, source: Source
+    card: Card, event: MessagePosted, p: ResolveCommitment, source: Source, guards: Guards
 ) -> tuple[Card, list[Reason]]:
     c = card.commitment(p.commitment_id)
     if c is None:
         return card, [Reason.UNKNOWN_TARGET]
     if not c.unresolved:
         return card, [Reason.ALREADY_RESOLVED]
+    refused = _check_close(card, c, (p.quote,), p.target_quote, guards)
+    if refused is not None:
+        hint = Suggestion(Closure.RESOLVED, source, refused.value)
+        return _put_commitment(card, _suggest(c, hint)), [refused]
 
     if event.author.side is c.owner.side:
         # The debtor's word that it is done is a claim, not a fact.
@@ -415,7 +476,7 @@ def _resolve_commitment(
 
 
 def _cancel_commitment(
-    card: Card, event: MessagePosted, p: CancelCommitment, source: Source
+    card: Card, event: MessagePosted, p: CancelCommitment, source: Source, guards: Guards
 ) -> tuple[Card, list[Reason]]:
     c = card.commitment(p.commitment_id)
     if c is None:
@@ -424,8 +485,59 @@ def _cancel_commitment(
         return card, [Reason.ALREADY_RESOLVED]
     if event.author.side is c.owner.side:
         return card, [Reason.DEBTOR_CANNOT_CANCEL]
+    refused = _check_close(card, c, (p.quote,), p.target_quote, guards)
+    if refused is not None:
+        hint = Suggestion(Closure.CANCELLED, source, refused.value)
+        return _put_commitment(card, _suggest(c, hint)), [refused]
     updated = replace(c, state=CommitmentState.CANCELLED, resolved_at=event.at, resolution=source)
     return _put_commitment(card, updated), []
+
+
+def _check_close(
+    card: Card,
+    target: Commitment,
+    said: Sequence[str],
+    target_quote: str,
+    guards: Guards,
+    restates: bool = False,
+) -> Reason | None:
+    """Why a close of ``target`` on the words ``said`` must not be admitted, or None.
+
+    Two independent references must agree: the id the model gave, and a span
+    it copied from the target's original wording. Then the closing words must
+    be about the target — share a content word with it, or, when the target is
+    the only open commitment its side owes, at least say that something was
+    done — and fit no other open commitment of that side as well. Bare thanks
+    passes none of this, which is the point: "спасибо" closes nothing.
+
+    A renegotiation (``restates``) must also be about the same thing: a
+    promise naming something the old one did not, and leaving out something
+    it did, is a second promise, not a new date for the first.
+    """
+    if guards.target and not quote_identifies(target_quote, target.source.quote):
+        return Reason.TARGET_MISMATCH
+    text = " ".join(said)
+    rivals = [
+        c for c in card.commitments
+        if c.unresolved and c.id != target.id and c.owner.side is target.owner.side
+    ]  # fmt: skip
+    fit = overlap(text, _wording(target))
+    if guards.relevance and fit == 0 and (rivals or not confirms(text)):
+        return Reason.NOT_ABOUT_TARGET
+    if guards.relevance and restates and names_other(text, _wording(target)):
+        return Reason.NOT_ABOUT_TARGET
+    if guards.ambiguity and any(overlap(text, _wording(r)) >= max(fit, 1) for r in rivals):
+        return Reason.AMBIGUOUS_TARGET
+    return None
+
+
+def _wording(c: Commitment) -> tuple[str, str]:
+    """What a commitment is known by: the words it was made in, and its action."""
+    return c.source.quote, c.action
+
+
+def _suggest(c: Commitment, hint: Suggestion) -> Commitment:
+    return replace(c, suggestions=(*c.suggestions, hint))
 
 
 def _put_commitment(card: Card, updated: Commitment) -> Card:

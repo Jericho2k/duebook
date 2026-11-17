@@ -102,6 +102,33 @@ class Confidence(IntEnum):
     HIGH = 2
 
 
+class Closure(StrEnum):
+    """The ways a commitment can stop being owed."""
+
+    RESOLVED = "resolved"
+    CANCELLED = "cancelled"
+    SUPERSEDED = "superseded"
+
+
+@dataclass(frozen=True, slots=True)
+class Suggestion:
+    """A close the reducer refused, kept so that a person can confirm it.
+
+    A message that may have settled a promise, but did not pass the checks
+    that a close must pass (see ``closing``), does not close it: the promise
+    stays open and its alerts still fire. Throwing the evidence away would be
+    wasteful too, so it is kept here and shown in the brief as "possibly done
+    per message N — confirm".
+    """
+
+    kind: Closure
+    source: Source
+    #: Why it was not admitted: a ``reducer.Reason`` value.
+    reason: str
+    #: For a refused renegotiation, the commitment that would have replaced it.
+    replacement: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class Due:
     deadline: Deadline
@@ -128,6 +155,9 @@ class Commitment:
     resolved_at: datetime | None = None
     resolution: Source | None = None
     superseded_by: str | None = None
+    #: Closes that were proposed and refused, oldest first. The commitment is
+    #: still open; these are for a person to confirm.
+    suggestions: tuple[Suggestion, ...] = ()
 
     @property
     def unresolved(self) -> bool:

@@ -24,6 +24,13 @@ Planted events are spread over the whole ticket on purpose. The first promise
 with a long deadline is made early and kept or broken late, so a method that
 only remembers the recent past loses it.
 
+The ``main`` profile (150-200 messages, round 2 of the evaluation) adds what
+stresses the closing of promises: pairs of near-identical promises open at
+once ("we'll refund the delivery" and "we'll refund the case"), one kept and
+one broken, so a confirmation of one can be pinned on the other; a promise
+renegotiated to a later date; and one the customer calls off. Profiles that
+plant none of these generate exactly the tickets they did before.
+
 Everything is driven by a seed: ``generate(seed, count)`` returns the same
 tickets every time, so two extractors, or two versions of one, are compared on
 identical input. ``SPLITS`` fixes which seeds are for development and which
@@ -48,7 +55,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, time, timedelta
 from enum import StrEnum
 
@@ -57,6 +64,7 @@ from ..events import Actor, AssigneeChanged, Event, MessagePosted, Role, Side
 from ..proposals import (
     AskQuestion,
     AssertFact,
+    CancelCommitment,
     MakeCommitment,
     Proposal,
     RecordStep,
@@ -84,6 +92,10 @@ class Fate(StrEnum):
     BROKEN = "broken"
     #: Still pending when the ticket ends.
     OPEN = "open"
+    #: Called off by the other side before the deadline.
+    CANCELLED = "cancelled"
+    #: Replaced, before the deadline, by a new promise with a later one.
+    RENEGOTIATED = "renegotiated"
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,8 +105,17 @@ class GoldCommitment:
     action: str
     due_at: datetime | None
     fate: Fate
-    #: The message in which the other side confirmed it done (KEPT only).
+    #: The message that settled it: the other side's confirmation (KEPT), the
+    #: cancellation (CANCELLED) or the renegotiation (RENEGOTIATED).
     resolved_seq: int | None = None
+
+    def closed(self, seq: int) -> bool:
+        """No longer owed after event ``seq``, for whatever reason."""
+        return self.resolved_seq is not None and self.resolved_seq <= seq
+
+    def done(self, seq: int) -> bool:
+        """Done, and confirmed by the other side, by event ``seq``."""
+        return self.fate is Fate.KEPT and self.closed(seq)
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,6 +224,12 @@ class Profile:
     fact_beats: tuple[int, int]
     #: Failed fixes suggested again after a handoff; at most one per handoff.
     fixes: tuple[int, int]
+    #: Pairs of near-identical promises open at once, one kept and one broken.
+    twins: tuple[int, int] = (0, 0)
+    #: Promises renegotiated to a later deadline before the first one passed.
+    renegotiated: tuple[int, int] = (0, 0)
+    #: Promises the customer calls off before the deadline.
+    cancelled: tuple[int, int] = (0, 0)
 
 
 STANDARD = Profile(
@@ -213,7 +240,13 @@ LONG = Profile(
     "long", messages=(200, 230), days=(18, 26), handoffs=(3, 4), kept=(3, 5), broken=(3, 4),
     vague=(1, 2), pending=(1, 1), customer=(1, 2), fact_beats=(4, 4), fixes=(2, 3),
 )  # fmt: skip
-PROFILES = {p.name: p for p in (STANDARD, LONG)}
+#: Round 2's main test: long, mostly filler, with closes that are easy to misplace.
+MAIN = Profile(
+    "main", messages=(150, 200), days=(10, 16), handoffs=(3, 4), kept=(2, 3), broken=(2, 3),
+    vague=(1, 1), pending=(1, 1), customer=(1, 2), fact_beats=(3, 4), fixes=(2, 3),
+    twins=(1, 2), renegotiated=(1, 1), cancelled=(0, 1),
+)  # fmt: skip
+PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,6 +270,9 @@ SPLITS = {
         Split("test", seed=202, count=20),
         # Two tickets of 200+ messages, to show how each method's cost scales.
         Split("long", seed=303, count=2, profile=LONG),
+        # Round 2: long tickets are the main test. Fresh seeds.
+        Split("dev2", seed=4141, count=4, profile=MAIN),
+        Split("test2", seed=4242, count=20, profile=MAIN),
     )
 }
 
@@ -296,6 +332,28 @@ PROMISES = [
     (Party.COMPANY, "Вышлем вам трек-номер посылки {due}", "выслать трек-номер",
      "Трек-номер получила, спасибо"),
 ]  # fmt: skip
+#: Promises the customer may call off, and how she does it.
+CANCELLATIONS = {
+    "отправить замену": "Замену можно не отправлять, вопрос решился",
+    "забрать товар курьером": "Курьер за товаром уже не нужен, отменяйте",
+    "выслать трек-номер": "Трек-номер уже не нужен, отменяйте",
+    "прислать акт сверки": "Акт сверки больше не нужен, отменяйте",
+    "перезвонить": "Перезванивать не нужно, вопрос снят",
+}
+#: Near-identical promises told apart by one word: (owner, sentence with {obj}
+#: and {due}, action with {obj}, confirmation with {obj}, the objects, and the
+#: action of an ordinary promise of the same kind, left out of a ticket that
+#: has twins of this kind so that every confirmation is unambiguous to a reader).
+TWINS = [
+    (Party.COMPANY, "Мы вернём вам деньги за {obj} {due}", "вернуть деньги за {obj}",
+     "Деньги за {obj} пришли, спасибо", ("доставку", "чехол", "сборку", "подписку"),
+     "вернуть деньги"),
+    (Party.AGENT, "Я перезвоню вам насчёт {obj} {due}", "перезвонить насчёт {obj}",
+     "Спасибо за звонок насчёт {obj}", ("доставки", "гарантии", "оплаты", "рассрочки"),
+     "перезвонить"),
+    (Party.COMPANY, "Пришлём вам {obj} {due}", "прислать {obj}", "{Obj} получила, спасибо",
+     ("гарантийный талон", "копию чека", "договор", "накладную"), None),
+]
 #: The customer's own promises, confirmed by the company.
 CUSTOMER_PROMISES = [
     (Party.CUSTOMER, "Пришлю скриншот ошибки {due}", "прислать скриншот ошибки",
@@ -515,6 +573,20 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
         plan.add(at, lambda b, agent=agent: b.assign(agent), message=False)
 
     promises = rng.sample(PROMISES, len(PROMISES))
+    # Round-2 beats draw from the generator only when the profile plants them,
+    # so the profiles of round 1 still give exactly the same tickets.
+    twins = rng.sample(TWINS, rng.randint(*profile.twins)) if profile.twins[1] else []
+    left_out = {kind[5] for kind in twins}
+    promises = [p for p in promises if p[2] not in left_out]
+    if profile.cancelled[1]:
+        for _ in range(rng.randint(*profile.cancelled)):
+            n = next(i for i, p in enumerate(promises) if p[2] in CANCELLATIONS)
+            _cancelled_promise(plan, promises.pop(n), plan.moment(0.05, 0.8))
+    if profile.renegotiated[1]:
+        for _ in range(rng.randint(*profile.renegotiated)):
+            _renegotiated_promise(plan, promises.pop(), plan.moment(0.05, 0.6))
+    for kind in twins:
+        _twin_promises(plan, kind, plan.moment(0.05, 0.7))
     kept, broken = rng.randint(*profile.kept), rng.randint(*profile.broken)
     fates = [Fate.KEPT] * kept + [Fate.BROKEN] * broken
     rng.shuffle(fates)
@@ -596,15 +668,25 @@ def _date_deadline(at: datetime, days: int, cal: WorkCalendar) -> tuple[str, Due
     return f"до {day.day} {_MONTHS[day.month - 1]}", DateRef(day.day, day.month)
 
 
-def _committed(b: _Builder, role: Role, promise, phrase: str | None, expr, due_at, fate) -> int:
+def _wording(promise) -> str:
+    """A promise's sentence without its deadline: the span that names it."""
+    return promise[1].format(due="").strip()
+
+
+def _committed(
+    b: _Builder, role: Role, promise, phrase: str | None, expr, due_at, fate,
+    prefix: str = "", replaces: int | None = None,
+) -> int:  # fmt: skip
     owner, sentence, action, _ = promise
     if phrase is None:
-        quote = sentence.format(due="").strip()
+        quote = _wording(promise)
         proposal = MakeCommitment(owner, action, quote)
     else:
         quote = sentence.format(due=phrase)
         proposal = MakeCommitment(owner, action, quote, due=expr, due_quote=phrase)
-    seq = b.say(role, f"{quote}.", proposal)
+    if replaces is not None:
+        proposal = replace(proposal, supersedes=f"e{replaces}#0", target_quote=_wording(promise))
+    seq = b.say(role, f"{prefix}{quote}.", proposal)
     b.commitments.append(GoldCommitment(seq, owner, action, due_at, fate))
     return seq
 
@@ -623,7 +705,7 @@ def _deadline_promise(plan: _Plan, promise, fate: Fate, at: datetime, options) -
     if fate is Fate.KEPT:
         # Confirmed by the customer well inside the time allowed.
         when = plan.within(at + (due_at - at) * 0.15, at + (due_at - at) * 0.7, Role.CUSTOMER)
-        plan.add(when, lambda b: _confirm(b, Role.CUSTOMER, promise[3], made[0]))
+        plan.add(when, lambda b: _confirm(b, Role.CUSTOMER, promise, made[0]))
     else:
         # The customer recalls the promise. This is a claim about the company,
         # not a new promise by it: a correct extractor proposes nothing here.
@@ -632,12 +714,16 @@ def _deadline_promise(plan: _Plan, promise, fate: Fate, at: datetime, options) -
         plan.add(when, lambda b: b.say(Role.CUSTOMER, complaint))
 
 
-def _confirm(b: _Builder, role: Role, confirmation: str, seq: int) -> None:
-    done = b.say(role, f"{confirmation}!", ResolveCommitment(f"e{seq}#0", confirmation))
+def _confirm(b: _Builder, role: Role, promise, seq: int) -> None:
+    confirmation = promise[3]
+    proposal = ResolveCommitment(f"e{seq}#0", confirmation, _wording(promise))
+    _settled(b, seq, b.say(role, f"{confirmation}!", proposal))
+
+
+def _settled(b: _Builder, seq: int, at_seq: int) -> None:
+    """Record in the label of the promise made at ``seq`` the message that settled it."""
     index = next(i for i, c in enumerate(b.commitments) if c.seq == seq)
-    gold = b.commitments[index]
-    b.commitments[index] = GoldCommitment(gold.seq, gold.owner, gold.action, gold.due_at,
-                                          gold.fate, done)  # fmt: skip
+    b.commitments[index] = replace(b.commitments[index], resolved_seq=at_seq)
 
 
 def _vague_promise(plan: _Plan, promise, at: datetime) -> None:
@@ -664,7 +750,87 @@ def _customer_promise(plan: _Plan, promise, at: datetime) -> None:
     ))  # fmt: skip
     # Delivered quickly; the company says it arrived, which is what settles it.
     when = plan.within(at + (due_at - at) * 0.1, at + (due_at - at) * 0.6, Role.AGENT)
-    plan.add(when, lambda b: _confirm(b, Role.AGENT, promise[3], made[0]))
+    plan.add(when, lambda b: _confirm(b, Role.AGENT, promise, made[0]))
+
+
+def _settle_later(plan: _Plan, promise, fate: Fate, at: datetime, due_at: datetime,
+                  made: list[int], not_before: datetime | None = None) -> None:  # fmt: skip
+    """Plan the confirmation of a kept promise, or the complaint about a broken one."""
+    if fate is Fate.KEPT:
+        lo = max(at + (due_at - at) * 0.15, not_before or at)
+        when = plan.within(lo, at + (due_at - at) * 0.7, Role.CUSTOMER)
+        plan.add(when, lambda b: _confirm(b, Role.CUSTOMER, promise, made[0]))
+    else:
+        when = plan.after(due_at + timedelta(minutes=plan.rng.randint(30, 1500)), Role.CUSTOMER)
+        complaint = plan.rng.choice(COMPLAINTS).format(action=promise[2])
+        plan.add(when, lambda b: b.say(Role.CUSTOMER, complaint))
+
+
+def _twin_promises(plan: _Plan, kind, at: datetime) -> None:
+    """Two promises of one kind, told apart by one word, open at the same time.
+
+    One is kept and one broken. The confirmation of the kept one names its
+    object and arrives while the other is still owed, so a reader that pins it
+    on the wrong one closes a promise that is about to be broken.
+    """
+    owner, sentence, action, confirmation, objects, _ = kind
+    first, second = plan.rng.sample(objects, 2)
+    fates = plan.rng.sample([Fate.KEPT, Fate.BROKEN], 2)
+    second_at = plan.within(at + timedelta(minutes=5), at + timedelta(hours=3), Role.AGENT)
+    for obj, fate, when in ((first, fates[0], at), (second, fates[1], second_at)):
+        promise = (owner, sentence.replace("{obj}", obj), action.format(obj=obj),
+                   confirmation.format(obj=obj, Obj=obj[:1].upper() + obj[1:]))  # fmt: skip
+        # Both must still be open when either is settled.
+        phrase, expr, due_at = _choose_deadline(
+            plan, when, DEADLINES + LONG_DEADLINES, second_at + timedelta(hours=6)
+        )
+        made: list[int] = []
+        plan.add(when, lambda b, p=promise, e=expr, ph=phrase, d=due_at, f=fate, m=made: m.append(
+            _committed(b, Role.AGENT, p, ph, e, d, f)
+        ))  # fmt: skip
+        _settle_later(plan, promise, fate, when, due_at, made, second_at + timedelta(minutes=30))
+
+
+def _renegotiated_promise(plan: _Plan, promise, at: datetime) -> None:
+    """A promise moved to a later date before it fell due; the new one is kept or broken."""
+    phrase, expr, due_at = _choose_deadline(plan, at, DEADLINES, at + timedelta(hours=20))
+    when = plan.within(at + (due_at - at) * 0.3, at + (due_at - at) * 0.8, Role.AGENT)
+    options = [*LONG_DEADLINES, _date_deadline(when, plan.rng.randint(6, 9), plan.cal)]
+    new_phrase, new_expr, new_due = _choose_deadline(
+        plan, when, options, due_at + timedelta(hours=1)
+    )
+    fate = plan.rng.choice([Fate.KEPT, Fate.BROKEN])
+    made: list[int] = []
+    plan.add(at, lambda b: made.append(
+        _committed(b, Role.AGENT, promise, phrase, expr, due_at, Fate.RENEGOTIATED)
+    ))  # fmt: skip
+
+    def renegotiate(b: _Builder) -> None:
+        seq = _committed(b, Role.AGENT, promise, new_phrase, new_expr, new_due, fate,
+                         prefix="К сожалению, к сроку не успеваем. ", replaces=made[0])  # fmt: skip
+        _settled(b, made[0], seq)
+        renewed.append(seq)
+
+    renewed: list[int] = []
+    plan.add(when, renegotiate)
+    _settle_later(plan, promise, fate, when, new_due, renewed)
+
+
+def _cancelled_promise(plan: _Plan, promise, at: datetime) -> None:
+    """The customer calls a promise off before it falls due."""
+    phrase, expr, due_at = _choose_deadline(plan, at, DEADLINES, at + timedelta(hours=3))
+    when = plan.within(at + (due_at - at) * 0.2, at + (due_at - at) * 0.8, Role.CUSTOMER)
+    made: list[int] = []
+    plan.add(at, lambda b: made.append(
+        _committed(b, Role.AGENT, promise, phrase, expr, due_at, Fate.CANCELLED)
+    ))  # fmt: skip
+    words = CANCELLATIONS[promise[2]]
+
+    def cancel(b: _Builder) -> None:
+        proposal = CancelCommitment(f"e{made[0]}#0", words, _wording(promise))
+        _settled(b, made[0], b.say(Role.CUSTOMER, f"{words}.", proposal))
+
+    plan.add(when, cancel)
 
 
 def _plan_change(plan: _Plan) -> None:

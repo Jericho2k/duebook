@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sys
@@ -10,6 +11,7 @@ import pytest
 from duebook import AssigneeChanged, Card, CommitmentState, Party, Reason, StepOutcome, apply
 from duebook.bench import (
     LONG,
+    MAIN,
     SPLITS,
     STANDARD,
     Counts,
@@ -23,7 +25,9 @@ from duebook.bench import (
     run_ticket,
     score,
 )
+from duebook.bench.generate import TWINS
 from duebook.bench.match import mentions
+from duebook.bench.rewrite import acceptable
 from duebook.events import Role, Side
 from duebook.extract import Completion, ModelError, Usage
 from duebook.extract.extractor import Extraction
@@ -134,7 +138,7 @@ def test_dev_and_test_splits_are_fixed_disjoint_and_the_test_split_has_20_ticket
 
 
 def test_the_benchmark_runs_without_a_database_driver():
-    check = "import sys, duebook.bench; sys.exit('psycopg' in sys.modules)"
+    check = "import sys, duebook.bench.experiment; sys.exit('psycopg' in sys.modules)"
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
     assert subprocess.run([sys.executable, "-c", check], env=env).returncode == 0
 
@@ -308,7 +312,7 @@ def test_a_rewrite_keeps_the_planted_spans_and_the_labels_stay_true():
 
 def test_a_rewrite_that_lost_a_planted_span_is_discarded():
     ticket = next(t for t in TICKETS if t.gold.commitments)
-    rewriter = Rewriter(RewritingModel(lambda text: "Здравствуйте, чем могу помочь?"))
+    rewriter = Rewriter(RewritingModel(lambda text: "Здравствуйте, добрый день."))
     rewritten = rewriter.rewrite(ticket)
     anchored = [e for e in ticket.events if ticket.anchors.get(e.id)]
     assert rewriter.discarded == len(anchored) > 0
@@ -336,8 +340,40 @@ def test_the_rewriter_is_told_who_is_speaking_and_which_spans_to_keep():
     assert all(f"- {a}" in request[0]["content"] for a in ticket.anchors[promise.id])
 
 
+@pytest.mark.parametrize(
+    ("original", "rewrite"),
+    [
+        ("Спасибо за терпение.", "Спасибо, что ждали. Мы разберёмся."),
+        (
+            "Спасибо за звонок насчёт доставки!",
+            "Спасибо за звонок насчёт доставки! Так и не привезли",
+        ),
+        ("Мне пришёл блендер модели BL-419.", "Мне пришёл блендер модели BL-419, но не работает."),
+        ("Адрес доставки: ул. Лесная, 7.", "Адрес доставки: ул. Лесная, 7. Когда привезёте?"),
+        (
+            "Пришлём исправленный счёт до 20 января.",
+            "Всё исправим. Пришлём исправленный счёт до 20 января.",
+        ),
+        ("Есть новости?", "Есть новости? Жду с 12 числа."),
+    ],
+)
+def test_a_rewrite_that_adds_a_promise_a_fact_a_question_or_a_number_is_not_accepted(
+    original, rewrite
+):
+    planted = ("BL-419", "ул. Лесная, 7", "Спасибо за звонок насчёт доставки",
+               "Пришлём исправленный счёт до 20 января")  # fmt: skip
+    anchors = tuple(a for a in planted if a in original)
+    assert not acceptable(original, rewrite, anchors)
+
+
+def test_a_faithful_rewrite_is_accepted():
+    assert acceptable(
+        "Новой информации пока нет.", "Здравствуйте! Пока новой информации, увы, нет.", ()
+    )
+    assert acceptable("Пароль сбросила, не помогло.", "Сбросила пароль — не помогло.", ())
+
+
 def test_a_rewrite_that_turned_into_a_dialogue_or_ballooned_is_not_accepted():
-    from duebook.bench.rewrite import acceptable
 
     assert acceptable("Ладно.", "Ну ладно, поняла.", ())
     assert not acceptable("Ладно.", "Клиент: у меня проблема.\nАгент: Сейчас уточню.", ())
@@ -345,3 +381,75 @@ def test_a_rewrite_that_turned_into_a_dialogue_or_ballooned_is_not_accepted():
     assert not acceptable("Ладно.", "Ладно, " + "очень " * 30 + "понятно.", ())
     assert not acceptable("Вернём деньги до пятницы.", "Деньги вернём к пятнице.",
                           ("Вернём деньги до пятницы",))  # fmt: skip
+
+
+# ------------------------------------------------- round 2: main profile ----
+
+MAIN_TICKETS = generate(seed=13, count=30, profile=MAIN)
+
+
+def test_the_main_profile_is_long_mostly_filler_and_spans_days_and_handoffs():
+    for t in MAIN_TICKETS:
+        assert 150 <= t.messages <= 200 and len(t.gold.handoffs) >= 3
+        assert (t.end - t.events[0].at).days >= 9
+        planted = sum(1 for p in t.proposals if p)
+        assert planted < t.messages / 3
+
+
+def test_twin_promises_are_open_at_once_and_one_is_kept_while_the_other_breaks():
+    pairs = 0
+    for t in MAIN_TICKETS:
+        for kind in TWINS:
+            actions = {kind[2].format(obj=obj) for obj in kind[4]}
+            twins = [c for c in t.gold.commitments if c.action in actions]
+            if not twins:
+                continue
+            kept, broken = sorted(twins, key=lambda c: c.fate is not Fate.KEPT)
+            assert (kept.fate, broken.fate) == (Fate.KEPT, Fate.BROKEN)
+            # The confirmation of one arrives while the other is still owed.
+            assert broken.seq < kept.resolved_seq and not broken.closed(kept.resolved_seq)
+            pairs += 1
+    assert pairs >= len(MAIN_TICKETS)
+
+
+def test_the_main_profile_plants_renegotiations_and_cancellations_with_true_labels():
+    fates = {c.fate for t in MAIN_TICKETS for c in t.gold.commitments}
+    assert {Fate.RENEGOTIATED, Fate.CANCELLED} <= fates
+    for t in MAIN_TICKETS:
+        card, _, failure = run_ticket(t, Oracle.of([t]))
+        assert failure is None
+        by_seq = {c.source.seq: c for c in card.commitments}
+        expected = {
+            Fate.KEPT: CommitmentState.FULFILLED,
+            Fate.CANCELLED: CommitmentState.CANCELLED,
+            Fate.RENEGOTIATED: CommitmentState.SUPERSEDED,
+            Fate.BROKEN: CommitmentState.OPEN,
+            Fate.OPEN: CommitmentState.OPEN,
+        }
+        for gold in t.gold.commitments:
+            assert by_seq[gold.seq].state is expected[gold.fate]
+            if gold.fate is Fate.RENEGOTIATED:
+                assert by_seq[gold.resolved_seq].superseded_by is None
+                assert by_seq[gold.seq].superseded_by == by_seq[gold.resolved_seq].id
+
+
+def test_every_planted_close_passes_the_guards_and_the_oracle_scores_one():
+    report = evaluate(MAIN_TICKETS, Oracle.of(MAIN_TICKETS))
+    s = report.score + report.handoffs
+    assert (s.commitments.fp, s.commitments.fn, s.alerts.fp, s.alerts.fn) == (0, 0, 0, 0)
+    assert s.status_accuracy == 1.0 and s.closes_right > 300
+    assert (s.closes_false, s.closes_wrong_target, s.closes_missed) == (0, 0, 0)
+    assert s.suggestions_right + s.suggestions_wrong == 0
+
+
+def test_round_one_profiles_generate_exactly_the_tickets_round_one_was_run_on():
+    stored = json.loads((Path(__file__).parents[1] / "results/tickets/test.json").read_text())
+    for t in SPLITS["test"].tickets():
+        messages = {e.id for e in t.events if not isinstance(e, AssigneeChanged)}
+        assert messages == set(stored["tickets"][t.ticket_id]["texts"])
+
+
+def test_round_two_splits_use_fresh_seeds():
+    old = {SPLITS[n].seed for n in ("dev", "test", "long")}
+    assert SPLITS["dev2"].seed not in old and SPLITS["test2"].seed not in old
+    assert SPLITS["test2"].count >= 20 and SPLITS["test2"].profile is MAIN

@@ -84,10 +84,11 @@ OUTPUT_SCHEMA: dict[str, Any] = _obj(
                 "due_quote": _OPT_STR,
                 "due": _DUE,
                 "supersedes": _OPT_STR,
+                "target_quote": _OPT_STR,
             }
         ),
-        "resolved": _list({"id": _STR, "quote": _STR}),
-        "cancelled": _list({"id": _STR, "quote": _STR}),
+        "resolved": _list({"id": _STR, "target_quote": _STR, "quote": _STR}),
+        "cancelled": _list({"id": _STR, "target_quote": _STR, "quote": _STR}),
         "steps": _list(
             {"action": _STR, "quote": _STR, "outcome": _enum([o.value for o in StepOutcome])}
         ),
@@ -134,8 +135,12 @@ def parse_output(
             ref(i["id"]), StepOutcome(i["outcome"]), _text(i["quote"])
         ),
         "answers": lambda i: AnswerQuestion(ref(i["id"]), _text(i["quote"])),
-        "resolved": lambda i: ResolveCommitment(ref(i["id"]), _text(i["quote"])),
-        "cancelled": lambda i: CancelCommitment(ref(i["id"]), _text(i["quote"])),
+        "resolved": lambda i: ResolveCommitment(
+            ref(i["id"]), _text(i["quote"]), _text(i.get("target_quote") or "")
+        ),
+        "cancelled": lambda i: CancelCommitment(
+            ref(i["id"]), _text(i["quote"]), _text(i.get("target_quote") or "")
+        ),
         "commitments": lambda i: MakeCommitment(
             owner=Party(i["owner"]),
             action=_text(i["action"]),
@@ -143,6 +148,7 @@ def parse_output(
             due=parse_due_expr(i.get("due")),
             due_quote=_text(i.get("due_quote") or ""),
             supersedes=ref(i["supersedes"]) if i.get("supersedes") else None,
+            target_quote=_text(i.get("target_quote") or ""),
         ),
         "questions": lambda i: AskQuestion(_text(i["text"]), _text(i["quote"])),
     }

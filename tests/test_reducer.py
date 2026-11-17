@@ -271,14 +271,26 @@ def test_the_debtors_word_is_a_claim_until_the_other_side_confirms():
     promise_refund(t)
     cid = t.card.commitments[0].id
 
-    t.wait(days=1).say(IVAN, "Деньги отправили.", ResolveCommitment(cid, "Деньги отправили"))
+    t.wait(days=1).say(
+        IVAN,
+        "Деньги отправили.",
+        ResolveCommitment(cid, "Деньги отправили", target_quote="вернём деньги"),
+    )
     assert t.card.commitment(cid).state is CommitmentState.CLAIMED
     claimed_at = t.now
 
-    again = t.say(IVAN, "Деньги отправили, проверьте.", ResolveCommitment(cid, "Деньги отправили"))
+    again = t.say(
+        IVAN,
+        "Деньги отправили, проверьте.",
+        ResolveCommitment(cid, "Деньги отправили", target_quote="вернём деньги"),
+    )
     assert reasons(again) == [Reason.ALREADY_CLAIMED]
 
-    t.wait(days=1).say(ANNA, "Да, деньги пришли, спасибо", ResolveCommitment(cid, "деньги пришли"))
+    t.wait(days=1).say(
+        ANNA,
+        "Да, деньги пришли, спасибо",
+        ResolveCommitment(cid, "деньги пришли", target_quote="вернём деньги"),
+    )
     c = t.card.commitment(cid)
     assert c.state is CommitmentState.FULFILLED
     assert c.claimed_at == claimed_at and c.resolved_at == t.now
@@ -289,7 +301,11 @@ def test_a_system_event_verifies_directly():
     t = Ticket()
     promise_refund(t)
     cid = t.card.commitments[0].id
-    t.say(BILLING, "refund settled", ResolveCommitment(cid, "refund settled"))
+    t.say(
+        BILLING,
+        "refund settled",
+        ResolveCommitment(cid, "refund settled", target_quote="вернём деньги"),
+    )
     assert t.card.commitment(cid).state is CommitmentState.FULFILLED
 
 
@@ -298,14 +314,24 @@ def test_the_debtor_cannot_cancel_their_own_promise_but_the_customer_can():
     promise_refund(t)
     cid = t.card.commitments[0].id
 
-    out = t.say(IVAN, "Возврат не потребуется.", CancelCommitment(cid, "не потребуется"))
+    out = t.say(
+        IVAN,
+        "Возврат не потребуется.",
+        CancelCommitment(cid, "Возврат не потребуется", target_quote="вернём деньги"),
+    )
     assert reasons(out) == [Reason.DEBTOR_CANNOT_CANCEL]
     assert t.card.commitment(cid).unresolved
 
-    t.say(ANNA, "Возврат уже не нужен", CancelCommitment(cid, "уже не нужен"))
+    t.say(
+        ANNA,
+        "Возврат уже не нужен",
+        CancelCommitment(cid, "Возврат уже не нужен", target_quote="вернём деньги"),
+    )
     assert t.card.commitment(cid).state is CommitmentState.CANCELLED
 
-    late = t.say(ANNA, "Точно не нужен", CancelCommitment(cid, "не нужен"))
+    late = t.say(
+        ANNA, "Точно не нужен", CancelCommitment(cid, "не нужен", target_quote="вернём деньги")
+    )
     assert reasons(late) == [Reason.ALREADY_RESOLVED]
 
 
@@ -323,6 +349,7 @@ def test_renegotiating_supersedes_the_old_commitment():
             due=WeekdayRef(0),
             due_quote="в понедельник",
             supersedes=old_id,
+            target_quote="вернём деньги",
         ),
     )
     old, new = t.card.commitments
@@ -391,7 +418,11 @@ def test_resolved_commitments_do_not_move():
     t.assign(None, IVAN.id)
     promise_refund(t)
     cid = t.card.commitments[0].id
-    t.say(BILLING, "refund settled", ResolveCommitment(cid, "refund settled"))
+    t.say(
+        BILLING,
+        "refund settled",
+        ResolveCommitment(cid, "refund settled", target_quote="вернём деньги"),
+    )
     t.assign(IVAN.id, OLGA.id)
     assert t.card.commitment(cid).responsible == IVAN.id
 

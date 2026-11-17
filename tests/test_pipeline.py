@@ -235,7 +235,7 @@ def test_a_ticket_runs_from_recorded_model_responses_to_a_stored_card(store, con
         output(facts=[{"slot": "order.number", "value": "4815", "quote": "Заказ 4815",
                        "change": False}]),
         output(commitments=[refund], facts=[{"slot": "order.number", "value": 4815}]),
-        output(resolved=[{"id": "C1", "quote": "Деньги пришли"}]),
+        output(resolved=[{"id": "C1", "target_quote": "вернём деньги", "quote": "Деньги пришли"}]),
     )  # fmt: skip
     t = Ticket()
     t.say(ANNA, "Заказ 4815 не пришёл, хочу вернуть деньги.")

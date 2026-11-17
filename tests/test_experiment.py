@@ -6,24 +6,34 @@ from dataclasses import replace
 import pytest
 from test_baselines import Scripted
 
-from duebook.bench import Oracle, generate
+from duebook.bench import MAIN, Fate, Oracle, generate
 from duebook.bench.baselines import FullContext
 from duebook.bench.experiment import (
+    GROWTH,
     METRICS,
+    guard_effects,
     main,
+    project,
     record,
     rewritten,
+    sample_of,
+    spent_before,
     summarise,
     table,
     to_json,
+    unguarded,
 )
 from duebook.bench.generate import SPLITS
 from duebook.bench.meter import Ledger, Tally
-from duebook.bench.methods import MethodRun
+from duebook.bench.methods import EventMemory, MethodRun
 from duebook.bench.result import PromiseStatus, checkpoints
 from duebook.bench.run import fold, snapshots
 from duebook.bench.score import score_ticket
 from duebook.extract import Completion, Usage
+from duebook.extract.extractor import Extraction
+from duebook.extract.schema import OUTPUT_SCHEMA
+from duebook.proposals import ResolveCommitment
+from duebook.store.codec import encode
 from duebook.temporal import WorkCalendar
 
 TICKETS = generate(seed=5, count=6)
@@ -108,7 +118,7 @@ def test_the_test_split_is_not_run_twice(tmp_path):
 
 def test_the_writer_may_not_be_the_extracting_model(tmp_path):
     with pytest.raises(Exception, match="different model"):
-        main(["--split", "dev", "--max-usd", "0", "--writer", "z-ai/glm-5.3-flash",
+        main(["--split", "dev", "--max-usd", "0", "--writer", "deepseek/deepseek-v4.1-flash",
               "--results", str(tmp_path)])  # fmt: skip
 
 
@@ -139,3 +149,81 @@ def test_an_end_of_week_answered_as_sunday_is_a_convention_and_other_misses_are_
     k = classify([t], [shifted])
     assert k["convention"] == len(week_end)
     assert k["arithmetic"] == sum(1 for c in t.gold.commitments if c.due_at) - len(week_end)
+
+
+# ------------------------------------------------------ round 2 plumbing ----
+
+MAIN_TICKETS = generate(seed=21, count=3, profile=MAIN)
+
+
+def test_a_method_run_on_a_subset_is_summarised_and_compared_on_that_subset_only():
+    runs = [oracle_run(t) for t in TICKETS] + [oracle_run(t, "partial") for t in TICKETS[:2]]
+    summary = summarise(TICKETS, runs, boot=100)
+    partial = summary["methods"]["partial"]
+    assert partial["tickets"] == 2 and summary["methods"]["event_memory"]["tickets"] == 6
+    assert partial["commitment_f1"]["diff_vs_reference"] == 0.0
+    assert partial["commitment_f1"]["diff_ci95"] == [0.0, 0.0]
+
+
+def test_the_session_cap_counts_every_earlier_run(tmp_path):
+    log = tmp_path / "spend.jsonl"
+    log.write_text('{"usd": 1.0}\n{"usd": 0.6}\n')
+    assert spent_before(log) == pytest.approx(1.6)
+    with pytest.raises(SystemExit, match="session cap"):
+        main(["--split", "dev", "--max-usd", "1", "--results", str(tmp_path)])
+
+
+class Priced:
+    """A model whose every answer is empty and costs a fixed amount."""
+
+    def __init__(self, usd=0.0001, cached=False):
+        self.usd, self.cached, self.model = usd, cached, "deepseek/deepseek-v4.1-flash"
+
+    def complete_json(self, messages, schema, name="output"):
+        empty = {k: [] for k in OUTPUT_SCHEMA["properties"]}
+        return Completion(empty, Usage(1, 1000, 50, 0, self.usd), cached=self.cached)
+
+
+def test_the_projection_scales_the_sample_to_the_whole_run_and_trusts_the_cache_only_if_asked():
+    ledger = Ledger()
+    fresh = EventMemory(Priced(), ledger)
+    (p,) = project([fresh], MAIN_TICKETS, {}, ledger, WorkCalendar(), events=20).values()
+    sample = sample_of(MAIN_TICKETS[0], 20)
+    calls = sum(1 for e in sample.events if getattr(e, "text", ""))
+    events = sum(len(t.events) for t in MAIN_TICKETS)
+    assert p["sample_usd"] == pytest.approx(calls * 0.0001)
+    assert p["upper"] == pytest.approx(p["sample_usd"] * GROWTH["event_memory"] * events / 20)
+    assert p["expected"] == pytest.approx(p["upper"])
+    replayed = EventMemory(Priced(cached=True), Ledger())
+    (q,) = project([replayed], MAIN_TICKETS, {}, replayed.ledger, WorkCalendar(), 20).values()
+    assert q["expected"] == 0 and q["upper"] == pytest.approx(p["upper"])
+
+
+def test_the_guards_are_measured_by_folding_the_same_proposals_without_them():
+    t = next(t for t in MAIN_TICKETS if any(c.fate is Fate.BROKEN for c in t.gold.commitments))
+    broken = next(c for c in t.gold.commitments if c.fate is Fate.BROKEN)
+    kept = next(c for c in t.gold.commitments if c.fate is Fate.KEPT and c.seq > broken.seq)
+
+    class Careless:
+        """The oracle, except that it pins one confirmation on the broken promise."""
+
+        oracle = Oracle.of([t])
+
+        def extract(self, card, event):
+            proposals = self.oracle.extract(card, event).proposals
+            if event.seq == kept.resolved_seq:
+                proposals = (ResolveCommitment(f"e{broken.seq}#0", proposals[0].quote, ""),)
+            return Extraction(proposals)
+
+    folded = fold(t, Careless(), [cp.seq for cp in checkpoints(t)])
+    run = MethodRun.of("event_memory", t, snapshots(t, folded), Tally(),
+                       detail={"proposals": [encode(list(p)) for p in folded.proposals],
+                               "refused": [[r.seq, r.reason, r.kind, r.target_seq]
+                                           for r in folded.refused]})  # fmt: skip
+    guarded = score_ticket(t, run.snapshots).end
+    loose = score_ticket(t, unguarded(run, t, WorkCalendar()).snapshots).end
+    assert guarded.closes_false == 0 and loose.closes_false == 1
+    assert loose.alerts.fn == guarded.alerts.fn + 1
+    effects = guard_effects([t], [run])
+    assert effects["verdicts"]["false_close_prevented"] == 1
+    assert effects["by_reason"] == {"target_mismatch": {"false_close_prevented": 1}}

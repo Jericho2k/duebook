@@ -75,7 +75,9 @@ def test_a_promise_appears_once_under_the_most_urgent_heading_it_qualifies_for()
 
 def test_a_claim_of_completion_is_shown_as_unconfirmed_with_its_own_source():
     t = story()
-    t.say(OLGA, "Перезвонила клиенту.", ResolveCommitment("e5#2", "Перезвонила клиенту"))
+    t.say(
+        OLGA, "Перезвонила клиенту.", ResolveCommitment("e5#2", "Перезвонила клиенту", "перезвоню")
+    )
     (line,) = [x for x in items(brief(t.card).text) if "перезвонить" in x]
     assert "заявлено как выполненное, не подтверждено [№8 Ольга: «Перезвонила клиенту»]" in line
     assert "ПРОСРОЧЕНО" not in line and "осталось" not in line

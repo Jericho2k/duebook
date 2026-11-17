@@ -18,6 +18,10 @@ It is ordered by what hurts most if missed:
 7. steps that failed, so they are not suggested again;
 8. open questions.
 
+A promise the extractor proposed to close, but whose close the reducer did
+not admit, is still listed as owed, with "возможно, выполнено по сообщению
+№N — подтвердите": the operator decides, the system does not guess.
+
 Every line ends with a reference to the message it rests on — its number in
 the ticket, who wrote it, and the quoted words. A line without a source is not
 rendered, because there is none: the card does not hold beliefs without one.
@@ -35,7 +39,17 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from .card import Card, Commitment, CommitmentState, Confidence, Fact, Party, Source, StepOutcome
+from .card import (
+    Card,
+    Closure,
+    Commitment,
+    CommitmentState,
+    Confidence,
+    Fact,
+    Party,
+    Source,
+    StepOutcome,
+)
 from .events import Side
 from .lifecycle import AlertPolicy, Status, status_at
 from .temporal import Precision, WorkCalendar
@@ -43,6 +57,11 @@ from .temporal import Precision, WorkCalendar
 _WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
 _OWNER = {Party.AGENT: "агент", Party.COMPANY: "компания", Party.CUSTOMER: "клиент"}
 _SIDE = {Side.CUSTOMER: "клиент", Side.COMPANY: "компания", Side.SYSTEM: "система"}
+_MAYBE = {
+    Closure.RESOLVED: "возможно, выполнено",
+    Closure.CANCELLED: "возможно, отменено",
+    Closure.SUPERSEDED: "возможно, заменено новым обещанием",
+}
 
 
 def estimate_tokens(text: str) -> int:
@@ -151,6 +170,13 @@ class _Writer:
         if c.state is CommitmentState.CLAIMED and c.resolution is not None:
             parts.append(f"заявлено как выполненное, не подтверждено {self.ref(c.resolution)}")
             sources.append(c.resolution)
+        for hint in c.suggestions:
+            # A close the reducer would not admit: still owed, but worth a look.
+            parts.append(
+                f"{_MAYBE[hint.kind]} по сообщению №{hint.source.seq} — подтвердите "
+                f"{self.ref(hint.source)}"
+            )
+            sources.append(hint.source)
         if c.owner is not Party.CUSTOMER:
             if c.orphaned:
                 parts.append("БЕЗ ОТВЕТСТВЕННОГО")
