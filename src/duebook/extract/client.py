@@ -64,6 +64,9 @@ MODELS: Mapping[str, ModelSettings] = MappingProxyType(
         ),
         # Round 1's reader.
         "z-ai/glm-5.3-flash": ModelSettings(reasoning=MappingProxyType({"effort": "low"})),
+        # Round 2's writer: the alias is served as z-ai/glm-5.3-flash. Rephrasing
+        # needs no reasoning; with it on, the writer cost six times as much.
+        "~z-ai/glm-flash-latest": ModelSettings(reasoning=MappingProxyType({"enabled": False})),
     }
 )
 

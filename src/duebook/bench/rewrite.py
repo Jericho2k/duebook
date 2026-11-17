@@ -17,6 +17,11 @@ Three rules are enforced in code rather than hoped for:
   with a new promise in it — content no label accounts for. A rewrite with a
   line break, a speaker label, or several times the original's length is
   discarded on that ground.
+* and so is a rewrite that ADDS something a label would have to account for.
+  The cheap writers tried for round 2 append "мы разберёмся" to a status
+  ping, "так и не привезли" to a thank-you, a complaint about bonuses to a
+  confirmation. A rewrite is discarded when it has a number, a question, a
+  negation or a promise-like verb more than the original had.
 """
 
 from __future__ import annotations
@@ -110,10 +115,29 @@ _SPEAKER = re.compile(
 )
 
 
+_NUMBER = re.compile(r"\d+")
+_NEGATION = re.compile(r"(?:^|[^а-яё])(?:не|нет|ни)(?=[^а-яё]|$)", re.I)
+#: Stems of verbs in which support promises, or reports, something.
+_DEEDS = ("разбер", "постара", "исправ", "сдела", "провер", "свяж", "звон", "отправ", "верн",
+          "пришл", "присл", "вышл", "высл", "уточн", "реш", "помо", "напиш", "сообщ", "оформ",
+          "обещ", "компенс", "достав", "привез", "получ", "заберё", "забер", "начисл",
+          "восстанов", "переда", "перевед", "перевёл", "перевел")  # fmt: skip
+
+
 def acceptable(original: str, text: str, anchors: tuple[str, ...]) -> bool:
-    """A rewrite is one message that keeps every planted span, and nothing much more."""
+    """A rewrite is one message that keeps every planted span and adds nothing a label would
+    have to account for."""
     if not text or any(a not in text for a in anchors):
         return False
     if "\n" in text or _SPEAKER.search(text):
         return False
-    return len(text) <= max(3 * len(original), len(original) + 80)
+    if len(text) > max(3 * len(original), len(original) + 80):
+        return False
+    if set(_NUMBER.findall(text)) - set(_NUMBER.findall(original)):
+        return False
+    if text.count("?") > original.count("?"):
+        return False
+    if len(_NEGATION.findall(text)) > len(_NEGATION.findall(original)):
+        return False
+    low, was = text.casefold(), original.casefold()
+    return all(low.count(stem) <= was.count(stem) for stem in _DEEDS)

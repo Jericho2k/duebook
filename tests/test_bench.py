@@ -27,6 +27,7 @@ from duebook.bench import (
 )
 from duebook.bench.generate import TWINS
 from duebook.bench.match import mentions
+from duebook.bench.rewrite import acceptable
 from duebook.events import Role, Side
 from duebook.extract import Completion, ModelError, Usage
 from duebook.extract.extractor import Extraction
@@ -311,7 +312,7 @@ def test_a_rewrite_keeps_the_planted_spans_and_the_labels_stay_true():
 
 def test_a_rewrite_that_lost_a_planted_span_is_discarded():
     ticket = next(t for t in TICKETS if t.gold.commitments)
-    rewriter = Rewriter(RewritingModel(lambda text: "Здравствуйте, чем могу помочь?"))
+    rewriter = Rewriter(RewritingModel(lambda text: "Здравствуйте, добрый день."))
     rewritten = rewriter.rewrite(ticket)
     anchored = [e for e in ticket.events if ticket.anchors.get(e.id)]
     assert rewriter.discarded == len(anchored) > 0
@@ -339,8 +340,40 @@ def test_the_rewriter_is_told_who_is_speaking_and_which_spans_to_keep():
     assert all(f"- {a}" in request[0]["content"] for a in ticket.anchors[promise.id])
 
 
+@pytest.mark.parametrize(
+    ("original", "rewrite"),
+    [
+        ("Спасибо за терпение.", "Спасибо, что ждали. Мы разберёмся."),
+        (
+            "Спасибо за звонок насчёт доставки!",
+            "Спасибо за звонок насчёт доставки! Так и не привезли",
+        ),
+        ("Мне пришёл блендер модели BL-419.", "Мне пришёл блендер модели BL-419, но не работает."),
+        ("Адрес доставки: ул. Лесная, 7.", "Адрес доставки: ул. Лесная, 7. Когда привезёте?"),
+        (
+            "Пришлём исправленный счёт до 20 января.",
+            "Всё исправим. Пришлём исправленный счёт до 20 января.",
+        ),
+        ("Есть новости?", "Есть новости? Жду с 12 числа."),
+    ],
+)
+def test_a_rewrite_that_adds_a_promise_a_fact_a_question_or_a_number_is_not_accepted(
+    original, rewrite
+):
+    planted = ("BL-419", "ул. Лесная, 7", "Спасибо за звонок насчёт доставки",
+               "Пришлём исправленный счёт до 20 января")  # fmt: skip
+    anchors = tuple(a for a in planted if a in original)
+    assert not acceptable(original, rewrite, anchors)
+
+
+def test_a_faithful_rewrite_is_accepted():
+    assert acceptable(
+        "Новой информации пока нет.", "Здравствуйте! Пока новой информации, увы, нет.", ()
+    )
+    assert acceptable("Пароль сбросила, не помогло.", "Сбросила пароль — не помогло.", ())
+
+
 def test_a_rewrite_that_turned_into_a_dialogue_or_ballooned_is_not_accepted():
-    from duebook.bench.rewrite import acceptable
 
     assert acceptable("Ладно.", "Ну ладно, поняла.", ())
     assert not acceptable("Ладно.", "Клиент: у меня проблема.\nАгент: Сейчас уточню.", ())

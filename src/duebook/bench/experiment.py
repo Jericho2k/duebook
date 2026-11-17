@@ -68,9 +68,10 @@ from .rewrite import Rewriter, require_different_models
 from .run import refold, snapshots
 from .score import Score, TicketScore, match, same_deadline, score_ticket
 
-#: Rewrites the tickets of round 2: the cheapest model that kept the planted
-#: spans and stayed one message on a trial of dev tickets (docs/results.md).
-WRITER = "mistralai/mistral-small-24b-instruct-2501"
+#: Rewrites the tickets of round 2: of the cheap models tried on the same dev
+#: messages, the one that reworded most without adding anything a label would
+#: have to account for (docs/results.md). Served as z-ai/glm-5.3-flash.
+WRITER = "~z-ai/glm-flash-latest"
 RESULTS = Path("results")
 ROUND2 = RESULTS / "round2"
 CACHE = Path(".cache/responses")
@@ -565,6 +566,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                         help="judge the projection by what the sample was charged (trusting the "
                              "response cache) instead of what it would cost uncached")
     parser.add_argument("--no-cache", action="store_true", help="do not use the response cache")
+    parser.add_argument("--rewrite-only", action="store_true",
+                        help="rewrite and save the split's tickets, then stop")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--out", type=Path, help="default: <results>/<split>.json")
     parser.add_argument("--label", default="", help="a note for the spend log")
@@ -602,6 +605,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     except OverBudget:
         spend("rewriting, stopped at the cap")
         raise
+    if args.rewrite_only:
+        spend("rewriting the tickets")
+        discarded = sum(v["discarded"] for v in written["tickets"].values())
+        print(f"{len(tickets)} tickets rewritten by {args.writer}: {discarded} of "
+              f"{sum(t.messages for t in tickets)} rewrites discarded, ${ledger.usd():.4f}")
+        return
     if args.tickets:
         tickets = tickets[: args.tickets]
     writing = ledger.usd()
