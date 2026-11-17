@@ -60,11 +60,11 @@ from ..reducer import UNGUARDED
 from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
-from .generate import MAIN, SPLITS, SimTicket, Split
+from .generate import MAIN, MAIN2, SPLITS, CloseCase, SimTicket, Split
 from .meter import Ledger, Meter, OverBudget
 from .methods import EventMemory, Method, MethodRun
 from .result import Snapshot, checkpoints
-from .rewrite import Rewriter, require_different_models
+from .rewrite import Rewriter, require_different_models, with_rewritten_text
 from .run import refold, snapshots
 from .score import Score, TicketScore, match, same_deadline, score_ticket
 
@@ -74,6 +74,7 @@ from .score import Score, TicketScore, match, same_deadline, score_ticket
 WRITER = "~z-ai/glm-flash-latest"
 RESULTS = Path("results")
 ROUND2 = RESULTS / "round2"
+ROUND3 = RESULTS / "round3"
 CACHE = Path(".cache/responses")
 #: What all live model calls of round 2 may cost together.
 SESSION_CAP = 1.50
@@ -82,6 +83,10 @@ UNGUARDED_RUN = "event_memory_unguarded"
 
 
 # --------------------------------------------------------------- tickets ----
+
+
+def results_directory(split: Split) -> Path:
+    return {MAIN: ROUND2, MAIN2: ROUND3}.get(split.profile, RESULTS)
 
 
 def rewritten(
@@ -123,13 +128,7 @@ def rewritten(
                   "profile": split.profile.name, "writer": writer, "tickets": out}  # fmt: skip
         cache.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(stored, ensure_ascii=False, indent=1))
-    result = []
-    for t in tickets:
-        texts = stored["tickets"][t.ticket_id]["texts"]
-        events = tuple(
-            replace(e, text=texts[e.id]) if isinstance(e, MessagePosted) else e for e in t.events
-        )
-        result.append(replace(t, events=events))
+    result = [with_rewritten_text(t, stored["tickets"][t.ticket_id]["texts"]) for t in tickets]
     return result, stored
 
 
@@ -386,6 +385,7 @@ def summarise(
     # A method run on a subset of the tickets is summarised, and compared with
     # the reference, on those tickets only — always the first N of the split.
     own = {m: [t.ticket_id for t in tickets if (m, t.ticket_id) in runs_of] for m in names}
+    close_cases = {case.kind.value for t in tickets for case in t.gold.close_cases}
     samples_for: dict[int, list[list[int]]] = {}
 
     def samples(n: int) -> list[list[int]]:
@@ -406,6 +406,8 @@ def summarise(
             }
             sums["all"] = sums["end"] + sums["handoffs"]
             out = {k: f(sums[w], len(picked)) for k, (w, f) in METRICS.items()}
+            out |= {case.value: getattr(sums["end"], case.value).recall
+                    for case in CloseCase if case.value in close_cases}  # fmt: skip
             out |= {k: sum(v[i] for i in indices) / len(indices) for k, v in cost.items()}
             return out
 
@@ -581,12 +583,12 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--out", type=Path, help="default: <results>/<split>.json")
     parser.add_argument("--label", default="", help="a note for the spend log")
     parser.add_argument("--results", type=Path,
-                        help="default: results/round2 for round-2 splits, else results")
+                        help="defaults to the results directory for the split's round")
     args = parser.parse_args(argv)  # fmt: skip
 
     require_different_models(args.writer, args.model)
     split = SPLITS[args.split]
-    results = args.results or (ROUND2 if split.profile is MAIN else RESULTS)
+    results = args.results or results_directory(split)
     out = args.out or results / f"{split.name}.json"
     if split.name.startswith("test") and out.exists():
         raise SystemExit(f"{out} exists: the test split is run once")
@@ -684,6 +686,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             "false_alerts_per_ticket", "false_closes_per_ticket",
             "wrong_target_closes_per_ticket", "missed_close_rate", "suggestions_per_ticket",
             "freshness_error", "dispute_recall", "usd_per_ticket"]  # fmt: skip
+    keys.extend(case.value for case in CloseCase
+                if case.value in summary["methods"][summary["reference"]])  # fmt: skip
     print(table(summary, keys))
     print(f"guards: {effects['verdicts']}", file=sys.stderr)
     print(f"\ncharged this run: ${ledger.usd():.4f} (+${ledger.reused.usd() or 0:.4f} reused "

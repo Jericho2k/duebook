@@ -3,7 +3,8 @@ import os
 import subprocess
 import sys
 from dataclasses import replace
-from datetime import timedelta
+from datetime import time, timedelta
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from duebook import AssigneeChanged, Card, CommitmentState, Party, Reason, StepO
 from duebook.bench import (
     LONG,
     MAIN,
+    MAIN2,
     SPLITS,
     STANDARD,
     Counts,
@@ -25,13 +27,17 @@ from duebook.bench import (
     run_ticket,
     score,
 )
-from duebook.bench.generate import TWINS
+from duebook.bench.experiment import to_json
+from duebook.bench.generate import TWINS, CloseCase
 from duebook.bench.match import mentions
 from duebook.bench.rewrite import acceptable
+from duebook.bench.run import fold
+from duebook.closing import overlap
 from duebook.events import Role, Side
 from duebook.extract import Completion, ModelError, Usage
 from duebook.extract.extractor import Extraction
 from duebook.proposals import MakeCommitment
+from duebook.reducer import Guards
 from duebook.temporal import Offset, Unit
 
 TICKETS = generate(seed=7, count=120)
@@ -435,13 +441,18 @@ def test_the_main_profile_plants_renegotiations_and_cancellations_with_true_labe
                 assert by_seq[gold.seq].superseded_by == by_seq[gold.resolved_seq].id
 
 
-def test_every_planted_close_passes_the_guards_and_the_oracle_scores_one():
-    report = evaluate(MAIN_TICKETS, Oracle.of(MAIN_TICKETS))
-    s = report.score + report.handoffs
-    assert (s.commitments.fp, s.commitments.fn, s.alerts.fp, s.alerts.fn) == (0, 0, 0, 0)
-    assert s.status_accuracy == 1.0 and s.closes_right > 300
-    assert (s.closes_false, s.closes_wrong_target, s.closes_missed) == (0, 0, 0)
-    assert s.suggestions_right + s.suggestions_wrong == 0
+@pytest.mark.parametrize("name", SPLITS)
+def test_the_oracle_scores_perfectly_at_the_end_and_handoffs_of_every_split(name):
+    tickets = SPLITS[name].tickets()
+    report = evaluate(tickets, Oracle.of(tickets))
+    for s in (report.score, report.handoffs):
+        assert s.commitments.f1 == s.alerts.f1 == s.disputes.f1 == s.failed_steps.f1 == 1.0
+        assert s.deadline_accuracy == s.status_accuracy == s.close_precision == 1.0
+        assert s.change_accuracy == s.fact_recall == 1.0 and s.freshness_error == 0.0
+        assert s.closes_missed == s.suggestions_right == s.suggestions_wrong == s.errors == 0
+        assert all(getattr(s, case.value).recall == 1.0 for case in CloseCase)
+    if SPLITS[name].profile is MAIN2:
+        assert all(getattr(report.score, case.value).tp == len(tickets) for case in CloseCase)
 
 
 def test_round_one_profiles_generate_exactly_the_tickets_round_one_was_run_on():
@@ -455,6 +466,80 @@ def test_round_two_splits_use_fresh_seeds():
     old = {SPLITS[n].seed for n in ("dev", "test", "long")}
     assert SPLITS["dev2"].seed not in old and SPLITS["test2"].seed not in old
     assert SPLITS["test2"].count >= 20 and SPLITS["test2"].profile is MAIN
-    fresh = SPLITS["test3"]
-    assert fresh.seed not in old | {SPLITS["dev2"].seed, SPLITS["test2"].seed}
-    assert fresh.count == 20 and fresh.profile is MAIN
+
+
+@pytest.mark.parametrize(
+    ("name", "digest"),
+    [
+        ("dev2", "520681e4fd3a392572990f0dce12affb159566c70461e2cc6a1c0e3c78e690b1"),
+        ("test2", "0289991ca7a6c7c16f029db5353198ed877c027d50539d2c890b25b1ce9d859f"),
+    ],
+)
+def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name, digest):
+    tickets = to_json(SPLITS[name].tickets())
+    for ticket in tickets:
+        # Compare the full round-2 record using its original schema.
+        assert ticket["gold"].pop("close_cases") == []
+    data = json.dumps(
+        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
+    )
+    assert sha256(data.encode("utf-8")).hexdigest() == digest
+
+
+def test_the_round_three_splits_use_main2_at_fresh_distinct_seeds():
+    assert len({split.seed for split in SPLITS.values()}) == len(SPLITS)
+    assert (SPLITS["dev3"].count, SPLITS["test3"].count, SPLITS["test3"].seed) == (4, 20, 4343)
+    for name in ("dev3", "test3"):
+        assert SPLITS[name].profile is MAIN2
+        for ticket in SPLITS[name].tickets():
+            assert 150 <= ticket.messages <= 200 and 3 <= len(ticket.gold.handoffs) <= 4
+            assert (ticket.end - ticket.events[0].at).days >= 9
+
+
+@pytest.mark.parametrize("name", ["dev3", "test3"])
+def test_rescue_closes_only_its_intended_twin_and_needs_the_verifier(name):
+    for ticket in SPLITS[name].tickets():
+        (case,) = [case for case in ticket.gold.close_cases if case.kind is CloseCase.RESCUE]
+        by_seq = {c.seq: c for c in ticket.gold.commitments}
+        left, right = (by_seq[seq] for seq in case.promise_seqs)
+        assert left.owner.side is right.owner.side and left.seq != right.seq
+        reply = ticket.events[case.seq - 1].text
+        for promise in (left, right):
+            assert promise.seq < case.seq and not promise.closed(case.seq - 1)
+            assert overlap(reply, (ticket.events[promise.seq - 1].text, promise.action)) == 0
+        assert case.target_seq in case.promise_seqs
+        assert [p.seq for p in (left, right) if p.done(case.seq)] == [case.target_seq]
+        deterministic = fold(ticket, Oracle.of([ticket]), guards=Guards(verifier=False))
+        assert [(r.seq, r.reason) for r in deterministic.refused] == [
+            (case.seq, Reason.NOT_ABOUT_TARGET)
+        ]
+
+
+def test_negative_close_cases_leave_all_relevant_promises_open():
+    for ticket in SPLITS["dev3"].tickets():
+        for case in ticket.gold.close_cases:
+            open_before = {
+                c.seq
+                for c in ticket.gold.commitments
+                if c.seq < case.seq and not c.closed(case.seq)
+            }
+            if case.kind is CloseCase.AMBIGUOUS:
+                assert len(case.promise_seqs) == 2 and set(case.promise_seqs) <= open_before
+                for seq in case.promise_seqs:
+                    assert overlap(ticket.events[case.seq - 1].text,
+                                   (ticket.events[seq - 1].text,)) == 0  # fmt: skip
+            elif case.kind is CloseCase.WRONG_THING:
+                assert len(case.promise_seqs) == 1 and set(case.promise_seqs) == open_before
+            if case.target_seq is None:
+                assert not ticket.proposals[case.seq - 1]
+
+
+def test_rewriting_keeps_the_close_case_replies_and_twin_context_verbatim():
+    ticket = SPLITS["dev3"].tickets()[0]
+    writer = RewritingModel(lambda text: f"Ой, слушайте… {text}")
+    rewritten = Rewriter(writer).rewrite(ticket)
+    for case in ticket.gold.close_cases:
+        assert rewritten.events[case.seq - 1] == ticket.events[case.seq - 1]
+        if case.kind is not CloseCase.WRONG_THING:
+            assert rewritten.events[case.seq - 2] == ticket.events[case.seq - 2]
+    assert len(writer.requests) == ticket.messages - 5

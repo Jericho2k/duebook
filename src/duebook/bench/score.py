@@ -30,6 +30,9 @@ checkpoints — each handoff and the end — and is judged by this code alone.
   still held open when the label is closed. *Suggestions* are closes the event
   memory held back for a person to confirm; one is right when it names the
   message that really closed the promise.
+* *Hard close cases* — after a labelled reply, the method must retain every
+  affected promise and show the correct one as fulfilled if the reply
+  identifies it. Any still owed must remain open.
 
 **Context** (RQ2) — facts are matched by VALUE, because methods do not agree
 on names (see ``match``). For every fact a method presents as current that
@@ -138,6 +141,10 @@ class Score:
     #: Planted values current at the checkpoint, and how many were presented.
     facts_current: int = 0
     facts_recalled: int = 0
+    #: Per-case successes and failures, counted once per eligible checkpoint.
+    rescue_close_correct: Counts = field(default_factory=Counts)
+    ambiguous_close_refrained: Counts = field(default_factory=Counts)
+    wrong_thing_not_closed: Counts = field(default_factory=Counts)
 
     def __add__(self, other: Score) -> Score:
         return Score(*(getattr(self, f.name) + getattr(other, f.name) for f in fields(self)))
@@ -247,6 +254,7 @@ def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
         statuses_judged=len(pairs),
         alerts=Counts(true_alerts, len(alerted) - true_alerts, breached - true_alerts),
         **closes,
+        **_close_cases(ticket, pairs, cp),
         facts_judged=judged,
         facts_stale=stale,
         facts_contested=contested,
@@ -332,6 +340,31 @@ def _closes(pairs, cp: Checkpoint) -> dict[str, int]:
         for seq in f.suggested:
             right = due and seq == g.resolved_seq
             out["suggestions_right" if right else "suggestions_wrong"] += 1
+    return out
+
+
+def _close_cases(
+    ticket: SimTicket, pairs: Sequence[tuple[GoldCommitment, Promise]], cp: Checkpoint
+) -> dict[str, Counts]:
+    out: dict[str, Counts] = {}
+    found = {g.seq: p for g, p in pairs}
+    for case in ticket.gold.close_cases:
+        if case.seq > cp.seq:
+            continue
+        right = all(
+            seq in found and found[seq].status is PromiseStatus.OPEN
+            for seq in case.promise_seqs if seq != case.target_seq
+        )  # fmt: skip
+        if case.target_seq is not None:
+            target = found.get(case.target_seq)
+            right = (
+                right
+                and target is not None
+                and target.status is PromiseStatus.FULFILLED
+                and target.closed_seq in (None, case.seq)
+            )
+        key = case.kind.value
+        out[key] = out.get(key, Counts()) + Counts(tp=int(right), fn=int(not right))
     return out
 
 

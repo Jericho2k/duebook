@@ -34,7 +34,7 @@ from ..lifecycle import AlertPolicy
 from ..proposals import CancelCommitment, MakeCommitment, Proposal, ResolveCommitment
 from ..reducer import GUARDED, Guards, apply
 from ..temporal import WorkCalendar
-from .generate import SimTicket
+from .generate import CloseCase, SimTicket
 from .result import Snapshot, checkpoints, from_card
 from .score import Score, TicketScore, score_ticket
 
@@ -79,6 +79,11 @@ class Report:
             f"recall {every.failed_steps.recall:.3f}",
             f"extraction failures: {len(self.failures)}",
         ]
+        for case in CloseCase:
+            cases = getattr(s, case.value)
+            if cases.tp or cases.fn:
+                lines.append(f"{case.value}: {cases.recall:.3f} "
+                             f"({cases.tp}/{cases.tp + cases.fn})")  # fmt: skip
         cost = self.usage.usd()
         if self.usage.calls:
             charged = f"${cost:.4f}" if cost is not None else "not reported"

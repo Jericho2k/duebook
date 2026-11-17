@@ -70,6 +70,8 @@ from ..proposals import (
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    Verdict,
+    Verification,
 )
 from ..temporal import (
     DateRef,
@@ -169,6 +171,20 @@ class GoldRepeatedFix:
     key: tuple[str, ...] = ()
 
 
+class CloseCase(StrEnum):
+    RESCUE = "rescue_close_correct"
+    AMBIGUOUS = "ambiguous_close_refrained"
+    WRONG_THING = "wrong_thing_not_closed"
+
+
+@dataclass(frozen=True, slots=True)
+class GoldCloseCase:
+    kind: CloseCase
+    seq: int
+    promise_seqs: tuple[int, ...]
+    target_seq: int | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class Gold:
     commitments: tuple[GoldCommitment, ...] = ()
@@ -179,6 +195,7 @@ class Gold:
     facts: tuple[GoldFact, ...] = ()
     #: The seq of every handoff from one operator to another.
     handoffs: tuple[int, ...] = ()
+    close_cases: tuple[GoldCloseCase, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +208,7 @@ class SimTicket:
     #: The moment the ticket is judged at: after its last event.
     end: datetime
     #: Per message event id, the spans a rewrite must keep word for word.
+    #: A full-message span keeps the message verbatim.
     anchors: dict[str, tuple[str, ...]] = field(default_factory=dict)
 
     @property
@@ -230,6 +248,7 @@ class Profile:
     renegotiated: tuple[int, int] = (0, 0)
     #: Promises the customer calls off before the deadline.
     cancelled: tuple[int, int] = (0, 0)
+    close_cases: bool = False
 
 
 STANDARD = Profile(
@@ -246,7 +265,8 @@ MAIN = Profile(
     vague=(1, 1), pending=(1, 1), customer=(1, 2), fact_beats=(3, 4), fixes=(2, 3),
     twins=(1, 2), renegotiated=(1, 1), cancelled=(0, 1),
 )  # fmt: skip
-PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN)}
+MAIN2 = replace(MAIN, name="main2", close_cases=True)
+PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -273,9 +293,8 @@ SPLITS = {
         # Round 2: long tickets are the main test. Fresh seeds.
         Split("dev2", seed=4141, count=4, profile=MAIN),
         Split("test2", seed=4242, count=20, profile=MAIN),
-        # Round 3's final run, on a seed nobody has read: NOT run. Its cost is
-        # projected in docs/results.md and waits for the owner's approval.
-        Split("test3", seed=4343, count=20, profile=MAIN),
+        Split("dev3", seed=4444, count=4, profile=MAIN2),
+        Split("test3", seed=4343, count=20, profile=MAIN2),
     )
 }
 
@@ -450,12 +469,13 @@ class _Builder:
     repeated: list[GoldRepeatedFix] = field(default_factory=list)
     facts: list[GoldFact] = field(default_factory=list)
     handoffs: list[int] = field(default_factory=list)
+    close_cases: list[GoldCloseCase] = field(default_factory=list)
 
     @property
     def seq(self) -> int:
         return len(self.events) + 1
 
-    def say(self, role: Role, text: str, *proposals: Proposal) -> int:
+    def say(self, role: Role, text: str, *proposals: Proposal, verbatim: bool = False) -> int:
         author = self.customer if role is Role.CUSTOMER else self.agent
         seq = self.seq
         self.events.append(
@@ -463,7 +483,9 @@ class _Builder:
                           author=author, text=text)
         )  # fmt: skip
         self.proposals.append(tuple(proposals))
-        self.anchors[f"e{seq}"] = tuple(dict.fromkeys(p.quote for p in proposals))
+        self.anchors[f"e{seq}"] = (text,) if verbatim else tuple(dict.fromkeys(
+            p.quote for p in proposals
+        ))  # fmt: skip
         return seq
 
     def assign(self, current: Actor) -> None:
@@ -618,6 +640,9 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
         since = handoff_times[i - 1] if i else start
         _repeated_fix(plan, *fix, since, handoff_times[i])
 
+    if profile.close_cases:
+        _close_cases(plan)
+
     # Planned last: by now it is known when the ticket ends, and this promise's
     # deadline must still be ahead then.
     pending = rng.randint(*profile.pending)
@@ -642,7 +667,7 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
         events=tuple(b.events),
         proposals=tuple(b.proposals),
         gold=Gold(tuple(b.commitments), tuple(b.changes), tuple(b.contradictions),
-                  tuple(b.repeated), tuple(b.facts), tuple(b.handoffs)),
+                  tuple(b.repeated), tuple(b.facts), tuple(b.handoffs), tuple(b.close_cases)),
         end=b.now + timedelta(hours=1),
         anchors=b.anchors,
     )  # fmt: skip
@@ -792,6 +817,81 @@ def _twin_promises(plan: _Plan, kind, at: datetime) -> None:
             _committed(b, Role.AGENT, p, ph, e, d, f)
         ))  # fmt: skip
         _settle_later(plan, promise, fate, when, due_at, made, second_at + timedelta(minutes=30))
+
+
+def _close_cases(plan: _Plan) -> None:
+    # The callback and unrelated refund report occur before any other promise.
+    at = plan.start + timedelta(minutes=2)
+    callback = (Party.AGENT, "Я свяжусь с вами по телефону {due}", "связаться по телефону", "")
+    phrase, expr = _date_deadline(at, 1, plan.cal)
+    due_at = resolve(expr, at, plan.cal).due_at
+    made: list[int] = []
+    plan.add(at, lambda b: made.append(
+        _committed(b, Role.AGENT, callback, phrase, expr, due_at, Fate.BROKEN)
+    ))  # fmt: skip
+
+    def wrong_thing(b: _Builder) -> None:
+        seq = b.say(Role.CUSTOMER, "Кстати, деньги за прошлый заказ пришли.", verbatim=True)
+        b.close_cases.append(GoldCloseCase(CloseCase.WRONG_THING, seq, tuple(made)))
+
+    plan.add(at + timedelta(minutes=1), wrong_thing)
+
+    first, second = plan.rng.sample(("монтажа", "сборки", "подъёма на этаж", "упаковки"), 2)
+    target = plan.rng.choice((first, second))
+    _close_twins(
+        plan, plan.moment(0.15, 0.45),
+        "Возместим стоимость {obj} {due}", "возместить стоимость {obj}", (first, second),
+        f"Проверьте, пожалуйста, поступило ли возмещение стоимости {target}. "
+        "По другой позиции ещё уточняем.",
+        plan.rng.choice(("Ага, вижу.", "Получила, спасибо.", "Да, на месте.")),
+        target,
+    )  # fmt: skip
+    first, second = plan.rng.sample(("инструкцию", "смету", "паспорт изделия", "сертификат"), 2)
+    _close_twins(
+        plan, plan.moment(0.5, 0.8),
+        "Вышлем вам {obj} {due}", "выслать {obj}", (first, second),
+        "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым.",
+        "Одно уже получила, спасибо.",
+    )  # fmt: skip
+
+
+def _close_twins(
+    plan: _Plan, at: datetime, wording: str, action: str,
+    objects: tuple[str, str], context: str, reply: str, target: str | None = None,
+) -> None:  # fmt: skip
+    """Keep the disambiguating turn next to the reply, even when filler is added."""
+    made: list[int] = []
+    first_at = plan.after(at, Role.AGENT)
+    second_at = plan.after(first_at + timedelta(minutes=20), Role.AGENT)
+    for obj, when in zip(objects, (first_at, second_at), strict=True):
+        promise = (Party.COMPANY, wording.replace("{obj}", obj), action.format(obj=obj), "")
+        phrase, expr, due_at = None, None, None
+        fate = Fate.OPEN
+        if target is not None:
+            phrase, expr = _date_deadline(when, 2, plan.cal)
+            due_at = resolve(expr, when, plan.cal).due_at
+            fate = Fate.KEPT if obj == target else Fate.BROKEN
+        plan.add(when, lambda b, p=promise, ph=phrase, e=expr, d=due_at, f=fate: made.append(
+            _committed(b, Role.AGENT, p, ph, e, d, f)
+        ))  # fmt: skip
+
+    def confirm(b: _Builder) -> None:
+        if target is None:
+            seq = b.say(Role.CUSTOMER, reply, verbatim=True)
+            case = GoldCloseCase(CloseCase.AMBIGUOUS, seq, tuple(made))
+        else:
+            target_seq = made[objects.index(target)]
+            quote = wording.replace("{obj}", target).format(due="").strip()
+            verification = Verification(Verdict.YES, reply)
+            proposal = ResolveCommitment(f"e{target_seq}#0", reply, quote, verification)
+            seq = b.say(Role.CUSTOMER, reply, proposal, verbatim=True)
+            _settled(b, target_seq, seq)
+            case = GoldCloseCase(CloseCase.RESCUE, seq, tuple(made), target_seq)
+        b.close_cases.append(case)
+
+    reply_at = plan.after(second_at + timedelta(minutes=30), Role.AGENT)
+    plan.add(reply_at, lambda b: b.say(Role.AGENT, context, verbatim=True))
+    plan.add(reply_at, confirm)
 
 
 def _renegotiated_promise(plan: _Plan, promise, at: datetime) -> None:

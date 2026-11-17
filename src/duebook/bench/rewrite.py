@@ -62,6 +62,14 @@ class SameModel(ValueError):
     """The tickets would be written by the model that is about to read them."""
 
 
+def with_rewritten_text(ticket: SimTicket, texts: dict[str, str]) -> SimTicket:
+    """Use archived wording while keeping the events, times and labels aligned."""
+    events = tuple(
+        replace(e, text=texts[e.id]) if isinstance(e, MessagePosted) else e for e in ticket.events
+    )
+    return replace(ticket, events=events)
+
+
 def require_different_models(writer: str, extractor: str) -> None:
     if _family(writer) == _family(extractor):
         raise SameModel(
@@ -92,6 +100,8 @@ class Rewriter:
 
     def text(self, event: MessagePosted, anchors: tuple[str, ...]) -> str:
         """One message in the writer's words, or as it was if the rewrite is unusable."""
+        if event.text in anchors:
+            return event.text
         listed = "\n".join(f"- {a}" for a in anchors) or "- (none)"
         completion = self.model.complete_json(
             [

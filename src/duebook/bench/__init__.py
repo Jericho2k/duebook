@@ -11,6 +11,7 @@ dev/test splits (``SPLITS``).
 from .generate import (
     LONG,
     MAIN,
+    MAIN2,
     PROFILES,
     SPLITS,
     STANDARD,
@@ -32,6 +33,7 @@ from .score import Counts, Score, score
 __all__ = [
     "LONG",
     "MAIN",
+    "MAIN2",
     "PROFILES",
     "SPLITS",
     "STANDARD",
