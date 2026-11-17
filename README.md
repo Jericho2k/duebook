@@ -286,6 +286,7 @@ estimated pessimistically for Russian; pass a real tokenizer's counter as
 python -m duebook.bench --seed 1 --tickets 200        # self-check, no model called
 python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
+python -m duebook.bench.round3 --max-usd 0.2   # round 3: dev only, configurations A, B, C
 ```
 
 `duebook.bench` builds simulated tickets the other way round: the events are
@@ -348,8 +349,8 @@ The baselines (`bench.baselines`) read with the same model as the event
 memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`). The comparison, its
 numbers with 95% bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (round 1 and round 2); the raw record is
-under `results/` and `results/round2/`.
+[docs/results.md](docs/results.md) (rounds 1, 2 and 3); the raw record is
+under `results/`, `results/round2/` and `results/round3/`.
 
 ## Running the service
 
@@ -473,18 +474,25 @@ from webhook to delivered alert. `scripts/smoke.py` runs a short ticket
 through a real model and prints the proposals, the refusals, the final card
 and the charged cost.
 
-Measured against a real model, in two rounds (see docs/results.md): round 1
+Measured against a real model, in three rounds (see docs/results.md): round 1
 with GLM 5.3 Flash on 50-64 message tickets; round 2 with DeepSeek V4.1 Flash
 on 150-200 message tickets, where the event memory made no false close on the
-20 test tickets.
+20 test tickets; round 3, on dev only, compared a reasoning extractor and the
+verifier with round 2's configuration and kept round 2's: no configuration
+made a false close, the verifier agreed with the guards on all 119 closes it
+was asked about but changed no outcome, and reasoning cost 2.3 times as much
+and read three deadlines wrong. A final run on a fresh seed (`test3`) is
+projected, not run.
 
 Each service command has been run against a local PostgreSQL with uvicorn and
 a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
 checked with `docker compose config` but not yet built or started.
 
-Next: a helpdesk adapter; real tickets; more than one extracting model; a
-word-by-word comparison of `target_quote` that tolerates a skipped function
-word (round 2's one blocked true close).
+Next: the final run on `test3` once its budget is approved; a helpdesk
+adapter; real tickets, which are what would show whether the verifier's
+rescue of wordless confirmations is worth its cost; a verifier from another
+model family; a word-by-word comparison of `target_quote` that tolerates a
+skipped function word (round 2's one blocked true close).
 
 ## Development
 
