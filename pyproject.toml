@@ -22,6 +22,9 @@ service = [
 # The Mem0 baseline of the benchmark. Pinned: its pipeline changes between
 # releases, and the reported numbers are for this one.
 mem0 = ["mem0ai==2.2.1"]
+# The Graphiti baseline, with its embedded graph database (FalkorDB Lite,
+# Python 3.12+). Pinned for the same reason.
+graphiti = ["graphiti-core[falkordblite]==0.31.2"]
 dev = [
     "pytest>=8",
     "ruff>=0.6",

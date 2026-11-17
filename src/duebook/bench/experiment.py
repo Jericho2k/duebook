@@ -9,7 +9,7 @@ Steps:
    text is rewritten by the writer model — never the extracting one. The
    rewritten text is cached under ``results/tickets/`` so every method, and
    every later run, reads exactly the same words.
-2. **Methods.** The event memory and the three baselines read each ticket;
+2. **Methods.** The event memory and the baselines read each ticket;
    (method, ticket) pairs run in parallel threads.
 3. **Scores.** Every snapshot is scored; per method, metrics are
    micro-averaged over tickets with 95% bootstrap confidence intervals
@@ -78,7 +78,7 @@ ROUND3 = RESULTS / "round3"
 CACHE = Path(".cache/responses")
 #: What all live model calls of round 2 may cost together.
 SESSION_CAP = 1.50
-METHODS = ("event_memory", "full_context", "rolling_summary", "mem0")
+METHODS = ("event_memory", "full_context", "rolling_summary", "mem0", "graphiti")
 UNGUARDED_RUN = "event_memory_unguarded"
 
 
@@ -164,6 +164,13 @@ def make_methods(
             if reason:
                 raise SystemExit(f"Mem0 is not available: {reason}")
             methods.append(Mem0Memory(answerer, ledger, cal, llm_model=model))
+        elif name == "graphiti":
+            from .baselines import GraphitiMemory, graphiti_available
+
+            reason = graphiti_available()
+            if reason:
+                raise SystemExit(f"Graphiti is not available: {reason}")
+            methods.append(GraphitiMemory(answerer, ledger, cal, llm_model=model, cache=cache))
         else:
             raise SystemExit(f"unknown method {name!r}")
     return methods
@@ -229,8 +236,10 @@ def sample_of(ticket: SimTicket, events: int) -> SimTicket:
 #: Mem0's store grow, and later checkpoint answers list more. Measured on
 #: round 2's test split against a 20-event sample: event memory 1.5, full
 #: context 0.7, rolling summary 3.4 (it was projected at 2.0 and three of its
-#: four tickets ran into the cap), Mem0 2.4.
-GROWTH = {"event_memory": 1.6, "full_context": 1.5, "rolling_summary": 3.5, "mem0": 2.5}
+#: four tickets ran into the cap), Mem0 2.4. Graphiti, on two dev2 tickets
+#: against a 30-event sample: 1.1.
+GROWTH = {"event_memory": 1.6, "full_context": 1.5, "rolling_summary": 3.5, "mem0": 2.5,
+          "graphiti": 1.2}  # fmt: skip
 
 
 def project(

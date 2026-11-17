@@ -20,7 +20,8 @@ from duebook.bench.baselines import (
     parse_due_at,
     render_event,
 )
-from duebook.bench.baselines.mem0_memory import _line, _usage
+from duebook.bench.baselines.graphiti_memory import cacheable, listing_of
+from duebook.bench.baselines.mem0_memory import _line, usage_of
 from duebook.bench.meter import Ledger, Meter, OverBudget
 from duebook.bench.result import PromiseStatus, checkpoints
 from duebook.bench.score import Score, fact_status, score_ticket
@@ -241,7 +242,7 @@ def test_mem0_usage_and_memories_are_read_from_its_own_client_responses():
     class R:
         usage = U()
 
-    assert _usage(R()) == Usage(1, 10, 2, 0, 1e-5)
+    assert usage_of(R()) == Usage(1, 10, 2, 0, 1e-5)
     assert _line({"memory": "Клиент на тарифе Премиум", "metadata": {"seq": 7}}) == (
         "- (added at #7) Клиент на тарифе Премиум"
     )
@@ -263,8 +264,9 @@ def test_the_event_memory_spends_only_while_reading_and_answers_from_the_card_fo
     assert [seq for seq, _ in run.detail["prompt_tokens"]] == messages
 
 
-def test_the_baselines_import_without_mem0_installed():
-    check = "import sys, duebook.bench.baselines; sys.exit('mem0' in sys.modules)"
+def test_the_baselines_import_without_mem0_or_graphiti_installed():
+    check = ("import sys, duebook.bench.baselines; "
+             "sys.exit('mem0' in sys.modules or 'graphiti_core' in sys.modules)")  # fmt: skip
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
     assert subprocess.run([sys.executable, "-c", check], env=env).returncode == 0
 
@@ -284,3 +286,32 @@ def test_mem0_is_given_its_memory_list_as_objects_when_the_model_wrote_strings()
     fine = SimpleNamespace(content='{"memory": [{"id": "0", "text": "y"}]}')
     _repair(SimpleNamespace(choices=[SimpleNamespace(message=fine)]))
     assert fine.content == '{"memory": [{"id": "0", "text": "y"}]}'
+
+
+def test_graphiti_facts_are_listed_by_first_message_with_their_sources_and_validity():
+    from types import SimpleNamespace as Edge
+
+    utc = ZoneInfo("UTC")
+    old = Edge(fact="Клиент на тарифе Базовый", episodes=["e2", "e5"], created_at=1,
+               valid_at=datetime(2027, 1, 11, 7, 0, tzinfo=utc),
+               invalid_at=datetime(2027, 1, 12, 9, 30), expired_at=None)
+    new = Edge(fact="Клиент на тарифе Про", episodes=["e7", "unknown"], created_at=2,
+               valid_at=None, invalid_at=None, expired_at=datetime(2027, 1, 13))
+    entity = Edge(name="Анна", summary="клиент")
+    listing = listing_of([new, old], [entity], {"e2": 2, "e5": 5, "e7": 7}, CAL)
+    assert listing.splitlines() == [
+        "FACTS",
+        "- (from #2, #5) Клиент на тарифе Базовый [valid from Mon 2027-01-11 10:00; "
+        "no longer true from Tue 2027-01-12 12:30]",
+        "- (from #7) Клиент на тарифе Про [retired]",
+        "ENTITIES",
+        "- Анна: клиент",
+    ]  # fmt: skip
+    assert listing_of([], [], {}, CAL) == "(empty graph)"
+
+
+def test_graphiti_caches_embeddings_and_only_deterministic_answers():
+    assert cacheable("embeddings", {})
+    assert cacheable("chat", {"temperature": 0})
+    assert not cacheable("chat", {"temperature": 0.7})
+    assert not cacheable("chat", {})

@@ -213,7 +213,7 @@ class Mem0Memory:
                 body = {**(chat_extra if chat else extra), **(params.pop("extra_body", None) or {})}
                 started = time.perf_counter()
                 response = create(*args, **params, extra_body=body)
-                meter.spend(_usage(response), time.perf_counter() - started)
+                meter.spend(usage_of(response), time.perf_counter() - started)
                 if chat:
                     _repair(response)
                 return response
@@ -280,7 +280,7 @@ def _line(memory: dict) -> str:
     return f"- {origin}{memory.get('memory', '')}"
 
 
-def _usage(response) -> Usage:
+def usage_of(response) -> Usage:
     raw = getattr(response, "usage", None)
     if raw is None:
         return Usage(calls=1)

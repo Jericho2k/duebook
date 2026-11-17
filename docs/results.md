@@ -1,7 +1,137 @@
-# Results: event memory against three baselines
+# Results: event memory against the baselines
 
-Three rounds, all run on 2026-11-17. Round 3 (dev only) comes first, then
-round 2; round 1 follows as it was written.
+Three rounds, all run on 2026-11-17. Round 3b and round 3 (dev only) come
+first, then round 2; round 1 follows as it was written.
+
+## Round 3b (dev only): further memory baselines
+
+Mem0 was the only existing memory system compared. `docs/competitors.md`
+surveys the rest and picks **Graphiti** (`graphiti-core` 0.31.2, Zep's
+open-source engine): it is the one system whose facts carry validity
+intervals that are closed, not deleted, when contradicted — what RQ2
+measures. No second system was cheap enough to add (Hindsight is the next
+candidate; see the survey). **Only dev2 was run.** Raw record:
+`results/round3b/`.
+
+### What was run
+
+| | |
+|---|---|
+| Split | `dev2`, the text round 2 rewrote (`results/round3b/tickets/dev2.json` links to it) |
+| Graphiti | the **first 2 tickets** (M0000, M0001; 175 and 183 events), as the budget allowed: projected at $0.59 upper for 2 tickets, $1.07 for 4 |
+| Event memory | all 4 tickets, round 2's configuration (C), as the reference; the differences below are on Graphiti's 2 tickets |
+| Reader | `deepseek/deepseek-v4.1-flash`, reasoning off, locked to DeepInfra (`PRESETS`), for every call Graphiti makes and for the checkpoint answer |
+| Embeddings | `openai/text-embedding-3-small` through OpenRouter, as for Mem0 |
+| Graph database | FalkorDB Lite (`falkordblite` 0.11.0), embedded, one per ticket; no Docker |
+| Feeding | every message and reassignment is an episode, with the event's own time as `reference_time`; the episode text is the same numbered, time-stamped line the other baselines see |
+| Checkpoint | the ticket's whole graph — every fact with its source messages and validity window, every entity summary — and the shared question; no search |
+| Charged | $0.375: $0.0224 for the projection sample, $0.3500 for the run, $0.0027 for a 4-event smoke test before it; a replay from the response cache cost $0 and reproduced every answer |
+
+`results/round3b/dev2.json` is the run. `dev2-replay.json` is the same run
+replayed from the cache, identical in every answer and score, which also
+keeps the text Graphiti's graph showed the model at each checkpoint; its
+timings are the cache's, not the model's.
+
+### Dev comparison (Graphiti's 2 tickets)
+
+At the end of each ticket unless marked; intervals are 95% bootstrap over 2
+tickets, so they are narrow only because they cannot be wide.
+
+| | **event memory** (C) | **Graphiti** | difference |
+|---|---|---|---|
+| commitment F1 | 1.000 | 1.000 | 0 |
+| deadline accuracy | 1.000 (28/28) | 0.929 (26/28) | −0.071 |
+| status accuracy / breach-alert recall | 1.000 / 1.000 | 1.000 / 1.000 | 0 |
+| **false closes** (end / any checkpoint) | 0 / 0 | 0 / 0 | 0 |
+| missed closes (all checkpoints) | 0 | 2 of 36 (at handoffs) | |
+| **freshness error** (all checkpoints) | **0.000** | **0.389** (14 contested of 36) | +0.389 |
+| fact recall / fact changes right | 1.000 / 1.000 | 1.000 / 1.000 | 0 |
+| **dispute recall** (all checkpoints) | **1.000** | **0.071** (1 of 14) | −0.929 |
+| failed-step precision (all checkpoints) | 0.833 (15 of 18) | 0.682 (15 of 22) | −0.152 |
+| model calls per ticket | 174.5 | 1,392.5 | ×8.0 |
+| prompt tokens per ticket | 313k | 1,238k | ×4.0 |
+| prompt tokens served from cache | 89.7% | 13.4% | |
+| **USD per ticket** | **0.0110** | **0.165** | ×15 |
+| model seconds per ticket | 238 | 797 (wall time; Graphiti's calls run concurrently) | ×3.3 |
+
+Event memory on all 4 dev2 tickets: F1 0.991, deadlines 1.000, 0 false
+closes, freshness error 0.000, dispute recall 1.000, $0.011 a ticket — the
+same as round 3's C.
+
+**What happened.** Graphiti found every promise and closed none falsely; on
+these two tickets its commitment account is as good as ours. It loses on
+exactly what RQ2 is about. Each planted dispute — the customer says one
+value, the company another — became a supersession:
+
+    - (from #16) Анна сообщила, что с её карты списали 9700 рублей.
+      [valid from Tue 2027-01-12 12:44; no longer true from Tue 2027-01-12 14:53]
+    - (from #17) По данным Ивана, со счёта Анны списано 6300 рублей.
+      [valid from Tue 2027-01-12 14:53]
+
+Graphiti's model judged the company's figure to contradict the customer's
+and closed the customer's interval, so the reader, shown the graph, reports
+6300 as the current amount and no dispute. The same happened to the product
+model (VC-519 against VC-722). That is a design consequence, not a bad
+call: Graphiti has one way to resolve a contradiction — the newer fact wins
+— and no notion of who said what. The two deadlines it got wrong were
+relative times a model resolved itself: "через 3 часа" was kept at the time
+it was said, and "до конца недели", said on a Saturday, became that Sunday
+where the working calendar gives the end of the next working week (Friday
+the 29th).
+
+It also costs 15 times as much as the event memory and 3 times Mem0's
+round-2 test cost ($0.052): about 8 calls per message, chat and embedding
+together (extract entities, resolve them, extract facts, resolve and
+invalidate facts, summarise entities, embed names and facts), with prompts that change on every call, so the
+provider's prompt cache serves 13%.
+
+### Projected cost on `test3`
+
+20 `main`-profile tickets, not generated or run. Per ticket: $0.165 measured
+on dev2; the upper bound adds 30% for a fresh seed's longer tickets and
+retries, as round 3's projection does.
+
+| what | expected, 20 tickets | upper |
+|---|---|---|
+| **Graphiti, all 20 tickets** | **$3.31** | **$4.30** |
+| Graphiti on the first 4 (round 2's subset shape) | $0.66 | $0.86 |
+
+Added to round 3's projection: every method on all 20 tickets about $7.7
+(upper $9.9); with rolling summary, Mem0 and Graphiti on the first 4, about
+$1.9 (upper $2.5). The cost projection in the runner now uses a growth factor
+of 1.2 for Graphiti (measured 1.1).
+
+### Threats to validity (round 3b)
+
+- **Two tickets.** Graphiti ran on half of dev2. The intervals mean little;
+  the dispute result rests on its mechanism (shown above, on every planted
+  dispute but one), not on the count.
+- **Our reading of Graphiti.** The checkpoint shows the whole graph, the
+  way Zep's context block shows facts with date ranges and entity
+  summaries; Graphiti's search was not used, which can only help its recall.
+  Zep Cloud adds its own retrieval and was not run.
+- **One model.** Graphiti is documented to work best with models that honour
+  structured output; DeepSeek V4.1 Flash on DeepInfra does, and no call
+  failed, but a stronger model might judge contradictions differently. It
+  cannot tell a dispute from a change without being told who said what,
+  which its fact model does not carry.
+- **Dev only, no tuning.** The instructions given to Graphiti
+  (`custom_extraction_instructions`) were written once, before the run, and
+  not changed after seeing results.
+
+### Reproducing round 3b
+
+```bash
+pip install -e ".[dev,mem0,graphiti]"     # Python 3.12+: FalkorDB Lite is embedded, no server
+python -m duebook.bench.experiment --split dev2 --methods event_memory,graphiti \
+    --subset graphiti=2 --results results/round3b --out results/round3b/dev2.json \
+    --session-cap 1.0 --max-usd 0.95
+```
+
+`falkordblite` ships its own `redis-server` and FalkorDB module and starts
+one per ticket in a temporary directory; nothing else needs installing.
+Answers and embeddings are cached under `.cache/responses/`, so the run
+replays without a model call on the machine that made it.
 
 ## Round 3 (dev only): verifier and reasoning
 
