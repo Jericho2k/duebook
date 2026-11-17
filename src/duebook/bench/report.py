@@ -10,11 +10,17 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..events import Side
+from .deadlines import classify
 from .experiment import table
 from .figures import line_chart
+from .generate import SPLITS
+from .methods import MethodRun
+from .result import Checkpoint, Moment, Promise, PromiseStatus, Snapshot
 
 ACCURACY = [
     "commitment_precision", "commitment_recall", "commitment_f1", "deadline_accuracy",
@@ -60,6 +66,40 @@ def deadline_kinds(summary: dict[str, Any]) -> str:
         k = rows["deadline_errors"]["kinds"]
         lines.append(f"| {m} | " + " | ".join(str(k[x]) for x in kinds) + " |")
     return "\n".join(lines)
+
+
+def conventions(result: dict[str, Any]) -> str:
+    """Deadline errors split into arithmetic and the "end of week" convention."""
+    tickets = SPLITS[result["split"]].tickets()
+    kinds = ["right", "convention", "arithmetic", "missing", "invented"]
+    lines = ["| method | " + " | ".join(kinds) + " | strict | either convention |",
+             "|---|" + "---|" * (len(kinds) + 2)]  # fmt: skip
+    for m in result["summary"]["methods"]:
+        runs = [_run(r) for r in result["runs"] if r["method"] == m]
+        k = classify(tickets, runs)
+        n = sum(k.values()) or 1
+        strict, either = k["right"] / n, (k["right"] + k["convention"]) / n
+        counts = " | ".join(str(k[x]) for x in kinds)
+        lines.append(f"| {m} | {counts} | {strict:.3f} | {either:.3f} |")
+    return "\n".join(lines)
+
+
+def _run(raw: dict[str, Any]) -> MethodRun:
+    """The promises of a saved run, enough to re-judge its deadlines."""
+
+    def snap(s: dict[str, Any]) -> Snapshot:
+        cp = s["checkpoint"]
+        checkpoint = Checkpoint(cp["seq"], datetime.fromisoformat(cp["at"]), Moment(cp["kind"]))
+        promises = tuple(
+            Promise(Side(p["side"]), p["seq"], p["action"],
+                    datetime.fromisoformat(p["due_at"]) if p["due_at"] else None,
+                    PromiseStatus(p["status"]), p["alertable"])
+            for p in s["promises"]
+        )  # fmt: skip
+        return Snapshot(checkpoint, promises)
+
+    return MethodRun(raw["method"], raw["ticket"], tuple(snap(s) for s in raw["snapshots"]),
+                     None)  # fmt: skip
 
 
 def prompt_growth(result: dict[str, Any]) -> tuple[str, str]:
@@ -113,6 +153,7 @@ def main() -> None:
         print(f"### {title}\n\n{table(s, keys)}\n")
     print(f"### Differences\n\n{differences(s, KEY)}\n")
     print(f"### Deadlines of found promises\n\n{deadline_kinds(s)}\n")
+    print(f"### Deadline errors: arithmetic or convention\n\n{conventions(result)}\n")
     print("### Totals\n")
     for m, rows in s["methods"].items():
         print(f"- {m}: ${rows['usd_total']:.4f} charged, {rows['failures']} tickets with a failure")

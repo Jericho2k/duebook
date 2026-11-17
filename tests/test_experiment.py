@@ -24,8 +24,10 @@ from duebook.bench.result import PromiseStatus, checkpoints
 from duebook.bench.run import fold, snapshots
 from duebook.bench.score import score_ticket
 from duebook.extract import Completion, Usage
+from duebook.temporal import WorkCalendar
 
 TICKETS = generate(seed=5, count=6)
+MSK = WorkCalendar().tz
 
 
 def oracle_run(t, name="event_memory"):
@@ -108,3 +110,32 @@ def test_the_writer_may_not_be_the_extracting_model(tmp_path):
     with pytest.raises(Exception, match="different model"):
         main(["--split", "dev", "--max-usd", "0", "--writer", "z-ai/glm-5.3-flash",
               "--results", str(tmp_path)])  # fmt: skip
+
+
+def test_an_end_of_week_answered_as_sunday_is_a_convention_and_other_misses_are_arithmetic():
+    from datetime import timedelta
+
+    from duebook.bench.deadlines import classify
+
+    t = next(
+        t for t in generate(seed=5, count=40)
+        if any("конца недели" in t.events[c.seq - 1].text for c in t.gold.commitments)
+    )  # fmt: skip
+    run = oracle_run(t)
+    assert classify([t], [run]) == {"right": len(t.gold.commitments), "convention": 0,
+                                    "arithmetic": 0, "missing": 0, "invented": 0}  # fmt: skip
+    week_end = {c.seq for c in t.gold.commitments if "конца недели" in t.events[c.seq - 1].text}
+
+    def moved(p):
+        if p.due_at is None:
+            return p
+        local = p.due_at.astimezone(MSK)
+        if p.seq in week_end:  # Friday -> the Sunday of the same week
+            return replace(p, due_at=p.due_at + timedelta(days=6 - local.weekday()))
+        return replace(p, due_at=p.due_at + timedelta(days=1))
+
+    end = run.snapshots[-1]
+    shifted = replace(run, snapshots=(replace(end, promises=tuple(map(moved, end.promises))),))
+    k = classify([t], [shifted])
+    assert k["convention"] == len(week_end)
+    assert k["arithmetic"] == sum(1 for c in t.gold.commitments if c.due_at) - len(week_end)
