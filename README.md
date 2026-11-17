@@ -186,60 +186,76 @@ sections from the bottom of that order and ends by naming them — "Не
 estimated pessimistically for Russian; pass a real tokenizer's counter as
 `count` when the exact figure matters.
 
-## The benchmark (first cut)
+## The benchmark
 
 ```bash
-python -m duebook.bench --seed 1 --tickets 200      # self-check, no model called
-python -m duebook.bench --model z-ai/glm-5.3-flash --writer <another model> --max-usd 0.5
+python -m duebook.bench --seed 1 --tickets 200        # self-check, no model called
+python -m duebook.bench.experiment --split dev --max-usd 1.0
+python -m duebook.bench.report results/test.json --long results/long.json
 ```
 
 `duebook.bench` builds simulated tickets the other way round: the events are
-planted first — a promise kept, a promise broken, a promise with no deadline,
-a fact changed, a contradiction, a failed fix suggested again after a handoff
-— and the conversation is written around them, so the labels are true by
-construction. Generation is seeded: the same seed gives the same tickets.
+planted first and the conversation is written around them, so the labels are
+true by construction. A ticket has 50-64 messages (200-230 with the `long`
+profile), at least two handoffs between operators, and runs over several
+days. Most of it is filler — status pings, thanks, "any news?" — as in a real
+long ticket. Planted: promises kept, broken, vague, still pending at the end,
+and the customer's own; a promise made early with a deadline days away; a
+plan changed by the company and an address changed by the customer; disputes
+over an amount (half later settled) and a product model; a fix that failed,
+suggested again by the operator who took the ticket over. Generation is
+seeded, and `SPLITS` fixes the seeds: `dev` (6 tickets) for tuning, `test`
+(20 tickets) run once for the reported numbers, `long` (2 tickets of 200+
+messages) for cost scaling.
 
-The scorer reports commitment precision, recall and F1 (a promise is
-identified by the message it was made in and the side that owes it), deadline
-accuracy (the exact instant, or correctly none), and the precision and recall
-of "promise broken" alerts at the end of the ticket.
+Every method answers in one format at every handoff and at the end
+(`bench.result`): promises with the owing side, source message, due instant
+and status; the facts it presents as current; failed steps; open disputes.
+One scorer (`bench.score`) judges them all: commitment precision/recall/F1,
+deadline accuracy, status accuracy, breach-alert precision/recall and false
+alerts per ticket, freshness error (the share of presented facts that are
+stale or contested), fact changes, disputes and failed steps. Facts are
+matched by planted value, not slot name, because methods name things
+differently.
 
-Each ticket carries the proposals a perfect extractor would make. Pushed
-through the real reducer they must score exactly 1.0 — that is the check that
-generator, reducer and scorer agree, and it is the only run made so far:
+Each ticket carries the proposals a perfect extractor would make; pushed
+through the real reducer they score exactly 1.0 on every measure:
 
     tickets: 200
-    commitments: precision 1.000  recall 1.000  F1 1.000  (tp 434, fp 0, fn 0)
-    deadline accuracy: 1.000 (434/434)
-    breach alerts: precision 1.000  recall 1.000  (tp 145, fp 0, fn 0)
+    at the end of each ticket:
+      commitments: precision 1.000  recall 1.000  F1 1.000  (tp 913, fp 0, fn 0)
+      deadline accuracy: 1.000 (913/913)
+      status accuracy: 1.000 (913/913)
+      breach alerts: precision 1.000  recall 1.000  (tp 304, fp 0, fn 0)
+    at every handoff and the end (697 checkpoints):
+      freshness error: 0.000 (stale 0, contested 0 of 1772 facts judged)
+      fact changes right: 1.000 (686/686)
+      disputes: precision 1.000  recall 1.000
+      failed steps: precision 1.000  recall 1.000
 
-Tickets must be written by a different model than the one that reads them.
-`--writer` rewrites the template text with another model while the planted
-spans are kept word for word (a rewrite that loses one is discarded), and the
-run refuses to start when writer and extractor are the same model.
+Tickets are rewritten by a different model than the one that reads them
+(`deepseek/deepseek-v4.1-flash`); a rewrite that loses a planted span, or
+turns into something other than one message, is discarded.
 
-Not there yet: no model has been measured on it, fact changes, contradictions
-and repeated fixes are labelled but not scored, and there are no full-context,
-rolling-summary or Mem0 baselines.
+The baselines (`bench.baselines`) read with the same model as the event
+memory: (a) the whole transcript at each checkpoint, (b) a summary updated
+after every event, (c) Mem0 (`pip install -e ".[mem0]"`). The comparison, its
+numbers with 95% bootstrap intervals, and its threats to validity are in
+[docs/results.md](docs/results.md); the raw record is under `results/`.
 
 ## Status
 
 Implemented, with tests: the domain core, the extractor, and the PostgreSQL
 event store with its alert outbox, scheduler and delivery worker, the
 per-ticket pipeline that ties them together, the handoff brief, slot
-normalisation, and a first cut of the benchmark. The
-extractor is unit-tested against recorded responses; `scripts/smoke.py` runs a
-short ticket through a real model and prints the proposals, the refusals, the
-final card and the charged cost.
+normalisation, the benchmark with its three baselines, and the experiment
+runner. `scripts/smoke.py` runs a short ticket through a real model and
+prints the proposals, the refusals, the final card and the charged cost.
 
-Checked against a real model so far: the extractor as it was before slot
-normalisation. The slot vocabulary added to the model's instructions, the
-ticket rewriter and the benchmark have only been run against recorded and
-scripted responses.
+Measured against a real model: the extractor and all three baselines on the
+dev, test and long splits (see docs/results.md).
 
-Next: a helpdesk adapter; measuring real models on the benchmark, scoring the
-remaining planted events, and the full-context, rolling-summary and Mem0
-baselines.
+Next: a helpdesk adapter; real tickets; more than one extracting model.
 
 ## Development
 
