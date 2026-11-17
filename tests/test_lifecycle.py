@@ -130,3 +130,37 @@ def test_next_wakeup_names_each_moment_something_becomes_due():
     assert first == FRIDAY_END - timedelta(hours=4)
     assert next_wakeup(t.card, first) == FRIDAY_END
     assert next_wakeup(t.card, FRIDAY_END) is None
+
+
+# ------------------------------------------------------- backfill cutoff ----
+
+
+def test_a_deadline_before_the_alert_cutoff_never_alerts_but_still_shows_as_breached():
+    t = refund_ticket()
+    (c,) = t.card.commitments
+    policy = AlertPolicy(alerts_since=FRIDAY_END + timedelta(days=30))
+    later = FRIDAY_END + timedelta(days=31)
+    assert status_at(c, later, policy) is Status.BREACHED
+    assert notices(t.card, later, policy) == []
+    assert notices(t.card, FRIDAY_END - timedelta(hours=1), policy) == []
+    assert next_wakeup(t.card, t.now, policy) is None
+
+
+def test_a_deadline_after_the_alert_cutoff_alerts_as_if_there_were_none():
+    t = refund_ticket()
+    policy = AlertPolicy(alerts_since=t.now)
+    assert next_wakeup(t.card, t.now, policy) == next_wakeup(t.card, t.now)
+    for moment in (FRIDAY_END - timedelta(hours=1), FRIDAY_END):
+        assert notices(t.card, moment, policy) == notices(t.card, moment)
+        assert notices(t.card, moment, policy)
+
+
+def test_the_cutoff_is_judged_by_the_deadline_not_by_when_it_becomes_due_soon():
+    t = refund_ticket()
+    # The warning window opened before the cutoff, but the deadline is after it:
+    # both alerts are still about something that can be acted on.
+    policy = AlertPolicy(alerts_since=FRIDAY_END - timedelta(hours=1))
+    assert [n.kind for n in notices(t.card, FRIDAY_END - timedelta(minutes=30), policy)] == [
+        NoticeKind.DUE_SOON
+    ]
+    assert next_wakeup(t.card, t.now, policy) == FRIDAY_END - timedelta(hours=4)

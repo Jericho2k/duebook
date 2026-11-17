@@ -132,6 +132,22 @@ class Outbox:
             )
         return cursor.rowcount == 1
 
+    def release(self, claim: Claim) -> bool:
+        """Give back a lease without attempting the send, e.g. when the worker is stopping.
+
+        The notice is available again at once and the claim does not count as
+        an attempt, so the next worker neither waits for the lease to go stale
+        nor backs off for a failure that never happened.
+        """
+        with self.conn.transaction():
+            cursor = self.conn.execute(
+                "update outbox set claim_token = null, claimed_by = null, claimed_at = null,"
+                " attempts = greatest(attempts - 1, 0)"
+                " where key = %s and claim_token = %s and delivered_at is null",
+                (claim.notice.key, claim.token),
+            )
+        return cursor.rowcount == 1
+
     def discard(self, claim: Claim, reason: str, now: datetime) -> bool:
         """Retire a notice that stopped being true before it was sent."""
         with self.conn.transaction():

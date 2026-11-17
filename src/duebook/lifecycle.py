@@ -54,6 +54,13 @@ class AlertPolicy:
     min_confidence: Confidence = Confidence.MEDIUM
     #: Whether to alert the assignee when the CUSTOMER misses their own deadline.
     include_customer: bool = False
+    #: No alert is raised about a deadline that fell before this instant. Set it
+    #: to the go-live moment: importing a ticket's history would otherwise
+    #: queue a breach alert for every promise broken long ago, a flood that
+    #: buries the alerts that can still be acted on. The commitment itself is
+    #: unaffected — it is still breached on the card and in the brief; only
+    #: the alert is withheld. None alerts on every deadline.
+    alerts_since: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +147,8 @@ def _alertable(c: Commitment, policy: AlertPolicy) -> bool:
     if c.state is not CommitmentState.OPEN or c.due is None:
         return False
     if c.due.confidence < policy.min_confidence:
+        return False
+    if policy.alerts_since is not None and c.due.deadline.due_at < policy.alerts_since:
         return False
     return policy.include_customer or c.owner is not Party.CUSTOMER
 

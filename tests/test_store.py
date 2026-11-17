@@ -5,7 +5,8 @@ import psycopg
 import pytest
 from helpers import ANNA, CAL, IVAN, START, persist, promise, story
 
-from duebook import Card, Reason
+from duebook import AlertPolicy, Card, Reason
+from duebook.brief import compose
 from duebook.proposals import AssertFact
 from duebook.reducer import OutOfOrder
 from duebook.store import Conflict, Store, connect
@@ -142,6 +143,27 @@ def test_an_alert_already_due_is_queued_in_the_events_own_transaction(store, con
     (row,) = conn.execute("select * from outbox").fetchall()
     assert row["kind"] == "breached" and row["recipient"] == IVAN.id
     assert row["commitment_id"] == ticket.card.commitments[0].id
+
+
+def test_an_imported_ticket_with_a_promise_broken_before_go_live_queues_nothing(conn):
+    ticket = promise("T-1")
+    go_live = START + timedelta(days=30)
+    store = Store(conn, CAL, AlertPolicy(alerts_since=go_live))
+    persist(store, ticket, now=go_live)
+    assert count(conn, "outbox") == 0
+    assert conn.execute("select wake_at from tickets").fetchone()["wake_at"] is None
+    assert store.wake(go_live + timedelta(days=1)) == 0 and count(conn, "outbox") == 0
+    # Not an alert, but still the truth about the promise.
+    brief = compose(store.card("T-1"), go_live, cal=CAL, policy=store.policy)
+    assert "ПРОСРОЧЕНО" in brief.text
+
+
+def test_a_promise_made_after_go_live_alerts_normally(conn):
+    ticket = promise("T-1")
+    store = Store(conn, CAL, AlertPolicy(alerts_since=START))
+    persist(store, ticket, now=START + timedelta(hours=3))
+    (row,) = conn.execute("select * from outbox").fetchall()
+    assert row["kind"] == "breached" and row["recipient"] == IVAN.id
 
 
 def test_the_ticket_row_records_when_its_alerts_next_change(store, conn):

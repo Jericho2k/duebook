@@ -129,6 +129,14 @@ The scheduler does not poll tickets. Each ticket row carries
 `lifecycle.next_wakeup` — the next instant at which its alerts change — and
 the scheduler sleeps until the earliest one.
 
+### Going live on old tickets
+
+Importing a ticket's history would queue a breach alert for every promise
+broken long ago. `AlertPolicy(alerts_since=go_live)` withholds alerts about
+deadlines before that moment: they are never derived and never scheduled. The
+promise is still breached on the card and in the brief — only the alert is
+suppressed.
+
 ## The pipeline: one event, all the way through
 
 ```python
@@ -149,6 +157,21 @@ When extraction fails the ticket is **held** at that event. No empty result
 is recorded for it and nothing after it is applied; the hold is stored with
 the error, the cost of the failed calls and a retry time that backs off. Other
 tickets are not affected.
+
+`handle` does both halves in the caller's time. The service splits them: the
+webhook only stores (`Store.ingest`), and processors apply what was stored:
+
+```python
+pipeline.process()  # one pass over tickets with new events or a retry due
+pipeline.advance(ticket_id)  # move one ticket as far as its stored events allow
+```
+
+Each ticket row counts the events ingested for it, and a processor writes back
+the count it saw before advancing, so the work list is a partial-index read
+and an event that lands mid-pass keeps its ticket on the list. A ticket
+waiting on a gap or backing off after a failure drops off the list until
+something changes. Several processors can run at once: they *try* the
+per-ticket lock and pass over a ticket another one holds.
 
 ## The handoff brief
 
@@ -222,12 +245,122 @@ Not there yet: no model has been measured on it, fact changes, contradictions
 and repeated fixes are labelled but not scored, and there are no full-context,
 rolling-summary or Mem0 baselines.
 
+## Running the service
+
+The service is five commands of one console script, configured only by
+environment variables, so one image runs every role:
+
+| Command | What it does | How many |
+|---|---|---|
+| `duebook migrate` | brings the schema up to date, then exits | once per deploy |
+| `duebook serve` | the HTTP API (uvicorn) | any |
+| `duebook process` | applies stored events: extract, reduce, persist | any |
+| `duebook schedule` | queues alerts as deadlines come due | one |
+| `duebook deliver` | sends queued alerts through the configured channel | any |
+
+`process`, `schedule` and `deliver` accept `--once` for a single pass. On
+SIGTERM or SIGINT each loop finishes the item in hand — the ticket being
+advanced, the alert being sent — and exits 0; a delivery worker hands the
+rest of its claimed batch straight back to the queue. A loop that loses the
+database logs it and reconnects.
+
+### With Docker
+
+```bash
+cp .env.example .env   # set the model key, secrets, alert channel
+docker compose up -d --build
+docker compose up -d --scale processor=3   # processors share the work safely
+```
+
+`docker-compose.yml` runs PostgreSQL 16, the migrations, the API on port
+8000, a processor, a scheduler and a delivery worker.
+
+### Without Docker
+
+```bash
+pip install -e ".[service]"
+export DUEBOOK_DATABASE_URL=postgresql://duebook:duebook@localhost:5432/duebook
+export DUEBOOK_OPENROUTER_API_KEY=...
+duebook migrate
+duebook serve &
+duebook process &
+duebook schedule &
+duebook deliver &
+```
+
+The core library does not need the web stack: `pip install duebook[store]`
+is enough for the event store, `[service]` adds FastAPI, uvicorn and the
+connection pool.
+
+### Endpoints
+
+| Method and path | Returns |
+|---|---|
+| `POST /events` | 202 `{"ticket_id", "seq", "new"}` once the event is stored; 409 when a different event holds that position; 422 when the body is not a valid event |
+| `GET /tickets/{id}/card` | the card in the codec's JSON, and `commitment_status`: each commitment's status now |
+| `GET /tickets/{id}/card?as_of=<seq>` | the card replayed from the log up to that event, with statuses as of that event's time |
+| `GET /tickets/{id}/brief?budget=<tokens>&format=text\|json` | the handoff brief; as JSON, its sections and lines, each line with its sources (event id, seq, author, side, quote) |
+| `GET /tickets/{id}/status` | last applied seq, how many stored events wait, and the hold (error, attempts, retry time) if any |
+| `GET /health` | database reachable, pending alerts, held tickets; 503 when the database is not |
+
+`POST /events` takes one event in the format `duebook.store.codec` stores:
+
+```json
+{"type": "MessagePosted", "id": "msg-8812", "ticket_id": "T-1", "seq": 3,
+ "at": "2027-01-11T10:15:00+03:00",
+ "author": {"type": "Actor", "id": "agent-ivan", "role": "agent", "name": "Иван"},
+ "text": "Перезвоню вам через 2 часа.", "public": true}
+```
+
+`AssigneeChanged` (`previous`, `current`) and `StatusChanged` (`previous`,
+`current`) are the other kinds. `seq` is the ticket-local order and the
+idempotency key; events may arrive in any order and more than once. The
+endpoint only stores — it never waits for the model — so a helpdesk is
+answered at once.
+
+When `DUEBOOK_WEBHOOK_SECRET` is set the raw body must be signed:
+`X-Duebook-Signature: sha256=<hex HMAC-SHA256 of the body>`. When
+`DUEBOOK_API_KEY` is set the read endpoints need `Authorization: Bearer
+<key>`; `/health` is open.
+
+Alerts go either to stdout as JSON lines (`log`) or to a URL (`webhook`): a
+POST of the notice as JSON with `Idempotency-Key: <notice key>`, signed with
+the same scheme when `DUEBOOK_ALERT_SECRET` is set. Any answer but 2xx is
+retried with backoff, and the receiver must treat the key as an idempotency
+key.
+
+### Environment variables
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DUEBOOK_DATABASE_URL` | — | PostgreSQL connection string (required) |
+| `DUEBOOK_OPENROUTER_API_KEY` | — | model key; required by `process` |
+| `DUEBOOK_OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | any OpenAI-compatible endpoint |
+| `DUEBOOK_OPENROUTER_MODEL` | `z-ai/glm-5.3-flash` | the model that reads messages |
+| `DUEBOOK_WEBHOOK_SECRET` | empty: unsigned | HMAC secret for `POST /events` |
+| `DUEBOOK_API_KEY` | empty: open | bearer key for the read endpoints |
+| `DUEBOOK_ALERT_CHANNEL` | `log` | `log` or `webhook` |
+| `DUEBOOK_ALERT_URL` | — | where `webhook` alerts are POSTed |
+| `DUEBOOK_ALERT_SECRET` | empty: unsigned | HMAC secret for outgoing alerts |
+| `DUEBOOK_TIMEZONE` | `Europe/Moscow` | the working calendar's zone; keep it fixed, cards are replayed under it |
+| `DUEBOOK_ALERTS_SINCE` | none | ISO 8601 time with offset; no alerts about earlier deadlines |
+| `DUEBOOK_WORKER_NAME` | role@host:pid | this process's name in outbox claims |
+| `DUEBOOK_PROCESS_IDLE_SECONDS` | 1 | processor sleep when there is no work |
+| `DUEBOOK_PROCESS_BATCH` | 20 | tickets per processor pass |
+| `DUEBOOK_SCHEDULE_MAX_IDLE_SECONDS` | 30 | longest scheduler sleep |
+| `DUEBOOK_DELIVER_IDLE_SECONDS` | 5 | delivery worker sleep when the queue is empty |
+| `DUEBOOK_DELIVER_BATCH` | 10 | alerts claimed per pass |
+| `DUEBOOK_HOST`, `DUEBOOK_PORT` | `0.0.0.0`, 8000 | where `serve` listens |
+| `DUEBOOK_POOL_MIN`, `DUEBOOK_POOL_MAX` | 1, 10 | the API's connection pool |
+
 ## Status
 
 Implemented, with tests: the domain core, the extractor, and the PostgreSQL
 event store with its alert outbox, scheduler and delivery worker, the
 per-ticket pipeline that ties them together, the handoff brief, slot
-normalisation, and a first cut of the benchmark. The
+normalisation, a first cut of the benchmark, and the service around them: the
+HTTP API, the processor, scheduler and delivery loops, log and webhook alert
+channels, and an end-to-end test from webhook to delivered alert. The
 extractor is unit-tested against recorded responses; `scripts/smoke.py` runs a
 short ticket through a real model and prints the proposals, the refusals, the
 final card and the charged cost.
@@ -236,6 +369,10 @@ Checked against a real model so far: the extractor as it was before slot
 normalisation. The slot vocabulary added to the model's instructions, the
 ticket rewriter and the benchmark have only been run against recorded and
 scripted responses.
+
+Each service command has been run against a local PostgreSQL with uvicorn and
+a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
+checked with `docker compose config` but not yet built or started.
 
 Next: a helpdesk adapter; measuring real models on the benchmark, scoring the
 remaining planted events, and the full-context, rolling-summary and Mem0
@@ -251,8 +388,8 @@ python -m venv .venv && .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest -q
 ```
 
-The store tests need a PostgreSQL database they may wipe, and are skipped
-without one:
+The store, API and service tests need a PostgreSQL database they may wipe,
+and are skipped without one:
 
 ```bash
 TEST_DATABASE_URL=postgresql://user:password@localhost:5432/duebook_test .venv/bin/pytest -q
