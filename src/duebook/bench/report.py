@@ -11,17 +11,13 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..events import Side
 from .deadlines import classify
-from .experiment import table
+from .experiment import run_of, table
 from .figures import line_chart
 from .generate import SPLITS, CloseCase
-from .methods import MethodRun
-from .result import Checkpoint, Moment, Promise, PromiseStatus, Snapshot
 
 ACCURACY = [
     "commitment_precision", "commitment_recall", "commitment_f1", "deadline_accuracy",
@@ -155,7 +151,7 @@ def conventions(result: dict[str, Any]) -> str:
     lines = ["| method | " + " | ".join(kinds) + " | strict | either convention |",
              "|---|" + "---|" * (len(kinds) + 2)]  # fmt: skip
     for m in result["summary"]["methods"]:
-        runs = [_run(r) for r in result["runs"] if r["method"] == m]
+        runs = [run_of(r) for r in result["runs"] if r["method"] == m]
         if not runs:  # a replay, not a run: its deadlines are the run's
             continue
         k = classify(tickets[: len(runs)], runs)
@@ -164,24 +160,6 @@ def conventions(result: dict[str, Any]) -> str:
         counts = " | ".join(str(k[x]) for x in kinds)
         lines.append(f"| {m} | {counts} | {strict:.3f} | {either:.3f} |")
     return "\n".join(lines)
-
-
-def _run(raw: dict[str, Any]) -> MethodRun:
-    """The promises of a saved run, enough to re-judge its deadlines."""
-
-    def snap(s: dict[str, Any]) -> Snapshot:
-        cp = s["checkpoint"]
-        checkpoint = Checkpoint(cp["seq"], datetime.fromisoformat(cp["at"]), Moment(cp["kind"]))
-        promises = tuple(
-            Promise(Side(p["side"]), p["seq"], p["action"],
-                    datetime.fromisoformat(p["due_at"]) if p["due_at"] else None,
-                    PromiseStatus(p["status"]), p["alertable"])
-            for p in s["promises"]
-        )  # fmt: skip
-        return Snapshot(checkpoint, promises)
-
-    return MethodRun(raw["method"], raw["ticket"], tuple(snap(s) for s in raw["snapshots"]),
-                     None)  # fmt: skip
 
 
 def prompt_growth(result: dict[str, Any]) -> tuple[str, str]:

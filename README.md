@@ -293,8 +293,9 @@ estimated pessimistically for Russian; pass a real tokenizer's counter as
 python -m duebook.bench --seed 1 --tickets 200        # self-check, no model called
 python -m duebook.bench --split dev3                 # self-check a fixed split
 python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
+python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.02 \
+    --replay results/round2/dev2-4.json   # recorded proposals, only the verifier is asked
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
-python -m duebook.bench.round3 --max-usd 0.2   # round 3: dev only, configurations A, B, C
 python -m duebook.bench.review --split test2  # regenerate the human spot-check
 ```
 
@@ -371,7 +372,13 @@ command uses archived text when available and generated text otherwise.
 The experiment runner keeps every run inside a session budget: answers are
 cached on disk, every run logs its charge to `spend.jsonl`, and a run first
 projects its cost from a sample and refuses to start if it would not fit. A
-method too expensive for every ticket runs on a disclosed subset.
+method too expensive for every ticket runs on a disclosed subset. A round is
+a configuration of the one runner: the event memory runs as the product ships
+it, with the verifier, and the same proposals are folded again with the
+verdicts ignored and with the guards off. `--replay` folds a recorded run's
+proposals instead of calling the extractor, and `--frozen` scores a record's
+other methods again, so frozen baselines are never run twice. Finished
+tickets are journalled, so an interrupted run resumes without paying twice.
 
 The baselines (`bench.baselines`) read with the same model as the event
 memory: (a) the whole transcript at each checkpoint, (b) a summary updated

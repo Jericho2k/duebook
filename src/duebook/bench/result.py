@@ -197,3 +197,23 @@ def from_card(
             Dispute(c.slot, tuple(f.value for f in sides), tuple(f.source.seq for f in sides))
         )
     return Snapshot(checkpoint, promises, facts, failed, tuple(disputes), error)
+
+
+def snapshot_of(raw: dict) -> Snapshot:
+    """A snapshot read back from a saved run, so it can be scored again without a model."""
+    cp = raw["checkpoint"]
+    when = lambda x: datetime.fromisoformat(x) if x else None  # noqa: E731
+    promises = tuple(
+        Promise(Side(p["side"]), p["seq"], p["action"], when(p["due_at"]),
+                PromiseStatus(p["status"]), p["alertable"], p.get("closed_seq"),
+                tuple(p.get("suggested", ())))
+        for p in raw["promises"]
+    )  # fmt: skip
+    return Snapshot(
+        Checkpoint(cp["seq"], datetime.fromisoformat(cp["at"]), Moment(cp["kind"])),
+        promises,
+        tuple(FactItem(**f) for f in raw["facts"]),
+        tuple(FailedStep(**f) for f in raw["failed_steps"]),
+        tuple(Dispute(d["topic"], tuple(d["values"]), tuple(d["seqs"])) for d in raw["disputes"]),
+        raw["error"],
+    )

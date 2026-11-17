@@ -344,11 +344,29 @@ approves this budget before anyone runs it.**
 | **every method on all 20 tickets** | | **≈ $4.4** | **≈ $5.6** |
 | round 2's shape: rolling summary and Mem0 on the first 4 | | ≈ $1.2 | ≈ $1.6 |
 
+### Reproducing round 3
+
+Round 3 was run by its own module, since folded into the experiment runner:
+`event_memory` is now B's configuration (reasoning off, guards, verifier),
+`event_memory_no_verifier` is C (the same proposals, verdicts ignored), and
+`event_memory_reasoning` is A.
+
 ```bash
-python -m duebook.bench.experiment --split test3 --results results/round3 \
-    --session-cap <approved> --max-usd <approved> --sample-events 20 \
-    [--subset rolling_summary=4,mem0=4]       # once, after approval
+# Every number above, scored again from the saved record: no model call.
+python -m duebook.bench.experiment --split dev2 --methods "" --max-usd 0 \
+    --frozen results/round3/dev2.json --results /tmp/r3 --out /tmp/r3/dev2.json
+# B and C from round 2's frozen proposals: 31 verifier calls ($0.003).
+python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.02 \
+    --replay results/round2/dev2-4.json --results /tmp/r3 --out /tmp/r3/bc.json
+# The stress runs: the same with --replay results/round2/dev2-{1,2,3}.json.
+# A, read again ($0.10 uncached).
+python -m duebook.bench.experiment --split dev2 --methods event_memory_reasoning \
+    --max-usd 0.15 --results /tmp/r3 --out /tmp/r3/a.json
 ```
+
+The first command reproduces every value of round 3's summary exactly; the
+second gave B $0.0117 and C $0.0109 a ticket and 31 "yes" verdicts, all true,
+when it was checked on 2026-11-17.
 
 ### Threats to validity (round 3)
 
@@ -823,6 +841,10 @@ python -m duebook.bench.experiment --split test2 --max-usd 1.07 --sample-events 
     --subset rolling_summary=4,mem0=4 --workers 12                              # refuses to run twice
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
 ```
+
+Round 2's event memory had no verifier. Since round 4, `event_memory` runs
+with it, and round 2's configuration is reported beside it as
+`event_memory_no_verifier`.
 
 The rewritten text is in `results/round2/tickets/`; `results/round2/
 writer-trial.json` holds the writer trial; `results/round2/spend.jsonl` every

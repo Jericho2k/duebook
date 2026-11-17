@@ -7,21 +7,27 @@ import pytest
 from test_baselines import Scripted
 
 from duebook.bench import MAIN, Fate, Oracle, generate
-from duebook.bench.baselines import FullContext
+from duebook.bench.baselines import FullContext, RollingSummary
 from duebook.bench.experiment import (
     GROWTH,
     METRICS,
+    audit,
     guard_effects,
+    load_runs,
     main,
     project,
     record,
+    recorded_proposals,
+    refolded,
     rewritten,
+    run_all,
     sample_of,
+    saved,
     spent_before,
     summarise,
     table,
     to_json,
-    unguarded,
+    verdict_table,
 )
 from duebook.bench.generate import SPLITS, CloseCase
 from duebook.bench.meter import Ledger, Tally
@@ -97,12 +103,28 @@ def test_a_wrong_close_case_outcome_lowers_only_its_own_case_metric(kind):
         assert rows["full_context"][metric.value]["value"] == float(metric is not kind)
 
 
-def test_a_record_holds_what_the_method_said_and_is_plain_json():
+def test_a_record_holds_what_the_method_said_but_not_its_raw_answers():
     t = TICKETS[0]
     run = FullContext(Scripted(t), Ledger()).run(t)
     rec = record(run, score_ticket(t, run.snapshots))
     assert json.loads(json.dumps(to_json(rec)))["snapshots"][0]["checkpoint"]["seq"] > 0
-    assert rec["detail"]["answers"] and rec["score_end"]["checkpoints"] == 1
+    assert run.detail["answers"] and "answers" not in rec["detail"]
+    assert rec["score_end"]["checkpoints"] == 1
+    summary = RollingSummary(Scripted(t), Ledger()).run(t)
+    kept = record(summary, score_ticket(t, summary.snapshots))["detail"]
+    # What the memory held when it was last asked, without the answer.
+    assert kept["end"] == {"seq": t.events[-1].seq, "summary": summary.detail["checkpoints"][-1]
+                           ["summary"]} and "checkpoints" not in kept  # fmt: skip
+
+
+def test_a_saved_run_reads_back_and_scores_as_it_did(tmp_path):
+    runs = [FullContext(Scripted(t), Ledger()).run(t) for t in TICKETS[:2]]
+    path = tmp_path / "result.json"
+    records = [record(r, score_ticket(TICKETS[i], r.snapshots)) for i, r in enumerate(runs)]
+    path.write_text(json.dumps({"runs": records}))
+    again = load_runs(path)
+    assert [r.snapshots for r in again] == [r.snapshots for r in runs]
+    assert [r.usage for r in again] == [r.usage for r in runs]
 
 
 def test_tickets_are_rewritten_once_and_then_read_from_the_cache(tmp_path):
@@ -242,7 +264,8 @@ def test_the_guards_are_measured_by_folding_the_same_proposals_without_them():
                                "refused": [[r.seq, r.reason, r.kind, r.target_seq]
                                            for r in folded.refused]})  # fmt: skip
     guarded = score_ticket(t, run.snapshots).end
-    loose = score_ticket(t, unguarded(run, t, WorkCalendar()).snapshots).end
+    unguarded = refolded(run, t, WorkCalendar(), "event_memory_unguarded")
+    loose = score_ticket(t, unguarded.snapshots).end
     assert guarded.closes_false == 0 and loose.closes_false == 1
     assert loose.alerts.fn == guarded.alerts.fn + 1
     effects = guard_effects([t], [run])
@@ -250,7 +273,7 @@ def test_the_guards_are_measured_by_folding_the_same_proposals_without_them():
     assert effects["by_reason"] == {"target_mismatch": {"false_close_prevented": 1}}
 
 
-# ---------------------------------------------------------------- round 3 ----
+# ------------------------------------------- the verifier and the records ----
 
 
 class Judge:
@@ -258,32 +281,76 @@ class Judge:
 
     model = "stub/judge"
 
+    def __init__(self):
+        self.calls = 0
+
     def complete_json(self, messages, schema, name="output"):
+        self.calls += 1
         text = messages[-1]["content"].split("Text:\n", 1)[1]
         answer = {"verdict": "yes", "evidence_quote": text}
         return Completion(answer, Usage(1, 400, 30, 0, 1e-5))
 
 
-def test_round_three_replays_recorded_proposals_and_audits_every_verdict():
-    from duebook.bench.round3 import audit, replay_b, replay_c, verdict_table
+def _recorded(proposals):
+    from duebook.bench.methods import Recorded
 
+    return Recorded(tuple(proposals), Usage(170, 300_000, 12_000, 270_000, 0.01), Usage(),
+                    1.0, 0.0, {"DeepInfra": 170})  # fmt: skip
+
+
+def test_recorded_proposals_are_folded_again_and_only_unverified_closes_go_to_the_verifier(
+    tmp_path,
+):
     cal = WorkCalendar()
     t = MAIN_TICKETS[0]
-    rec = {"proposals": list(t.proposals), "usage": Usage(170, 300_000, 12_000, 270_000, 0.01),
-           "seconds": 1.0, "providers": {"DeepInfra": 170}}  # fmt: skip
-    c = replay_c(t, rec, cal)
-    assert score_ticket(t, c.snapshots).end.commitments.f1 == 1.0 and c.usage == rec["usage"]
-    ledger = Ledger(cap_usd=1.0)
-    b = replay_b(t, rec, Judge(), ledger, cal)
-    verifier = b.detail["verifier"]
+    judge, ledger = Judge(), Ledger(cap_usd=1.0)
+    run = EventMemory(Priced(), ledger, verifier=judge,
+                      recorded={t.ticket_id: _recorded(t.proposals)}).run(t)  # fmt: skip
     destructive = sum(1 for ps in t.proposals for p in ps if getattr(p, "target_quote", ""))
-    assert verifier["usage"]["calls"] == destructive > 0 and ledger.spent.calls == destructive
+    assert judge.calls == destructive > 0 and ledger.spent.calls == destructive
     # The extraction half costs what it was charged; the verifier is added.
-    assert b.usage.calls == 170 + destructive
-    rows = audit(t, [decode_proposals(p) for p in b.detail["proposals"]], cal)
+    assert run.usage.calls == 170 + destructive
+    assert score_ticket(t, run.snapshots).end.commitments.f1 == 1.0
+    rows = audit(t, [decode_proposals(p) for p in run.detail["proposals"]], cal)
     assert len(rows) == destructive and {r["truth"] for r in rows} == {"true"}
-    assert all(r["admitted"] for r in rows)
     summary = verdict_table(rows)
     assert summary["by_verdict"] == {"yes": {"true": destructive}} and summary["errors"] == 0
     # The planted closes need no rescue: the words alone admit them.
     assert summary["rescued"] == {}
+    # Read back from its record, the run asks nothing: every close has its verdict.
+    path = tmp_path / "result.json"
+    path.write_text(json.dumps({"runs": [record(run, score_ticket(t, run.snapshots))]}))
+    again = EventMemory(Priced(), Ledger(cap_usd=0.0), verifier=Judge(),
+                        recorded=recorded_proposals(path)).run(t)  # fmt: skip
+    assert again.snapshots == run.snapshots and again.usage == run.usage
+
+
+def test_without_the_verifier_the_same_proposals_cost_only_their_extraction():
+    t = MAIN_TICKETS[0]
+    run = EventMemory(Priced(), Ledger(), verifier=Judge(),
+                      recorded={t.ticket_id: _recorded(t.proposals)}).run(t)  # fmt: skip
+    alone = refolded(run, t, WorkCalendar(), "event_memory_no_verifier")
+    assert alone.usage == _recorded(t.proposals).extraction
+    assert alone.ingest_seconds == pytest.approx(1.0)
+    assert all(p.verification is not None
+               for ps in run.detail["proposals"] for p in decode_proposals(ps)
+               if getattr(p, "target_quote", ""))  # fmt: skip
+
+
+def test_an_interrupted_run_resumes_from_its_journal_and_reruns_only_what_failed(tmp_path):
+    class Counting:
+        name, calls = "full_context", []
+
+        def run(self, ticket):
+            self.calls.append(ticket.ticket_id)
+            return FullContext(Scripted(ticket), Ledger()).run(ticket)
+
+    journal = tmp_path / "journal.jsonl"
+    finished = FullContext(Scripted(TICKETS[0]), Ledger()).run(TICKETS[0])
+    failed = replace(FullContext(Scripted(TICKETS[1]), Ledger()).run(TICKETS[1]), failure="reset")
+    journal.write_text("".join(json.dumps(saved(r)) + "\n" for r in (finished, failed)))
+    method = Counting()
+    runs = run_all([method], TICKETS[:3], 2, journal=journal)
+    assert sorted(method.calls) == [TICKETS[1].ticket_id, TICKETS[2].ticket_id]
+    assert runs[0].snapshots == finished.snapshots
+    assert len(load_runs(journal)) == 4
