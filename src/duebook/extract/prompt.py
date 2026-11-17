@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from ..card import Card
+from ..card import Card, StepOutcome
 from ..events import MessagePosted
 from ..lifecycle import status_at
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
@@ -40,8 +40,15 @@ is broken, current state of the problem).
 the same thing, use exactly that slot. Otherwise use one from this list when \
 it fits: {slots}. Only when none fits, make a short lowercase English key in \
 the same "object.attribute" form. Never use two slots for one thing.
-- "change": true only when the message says the value CHANGED ("I've upgraded \
-you to Pro"). false when it just states or disputes a value.
+- When the message gives a different value for something the record already \
+holds — even from the other side, or "according to our records" — use the \
+record's slot for it. A disagreement is only visible if both values share a \
+slot.
+- "change": true only when the speaker says the value was MADE different \
+("I've upgraded you to Pro", "I've moved, my new address is..."). false when \
+the message states a value, reports what records show, or disputes what the \
+other side said ("according to our data you were charged 2900", "we shipped \
+model X") — those are not changes.
 
 commitments — a party promises a future action.
 - "owner": "agent" for a personal promise ("I will call you back"), "company" \
@@ -49,7 +56,9 @@ for a promise on the company's behalf ("we will refund you"), "customer" for \
 the customer's own promise ("I'll send the screenshot").
 - Only the speaker can promise. A customer writing "you promised a refund" is \
 NOT a company commitment — report nothing for it.
-- A vague intention ("we'll look into it") is a commitment without a deadline.
+- A vague intention ("we'll look into it") is a commitment without a deadline. \
+A status report ("your request is being processed", "we are working on it") \
+is not a promise.
 - "due_quote": the deadline phrase copied from the message, or null.
 - "due": the deadline in structured form. NEVER compute a calendar date \
 yourself; describe what was said:
@@ -65,7 +74,9 @@ field that does not apply to null.
 - "supersedes": the id of an unresolved commitment this one replaces (a new \
 date for the same promise), else null.
 
-resolved — the message says a listed commitment's action WAS DONE. Use its id.
+resolved — the message says a listed commitment's action WAS DONE, including \
+thanks that imply it ("thanks for calling back", "the money arrived"). Use its \
+id.
 cancelled — the message says a listed commitment is no longer needed.
 
 steps — a fix or diagnostic action that was suggested or tried. "outcome" is \
@@ -96,7 +107,35 @@ class Rendered:
     aliases: dict[str, str] = field(default_factory=dict)
 
 
-def render_card(card: Card, now: datetime, cal: WorkCalendar) -> Rendered:
+@dataclass(frozen=True, slots=True)
+class Bound:
+    """How much of the card the model is shown on a long ticket.
+
+    The card itself is never cut — this bounds only the prompt. What the model
+    can act on is always shown in full: every unresolved commitment (it may be
+    resolved, cancelled or renegotiated), every pending step (its outcome may
+    be reported) and every fact a dispute rests on. What is capped is history
+    the model only reads: steps whose outcome is known, the oldest open
+    questions, facts beyond the most recent. A capped list says how many items
+    it leaves out, so the model is not told the record is complete when it is
+    not.
+
+    Hiding an item removes its handle from the prompt, so the model cannot
+    refer to it; the reducer's rules are unchanged, and a reference to a
+    hidden handle is refused as an unknown target like any other.
+    """
+
+    #: Current facts shown, most recent first; disputed ones always.
+    facts: int = 12
+    #: Steps with a known outcome shown, most recent first; pending ones always.
+    settled_steps: int = 6
+    #: Open questions shown, most recent first.
+    questions: int = 6
+
+
+def render_card(
+    card: Card, now: datetime, cal: WorkCalendar, bound: Bound | None = None
+) -> Rendered:
     """The record so far, with short handles for anything the model may refer to."""
     aliases: dict[str, str] = {}
     lines = [
@@ -104,9 +143,16 @@ def render_card(card: Card, now: datetime, cal: WorkCalendar) -> Rendered:
         f"Assignee: {card.assignee or 'nobody'} | Status: {card.status or 'unknown'}",
     ]
 
-    facts = card.current_facts()
+    facts = list(card.current_facts())
+    hidden_facts = 0
+    if bound is not None and len(facts) > bound.facts:
+        disputed = {i for c in card.open_contradictions() for i in c.fact_ids}
+        keep = {f.id for f in sorted(facts, key=lambda f: f.valid_from)[-bound.facts :]}
+        shown = [f for f in facts if f.id in keep or f.id in disputed]
+        hidden_facts, facts = len(facts) - len(shown), shown
     lines.append("Facts:" if facts else "Facts: none")
     lines += [f"- {f.slot} = {f.value} (said by {f.source.side.value})" for f in facts]
+    lines += _more(hidden_facts, "older facts")
 
     commitments = [c for c in card.commitments if c.unresolved]
     lines.append("Unresolved commitments:" if commitments else "Unresolved commitments: none")
@@ -119,20 +165,39 @@ def render_card(card: Card, now: datetime, cal: WorkCalendar) -> Rendered:
             due = f" | due {local:%Y-%m-%d %H:%M}"
         lines.append(f"- {alias} [{c.owner.value}, {status_at(c, now).value}] {c.action}{due}")
 
-    lines.append("Steps:" if card.steps else "Steps: none")
-    for number, s in enumerate(card.steps, 1):
+    steps = list(enumerate(card.steps, 1))
+    hidden_steps = 0
+    if bound is not None:
+        settled = [n for n, s in steps if s.outcome is not StepOutcome.PENDING]
+        keep = set(settled[-bound.settled_steps :]) if bound.settled_steps else set()
+        shown = [(n, s) for n, s in steps if s.outcome is StepOutcome.PENDING or n in keep]
+        hidden_steps, steps = len(steps) - len(shown), shown
+    lines.append("Steps:" if steps else "Steps: none")
+    for number, s in steps:
+        # Handles keep their position in the full list, so a step is called
+        # the same whether or not older ones are shown.
         alias = f"S{number}"
         aliases[alias] = s.id
         lines.append(f"- {alias} [{s.outcome.value}] {s.action}")
+    lines += _more(hidden_steps, "earlier steps with a known outcome")
 
     questions = [q for q in card.questions if q.open]
+    hidden_questions = 0
+    if bound is not None and len(questions) > bound.questions:
+        hidden_questions = len(questions) - bound.questions
+        questions = questions[hidden_questions:]
     lines.append("Open questions:" if questions else "Open questions: none")
-    for number, q in enumerate(questions, 1):
+    for number, q in enumerate(questions, hidden_questions + 1):
         alias = f"Q{number}"
         aliases[alias] = q.id
         lines.append(f"- {alias} [waiting on {q.waiting_on.value}] {q.text}")
+    lines += _more(hidden_questions, "older open questions")
 
     return Rendered("\n".join(lines), aliases)
+
+
+def _more(count: int, what: str) -> list[str]:
+    return [f"- (+{count} {what} not shown)"] if count else []
 
 
 def render_message(event: MessagePosted, cal: WorkCalendar) -> str:
@@ -151,9 +216,13 @@ def render_message(event: MessagePosted, cal: WorkCalendar) -> str:
 
 
 def build_messages(
-    card: Card, event: MessagePosted, cal: WorkCalendar, vocab: Vocabulary = DEFAULT_VOCABULARY
+    card: Card,
+    event: MessagePosted,
+    cal: WorkCalendar,
+    vocab: Vocabulary = DEFAULT_VOCABULARY,
+    bound: Bound | None = None,
 ) -> tuple[list[dict[str, str]], dict[str, str]]:
-    rendered = render_card(card, event.at, cal)
+    rendered = render_card(card, event.at, cal, bound)
     user = f"{rendered.text}\n\n{render_message(event, cal)}"
     return (
         [{"role": "system", "content": system_prompt(vocab)}, {"role": "user", "content": user}],

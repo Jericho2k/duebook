@@ -1,0 +1,7 @@
+{"what": "rewrite dev+test+long (second time, fixed rewriter)", "usd": 0.06544189700000012}
+{"at": "2026-11-17T12:25:25.846424+00:00", "split": "long", "methods": "event_memory", "tickets": 1, "usd": 0.04978019099999999}
+{"at": "2026-11-17T12:33:52.318703+00:00", "split": "dev", "methods": "event_memory,full_context,rolling_summary,mem0", "tickets": 6, "usd": 0.37444498499999995}
+{"at": "2026-11-17T12:43:20.546837+00:00", "split": "dev", "methods": "event_memory,full_context,rolling_summary,mem0", "tickets": 6, "usd": 0.41269775399999997}
+{"at": "2026-11-17T12:49:29.353367+00:00", "split": "test", "methods": "event_memory,full_context,rolling_summary,mem0", "tickets": 20, "usd": 1.3488597305000003}
+{"at": "2026-11-17T13:01:47.969306+00:00", "split": "long", "methods": "event_memory,full_context,rolling_summary,mem0", "tickets": 2, "usd": 0.4761918110000003}
+{"what": "not logged by a run: live smoke tests of Mem0 and the writer, the first rewrite (discarded for the dialogue problem), a dev replay of the extractor; difference between the OpenRouter key counter and the logged runs", "usd": 0.0687}
