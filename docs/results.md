@@ -17,7 +17,7 @@ candidate; see the survey). **Only dev2 was run.** Raw record:
 
 | | |
 |---|---|
-| Split | `dev2`, the text round 2 rewrote (`results/round3b/tickets/dev2.json` links to it) |
+| Split | `dev2`, the text round 2 rewrote (`results/round2/tickets/dev2.json`) |
 | Graphiti | the **first 2 tickets** (M0000, M0001; 175 and 183 events), as the budget allowed: projected at $0.59 upper for 2 tickets, $1.07 for 4 |
 | Event memory | all 4 tickets, round 2's configuration (C), as the reference; the differences below are on Graphiti's 2 tickets |
 | Reader | `deepseek/deepseek-v4.1-flash`, reasoning off, locked to DeepInfra (`PRESETS`), for every call Graphiti makes and for the checkpoint answer |
@@ -27,10 +27,12 @@ candidate; see the survey). **Only dev2 was run.** Raw record:
 | Checkpoint | the ticket's whole graph — every fact with its source messages and validity window, every entity summary — and the shared question; no search |
 | Charged | $0.375: $0.0224 for the projection sample, $0.3500 for the run, $0.0027 for a 4-event smoke test before it; a replay from the response cache cost $0 and reproduced every answer |
 
-`results/round3b/dev2.json` is the run. `dev2-replay.json` is the same run
-replayed from the cache, identical in every answer and score, which also
-keeps the text Graphiti's graph showed the model at each checkpoint; its
-timings are the cache's, not the model's.
+`results/round3b/dev2.json` is the run. The run as made did not keep the
+text Graphiti's graph showed the model; a replay from the response cache,
+identical in every answer and score, did. Of that replay only Graphiti's
+graph at the end of each ticket is kept, in the last checkpoint of its runs
+(`listing`): it holds every fact with its validity window, closed ones
+included, which is what the dispute finding below rests on.
 
 ### Dev comparison (Graphiti's 2 tickets)
 
@@ -131,7 +133,10 @@ python -m duebook.bench.experiment --split dev2 --methods event_memory,graphiti 
 `falkordblite` ships its own `redis-server` and FalkorDB module and starts
 one per ticket in a temporary directory; nothing else needs installing.
 Answers and embeddings are cached under `.cache/responses/`, so the run
-replays without a model call on the machine that made it.
+replays without a model call on the machine that made it. Round 3b's event
+memory had no verifier; `event_memory` now has it, and round 3b's reference is
+reported beside it as `event_memory_no_verifier`. The tickets are read from
+`results/round2/tickets/`, where the split's round keeps them.
 
 ## Round 3 (dev only): verifier and reasoning
 
