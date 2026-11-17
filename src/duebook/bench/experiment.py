@@ -9,7 +9,7 @@ Steps:
    text is rewritten by the writer model — never the extracting one. The
    rewritten text is cached under ``results/tickets/`` so every method, and
    every later run, reads exactly the same words.
-2. **Methods.** The event memory and the three baselines read each ticket;
+2. **Methods.** The event memory and the baselines read each ticket;
    (method, ticket) pairs run in parallel threads.
 3. **Scores.** Every snapshot is scored; per method, metrics are
    micro-averaged over tickets with 95% bootstrap confidence intervals
@@ -77,7 +77,7 @@ ROUND2 = RESULTS / "round2"
 CACHE = Path(".cache/responses")
 #: What all live model calls of round 2 may cost together.
 SESSION_CAP = 1.50
-METHODS = ("event_memory", "full_context", "rolling_summary", "mem0")
+METHODS = ("event_memory", "full_context", "rolling_summary", "mem0", "graphiti")
 UNGUARDED_RUN = "event_memory_unguarded"
 
 
@@ -165,6 +165,13 @@ def make_methods(
             if reason:
                 raise SystemExit(f"Mem0 is not available: {reason}")
             methods.append(Mem0Memory(answerer, ledger, cal, llm_model=model))
+        elif name == "graphiti":
+            from .baselines import GraphitiMemory, graphiti_available
+
+            reason = graphiti_available()
+            if reason:
+                raise SystemExit(f"Graphiti is not available: {reason}")
+            methods.append(GraphitiMemory(answerer, ledger, cal, llm_model=model, cache=cache))
         else:
             raise SystemExit(f"unknown method {name!r}")
     return methods
