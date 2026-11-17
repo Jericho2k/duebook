@@ -8,7 +8,8 @@ from the event memory, in their memory and nothing else.
 The rules in the question are the same rules the event memory's extractor is
 given: only the speaker can promise; "you promised me" is not a new promise;
 a vague intention is a promise without a deadline; a disputed value is a
-dispute, not a fact. A baseline that was not told the rules would lose for
+dispute, not a fact; bare thanks confirms nothing, and a confirmation closes
+only the promise it names. A baseline that was not told the rules would lose for
 the wrong reason.
 
 One thing is deliberately different. The event memory never lets the model
@@ -60,6 +61,7 @@ ANSWER_SCHEMA: dict[str, Any] = _obj(
                 "action": _STR,
                 "due": _OPT_STR,
                 "status": {"type": "string", "enum": [s.value for s in PromiseStatus]},
+                "closed_seq": _OPT_INT,
             }
         ),
         "current_facts": _list({"name": _STR, "value": _STR, "source_seq": _OPT_INT}),
@@ -98,12 +100,16 @@ from what was said ("in 2 hours" said at 10:15 is 12:15 the same day; \
 "within 3 business days", "by end of week", "до 20 января"): the deadline is \
 the end of that day. Business days are Monday to Friday. null when no \
 deadline was given.
-- "status": "fulfilled" when the OTHER side confirmed it was done (thanks that \
-imply it count: "thanks for calling back", "the money arrived"); "claimed" \
-when the party that owes it says it is done but the other side has not \
-confirmed; "cancelled" or "superseded" when it was called off or replaced by \
-a renegotiated promise; otherwise "open" — including when the deadline has \
-passed.
+- "status": "fulfilled" when the OTHER side confirmed it was done, in words \
+that name the deed ("thanks for calling back", "the money arrived"); bare \
+thanks or acknowledgement ("thanks", "спасибо", "ok, waiting") confirms \
+nothing. "claimed" when the party that owes it says it is done but the other \
+side has not confirmed; "cancelled" or "superseded" when it was called off or \
+replaced by a renegotiated promise; otherwise "open" — including when the \
+deadline has passed. When two similar promises are open, a confirmation \
+closes only the one it names; if it names neither, both stay "open".
+- "closed_seq": the number of the message that confirmed, claimed, cancelled \
+or replaced it; null while it is open.
 
 current_facts — stable details of the case as they stand NOW: order number, \
 plan, address, amounts, product, and so on.
@@ -181,6 +187,7 @@ def parse_answer(raw: Mapping[str, Any], cp: Checkpoint, cal: WorkCalendar) -> R
                     action=str(item.get("action") or ""),
                     due_at=parse_due_at(due_text, cal) if due_text else None,
                     status=PromiseStatus(item.get("status") or "open"),
+                    closed_seq=_int(item.get("closed_seq")),
                 )
             )
         except (KeyError, ValueError, TypeError) as error:

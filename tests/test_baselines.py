@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from duebook import Side, WorkCalendar
-from duebook.bench import generate
+from duebook.bench import MAIN, Fate, generate
 from duebook.bench.baselines import (
     ANSWER_SCHEMA,
     FullContext,
@@ -28,8 +28,11 @@ from duebook.extract import Completion, ModelError, Usage
 
 MSK = ZoneInfo("Europe/Moscow")
 CAL = WorkCalendar(tz=MSK)
-TICKETS = generate(seed=5, count=8)
+TICKETS = generate(seed=5, count=8) + generate(seed=5, count=2, profile=MAIN)
 CALL = Usage(1, 1000, 100, 0, 0.0002)
+
+
+STATUS = {Fate.KEPT: "fulfilled", Fate.CANCELLED: "cancelled", Fate.RENEGOTIATED: "superseded"}
 
 
 def perfect_answer(ticket, cp):
@@ -49,7 +52,8 @@ def perfect_answer(ticket, cp):
                 "source_seq": c.seq,
                 "action": c.action,
                 "due": due(c.due_at),
-                "status": "fulfilled" if c.resolved_seq and c.resolved_seq <= seq else "open",
+                "status": STATUS[c.fate] if c.closed(seq) else "open",
+                "closed_seq": c.resolved_seq if c.closed(seq) else None,
             }
             for c in gold.commitments
             if c.seq <= seq
@@ -206,6 +210,20 @@ def test_the_ledger_refuses_a_call_once_the_cap_is_reached():
     with pytest.raises(OverBudget):
         meter.complete_json([{}, {"content": ""}], {}, name="summary")
     assert ledger.spent.calls == 3 and meter.tally.ingest.calls == 3
+
+
+def test_an_answer_from_the_response_cache_is_counted_for_the_method_but_not_charged():
+    class Remembered:
+        def complete_json(self, messages, schema, name="output"):
+            return Completion({}, Usage(1, 100, 10, 0, 0.002), cached=True, provider="DeepInfra")
+
+    ledger = Ledger(cap_usd=0.001)
+    meter = Meter(Remembered(), ledger)
+    for _ in range(3):  # over the cap if charged, and it is not
+        meter.complete_json([], {})
+    assert ledger.usd() == 0 and ledger.reused.calls == 3
+    assert meter.tally.usage.reported_usd == pytest.approx(0.006) and meter.tally.cache_hits == 3
+    assert meter.tally.providers == {"DeepInfra": 3}
 
 
 def test_a_run_that_hits_the_cap_records_the_failure_instead_of_crashing():

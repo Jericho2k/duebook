@@ -12,10 +12,13 @@ from duebook.extract import (
     Completion,
     Extractor,
     ModelError,
+    ModelSettings,
     Pricing,
+    ResponseCache,
     Usage,
     estimate,
     parse_output,
+    settings_for,
 )
 from duebook.extract.prompt import SYSTEM_PROMPT, Bound, build_messages, render_card
 from duebook.extract.schema import OUTPUT_SCHEMA, parse_due_expr
@@ -312,9 +315,71 @@ def test_client_sends_a_strict_schema_and_reads_usage():
     assert seen["auth"] == "Bearer test-key"
     assert seen["body"]["response_format"]["json_schema"]["strict"] is True
     assert seen["body"]["usage"] == {"include": True}
-    assert seen["body"]["provider"] == {"require_parameters": True}
-    assert seen["body"]["reasoning"] == {"effort": "low"}
+    # The default reader, with reasoning off and its routing pinned.
+    assert seen["body"]["model"] == "deepseek/deepseek-v4.1-flash"
+    assert seen["body"]["provider"] == {
+        "require_parameters": True, "order": ["deepinfra/fp8"], "allow_fallbacks": True,
+    }  # fmt: skip
+    assert seen["body"]["reasoning"] == {"enabled": False}
     assert seen["body"]["temperature"] == 0.0
+
+
+def test_each_model_carries_its_own_reasoning_and_routing():
+    bodies = []
+
+    def handler(request):
+        bodies.append(json.loads(request.content))
+        return chat_response("{}")
+
+    for model in ("z-ai/glm-5.3-flash", "some/other-model"):
+        client_for(handler, model=model).complete_json([{"role": "user", "content": "x"}], {})
+    glm, other = bodies
+    assert glm["reasoning"] == {"effort": "low"} and glm["provider"] == {"require_parameters": True}
+    assert "reasoning" not in other and other["provider"] == {"require_parameters": True}
+    custom = ModelSettings(reasoning={"effort": "high"}, provider={"order": ["x"]})
+    client_for(handler, settings=custom).complete_json([{"role": "user", "content": "x"}], {})
+    assert bodies[-1]["reasoning"] == {"effort": "high"}
+    assert bodies[-1]["provider"] == {"require_parameters": True, "order": ["x"]}
+    assert settings_for("deepseek/deepseek-v4.1-flash").reasoning == {"enabled": False}
+
+
+def test_a_deterministic_request_is_answered_from_disk_the_second_time(tmp_path):
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return chat_response('{"facts": [1]}', cost=0.0002)
+
+    cache = ResponseCache(tmp_path)
+    ask = [{"role": "user", "content": "x"}]
+    first = client_for(handler, cache=cache).complete_json(ask, {})
+    again = client_for(handler, cache=cache).complete_json(ask, {})
+    assert len(calls) == 1 and not first.cached and again.cached
+    assert again.data == first.data and again.usage == first.usage  # what it cost when made
+    other = client_for(handler, cache=cache).complete_json([{"role": "user", "content": "y"}], {})
+    assert len(calls) == 2 and not other.cached
+
+
+def test_a_request_at_a_higher_temperature_is_never_cached(tmp_path):
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return chat_response("{}")
+
+    cache = ResponseCache(tmp_path)
+    for _ in range(2):
+        client_for(handler, cache=cache, temperature=0.8).complete_json([], {})
+    assert len(calls) == 2 and not any(tmp_path.iterdir())
+
+
+def test_a_failed_request_is_not_cached(tmp_path):
+    answers = iter([httpx.Response(200, json={"choices": [{"message": {"content": "no"}}]}),
+                    chat_response("{}")] * 2)  # fmt: skip
+    client = client_for(lambda request: next(answers), cache=ResponseCache(tmp_path), attempts=1)
+    with pytest.raises(ModelError):
+        client.complete_json([], {})
+    assert not any(tmp_path.iterdir())
 
 
 def test_client_works_against_any_compatible_endpoint():

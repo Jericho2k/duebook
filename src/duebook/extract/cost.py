@@ -32,6 +32,8 @@ PRICES: dict[str, Pricing] = {
     # List price. The hosts that honour strict structured output charge more;
     # a measured run came to about $0.0002 per ticket message.
     "z-ai/glm-5.3-flash": Pricing(0.04, 0.078, 0.03),
+    # DeepInfra's fp8 endpoint, where ``client.MODELS`` routes it.
+    "deepseek/deepseek-v4.1-flash": Pricing(0.14, 0.42, 0.0042),
 }
 
 

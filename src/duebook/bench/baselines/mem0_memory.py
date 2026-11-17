@@ -13,8 +13,8 @@ help Mem0's recall.
 Configuration, chosen to change nothing but the plumbing:
 
 * LLM: Mem0's own ``openai`` provider pointed at OpenRouter's
-  OpenAI-compatible endpoint, with the same model and low reasoning effort as
-  every other method;
+  OpenAI-compatible endpoint, with the same model, reasoning and provider
+  routing (``extract.client.MODELS``) as every other method;
 * embedder: Mem0's ``openai`` provider against OpenRouter's embeddings
   endpoint (``openai/text-embedding-3-small``);
 * vector store: Qdrant in local mode, a fresh store per ticket;
@@ -28,7 +28,7 @@ Configuration, chosen to change nothing but the plumbing:
 Metering wraps the OpenAI client inside Mem0's LLM and embedder, adding the
 provider's charged amount for every call to the run's ledger. Nothing about
 what Mem0 sends is changed except the OpenRouter-specific request fields that
-ask for usage accounting and low reasoning effort.
+ask for usage accounting and carry the model's reasoning and routing settings.
 
 Two repairs, both about form, not content, and both found on the dev split:
 
@@ -50,7 +50,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ...events import AssigneeChanged, MessagePosted, Role
-from ...extract.client import DEFAULT_MODEL, OPENROUTER_URL
+from ...extract.client import DEFAULT_MODEL, OPENROUTER_URL, openrouter_fields, settings_for
 from ...extract.cost import Usage
 from ...extract.extractor import JsonModel
 from ...temporal import WorkCalendar
@@ -115,7 +115,6 @@ class Mem0Memory:
     embedder: str = EMBEDDER
     base_url: str = OPENROUTER_URL
     api_key: str = "proxy-injected"
-    reasoning_effort: str | None = "low"
     name: str = "mem0"
 
     def run(self, ticket: SimTicket) -> MethodRun:
@@ -206,15 +205,12 @@ class Mem0Memory:
     def _meter(self, memory, meter: Meter) -> None:
         """Count every call Mem0 makes, through its own OpenAI clients."""
         extra: dict[str, Any] = {"usage": {"include": True}}
-        if self.reasoning_effort:
-            extra["reasoning"] = {"effort": self.reasoning_effort}
+        chat_extra = {**extra, **openrouter_fields(settings_for(self.llm_model))}
 
         def wrap(create, chat: bool):
             def metered(*args, **params):
                 meter.ledger.check()
-                body = {**extra, **(params.pop("extra_body", None) or {})}
-                if not chat:
-                    body.pop("reasoning", None)
+                body = {**(chat_extra if chat else extra), **(params.pop("extra_body", None) or {})}
                 started = time.perf_counter()
                 response = create(*args, **params, extra_body=body)
                 meter.spend(_usage(response), time.perf_counter() - started)

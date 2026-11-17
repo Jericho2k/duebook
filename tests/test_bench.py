@@ -137,7 +137,7 @@ def test_dev_and_test_splits_are_fixed_disjoint_and_the_test_split_has_20_ticket
 
 
 def test_the_benchmark_runs_without_a_database_driver():
-    check = "import sys, duebook.bench; sys.exit('psycopg' in sys.modules)"
+    check = "import sys, duebook.bench.experiment; sys.exit('psycopg' in sys.modules)"
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
     assert subprocess.run([sys.executable, "-c", check], env=env).returncode == 0
 

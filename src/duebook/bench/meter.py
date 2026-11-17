@@ -5,6 +5,11 @@ every model call a method makes goes through a ``Meter``: it adds the call's
 tokens, charged dollars and wall-clock time to the method's tally for the
 ticket, and to a ``Ledger`` shared by the whole run.
 
+A call answered from the on-disk response cache is recorded in the method's
+tally at what it cost when it was made — the method's cost does not depend on
+whether this run happened to be the first — but it is not charged to the
+ledger, which counts only what the provider charges now.
+
 The ledger enforces the run's spending cap BEFORE a call is made, not after a
 ticket is finished: an experiment over several methods running in parallel
 could otherwise overshoot by a whole ticket per method. A refused call raises
@@ -35,6 +40,8 @@ class Ledger:
     #: Used only when a provider does not report the charged amount.
     pricing: Pricing | None = None
     spent: Usage = field(default_factory=Usage)
+    #: What calls answered from the response cache cost when first made.
+    reused: Usage = field(default_factory=Usage)
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def check(self) -> None:
@@ -44,6 +51,11 @@ class Ledger:
     def add(self, usage: Usage) -> None:
         with self._lock:
             self.spent += usage
+
+    def reuse(self, usage: Usage) -> None:
+        """A call answered from the response cache: counted, never charged."""
+        with self._lock:
+            self.reused += usage
 
     def usd(self) -> float:
         return self.spent.usd(self.pricing) or 0.0
@@ -59,6 +71,10 @@ class Tally:
     #: When asked for an answer at a checkpoint.
     answer: Usage = field(default_factory=Usage)
     answer_seconds: float = 0.0
+    #: Calls answered from the response cache, and which host served each
+    #: call (when it was first made).
+    cache_hits: int = 0
+    providers: dict[str, int] = field(default_factory=dict)
 
     @property
     def usage(self) -> Usage:
@@ -93,7 +109,13 @@ class Meter:
             self.ledger.add(spent)
             self.tally.record(spent, time.perf_counter() - started, self.answering)
             raise
-        self.ledger.add(completion.usage)
+        if completion.cached:
+            self.ledger.reuse(completion.usage)
+            self.tally.cache_hits += 1
+        else:
+            self.ledger.add(completion.usage)
+        host = getattr(completion, "provider", None) or "unknown"
+        self.tally.providers[host] = self.tally.providers.get(host, 0) + 1
         self.tally.record(completion.usage, time.perf_counter() - started, self.answering)
         return completion
 
