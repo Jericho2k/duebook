@@ -83,7 +83,8 @@ class Pipeline:
     #: Delay before the first retry of a failed extraction; doubles up to the cap.
     retry_base: timedelta = timedelta(minutes=1)
     retry_cap: timedelta = timedelta(hours=1)
-    batch_timeout: timedelta = BATCH_TIMEOUT
+    #: Read queued messages together (``Settings.extraction_batching``).
+    batching: bool = False
 
     def handle(self, event: Event) -> Handled:
         """Take one event from the helpdesk. Safe to call again with the same event."""
@@ -232,11 +233,11 @@ class Pipeline:
         return Handled(ticket_id, card, new, tuple(applied), waiting_for=waiting, usage=spent)
 
     def _can_batch(self, card: Card, event: Event, now: datetime) -> bool:
-        if (not isinstance(event, MessagePosted) or not event.text.strip()
-            or not getattr(self.extractor, "extract_batch", None) or not self.batch_timeout):
+        if (not self.batching or not isinstance(event, MessagePosted) or not event.text.strip()
+            or not getattr(self.extractor, "extract_batch", None)):
             return False
         wakeup = next_wakeup(card, now, self.store.policy)
-        return wakeup is None or wakeup > now + self.batch_timeout
+        return wakeup is None or wakeup > now + BATCH_TIMEOUT
 
 
 def _usage(raw: dict | None) -> Usage:

@@ -113,11 +113,12 @@ the event text, and the preceding public turn from the other side. Its
 structured response lists only kinds of changes with entries. An empty read
 is `{"updates":[]}`.
 
-The processor can read up to four already-waiting, consecutive text events of
-one ticket together. It collects one response per event and applies events in
-sequence. A response that depends on an earlier change can request an
-individual reread against the updated card. The processor starts immediately,
-uses the configured batch request timeout, and reads individually near a
+The processor reads each message individually by default. With
+`DUEBOOK_EXTRACTION_BATCHING=true` it reads up to four already-waiting,
+consecutive text events of one ticket together. It collects one response per
+event and applies events in sequence. A response that depends on an earlier
+change can request an individual reread against the updated card. A batch
+request has a 10 s deadline; the processor reads individually near a
 scheduled alert or after a failed batch.
 The default reader is `deepseek/deepseek-v4.1-flash` with reasoning switched
 off (left at "low" it spends 1,000-2,300 hidden tokens a message) and locked
@@ -495,7 +496,7 @@ key.
 | `DUEBOOK_WORKER_NAME` | role@host:pid | this process's name in outbox claims |
 | `DUEBOOK_PROCESS_IDLE_SECONDS` | 1 | processor sleep when there is no work |
 | `DUEBOOK_PROCESS_BATCH` | 20 | tickets per processor pass |
-| `DUEBOOK_EXTRACTION_BATCH_TIMEOUT_SECONDS` | 10 | batch request timeout and minimum slack before a scheduled alert. Zero disables batching |
+| `DUEBOOK_EXTRACTION_BATCHING` | `false` | `true` reads queued messages of a ticket together |
 | `DUEBOOK_SCHEDULE_MAX_IDLE_SECONDS` | 30 | longest scheduler sleep |
 | `DUEBOOK_DELIVER_IDLE_SECONDS` | 5 | delivery worker sleep when the queue is empty |
 | `DUEBOOK_DELIVER_BATCH` | 10 | alerts claimed per pass |
