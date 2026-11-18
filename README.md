@@ -328,8 +328,9 @@ broken), a renegotiation and a cancellation — what makes a close easy to pin
 on the wrong promise. Its splits are `dev2` (4 tickets) and `test2` (20).
 
 The `main2` profile uses the same length and handoff ranges and adds three
-cases per ticket. Use `dev3` (4 tickets, seed 4444) for tuning and `test3`
-(20 tickets, seed 4343) for evaluation.
+cases per ticket. Use `dev3` (4 tickets, seed 4444) and `dev4` (8 tickets,
+seed 4747, Round 7) for tuning and `test3` (20 tickets, seed 4343) for
+evaluation.
 
 | Measure | What the method must show at the end of the ticket |
 |---|---|
@@ -395,8 +396,8 @@ memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
 (`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
 bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 4); the raw record is under
-`results/` and `results/round2/` to `results/round4/`.
+[docs/results.md](docs/results.md) (rounds 1 to 7); the raw record is under
+`results/` and `results/round2/` to `results/round7/`.
 
 ## Running the service
 
