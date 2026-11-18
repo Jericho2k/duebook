@@ -199,6 +199,32 @@ def prompt_growth(result: dict[str, Any]) -> tuple[str, str]:
     return svg, "\n".join(rows)
 
 
+def graphiti_disputes(result: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """What Graphiti's graph did with each planted dispute, read from the graph at the end.
+
+    For each side's value: "current" when a fact holding it is still valid,
+    "closed" when every such fact was invalidated, "absent" when none holds it.
+    Disputes still open at the end are counted apart from settled ones.
+    """
+    gold = {t.ticket_id: t.gold for t in SPLITS[result["split"]].tickets()}
+    out: dict[str, dict[str, int]] = {"open": {}, "settled": {}}
+    for run in result["runs"]:
+        listing = run["method"] == "graphiti" and run["detail"].get("end", {}).get("listing")
+        if not listing:
+            continue
+        facts = listing.split("\nENTITIES", 1)[0].splitlines()[1:]
+        for dispute in gold[run["ticket"]].contradictions:
+            states = []
+            for value in dispute.values:
+                held = [line for line in facts if value.casefold() in line.casefold()]
+                states.append("absent" if not held else "current"
+                              if any("no longer true" not in line for line in held) else "closed")
+            outcome = " / ".join(states)  # customer's value / company's value
+            counts = out["settled" if dispute.settled_seq else "open"]
+            counts[outcome] = counts.get(outcome, 0) + 1
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m duebook.bench.report")
     parser.add_argument("result", type=Path)
@@ -233,6 +259,8 @@ def main() -> None:
             print(f"- {m}: a replay of recorded proposals, no model call")
             continue
         print(f"- {m}: ${rows['usd_total']:.4f} charged, {rows['failures']} tickets with a failure")
+    if any((disputes := graphiti_disputes(result)).values()):
+        print(f"### Graphiti and the planted disputes (customer / company)\n\n{disputes}\n")
     if args.long:
         long = json.loads(args.long.read_text())
         print(f"\n## long: {long['summary']['tickets']} tickets\n")
