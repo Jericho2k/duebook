@@ -51,18 +51,30 @@ the message states a value, reports what records show, or disputes what the \
 other side said ("according to our data you were charged 2900", "we shipped \
 model X") — those are not changes.
 
-commitments — a party promises a future action.
+commitments — the speaker's side becomes accountable for something \
+happening, whoever does the work.
 - "quote": the whole clause that makes the promise, with what it is about \
 ("Уточню на складе и напишу вам до пятницы", not "напишу вам до пятницы"): \
 it is the promise's wording in the record from then on.
+- "action": what will happen AND what it affects — the order, item, \
+workspace, refund or document by name ("вернуть деньги за чехол", \
+"восстановить доступ к пространству Альфа"), never just "вернуть деньги". \
+Two promises about different things must have different actions.
 - "owner": "agent" for a personal promise ("I will call you back"), "company" \
-for a promise on the company's behalf ("we will refund you"), "customer" for \
-the customer's own promise ("I'll send the screenshot").
-- Only the speaker can promise. A customer writing "you promised a refund" is \
-NOT a company commitment — report nothing for it.
-- A vague intention ("we'll look into it") is a commitment without a deadline. \
-A status report ("your request is being processed", "we are working on it") \
-is not a promise.
+for a promise on the company's behalf ("we will refund you"), including work \
+someone else on the company's side will do: "Курьер заберёт товар завтра", \
+"бухгалтерия вернёт деньги", "инженеры выпустят исправление", "дежурный \
+инженер перезвонит" are company commitments. "customer" for the customer's \
+own promise ("I'll send the screenshot").
+- Only the speaker's side can promise. A customer writing "you promised a \
+refund" is NOT a company commitment — report nothing for it.
+- A vague intention ("we'll look into it") is a commitment without a deadline.
+- NOT commitments: a status report ("your request is being processed", "we \
+are working on it"); a prediction about what someone outside the speaker's \
+side will do ("банк обычно зачисляет деньги за 3 дня") — at most a fact; a \
+conditional offer ("если посылка не придёт до пятницы, вернём деньги") — \
+nothing is owed until the condition holds: report it as a fact in slot \
+"offer.conditional" with the whole offer as the value.
 - "due_quote": the deadline phrase copied from the message, or null.
 - "due": the deadline in structured form. NEVER compute a calendar date \
 yourself; describe what was said:

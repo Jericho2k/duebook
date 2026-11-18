@@ -61,6 +61,8 @@ CANONICAL: Mapping[str, tuple[str, ...]] = MappingProxyType(
                          "goods.model"),
         "app.version": ("version", "app.build"),
         "issue.summary": ("issue", "problem", "issue.description", "problem.description"),
+        # A conditional offer is not yet owed (decision 0004); kept where people see it.
+        "offer.conditional": ("offer", "conditional_offer", "offer.condition"),
     }
 )  # fmt: skip
 
