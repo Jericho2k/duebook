@@ -539,8 +539,10 @@ a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
 checked with `docker compose config` but not yet built or started.
 
 Round 5 adds the negative verdict veto, contextual confirmation, compact
-replies, and batching for queued messages. The evaluation is in
-[docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
+replies, and batching for queued messages. Round 6 found that batching left
+promises off the card, turned it off by default, and refused contextual
+closes whose question names something the target does not. The evaluation is
+in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
 independently labeled real tickets are next.
 
 ## Development
