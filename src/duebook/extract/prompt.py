@@ -36,7 +36,8 @@ cannot quote it, do not report it.
 - When the message adds nothing, return empty lists. Most messages add little.
 
 facts — stable details of the case (order number, product, plan, device, what \
-is broken, current state of the problem).
+is broken, current state of the problem). Never restate a promise, an offer or \
+a status report as a fact.
 - "slot" names what the fact is about. If the record already has a slot for \
 the same thing, use exactly that slot. Otherwise use one from this list when \
 it fits: {slots}. Only when none fits, make a short lowercase English key in \
