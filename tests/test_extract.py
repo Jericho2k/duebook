@@ -22,7 +22,7 @@ from duebook.extract import (
     parse_output,
     settings_for,
 )
-from duebook.extract.extractor import read_batch
+from duebook.extract.extractor import read_batch, reading_clients
 from duebook.extract.prompt import SYSTEM_PROMPT, Bound, build_messages, render_card
 from duebook.extract.schema import OUTPUT_SCHEMA, parse_due_expr
 from duebook.proposals import (
@@ -495,6 +495,59 @@ def test_client_never_retries_a_timeout_which_may_already_be_billed():
     with pytest.raises(ModelError, match="timeout, not retried"):
         client_for(handler).complete_json([], {})
     assert len(calls) == 1
+
+
+def test_an_answer_cut_off_at_the_output_limit_is_unreadable_and_not_asked_again():
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        response = chat_response('{"facts": [')
+        body = response.json()
+        body["choices"][0]["finish_reason"] = "length"
+        return httpx.Response(200, json=body)
+
+    with pytest.raises(ModelError, match="cut off at 800 tokens") as failure:
+        client_for(handler, max_tokens=800, content_retries=0).complete_json([], {})
+    assert failure.value.unreadable and len(calls) == 1
+
+
+def test_an_unreadable_answer_is_read_again_once_with_reasoning(monkeypatch):
+    sent = []
+
+    def post(client, body):
+        sent.append((body["max_tokens"], body["reasoning"]))
+        if len(sent) == 1:
+            return chat_response("not json")
+        return chat_response(json.dumps(output(questions=[{"text": "Какое первым?",
+                                                           "quote": "какое получите первым"}])))
+
+    monkeypatch.setattr(ChatClient, "_post", post)
+    first, escalation = reading_clients(ChatClient("test-key"))
+    t = Ticket()
+    event = MessagePosted(id="e1", ticket_id="T-1", seq=1, at=t.now, author=IVAN,
+                          text="Напишите, какое получите первым.")  # fmt: skip
+    extraction = Extractor(first, escalation=escalation).extract(t.card, event)
+    assert sent == [(800, {"enabled": False}), (4000, {"effort": "low", "exclude": True})]
+    assert [type(p).__name__ for p in extraction.proposals] == ["AskQuestion"]
+    assert extraction.usage.calls == 2 and "not valid JSON" in extraction.retried[0]
+
+
+def test_a_failure_that_is_not_about_the_answer_is_not_escalated(monkeypatch):
+    sent = []
+
+    def post(client, body):
+        sent.append(body["max_tokens"])
+        raise httpx.ReadTimeout("stub timeout")
+
+    monkeypatch.setattr(ChatClient, "_post", post)
+    first, escalation = reading_clients(ChatClient("test-key"))
+    t = Ticket()
+    event = MessagePosted(id="e1", ticket_id="T-1", seq=1, at=t.now, author=IVAN,
+                          text="Проверю и отвечу.")  # fmt: skip
+    with pytest.raises(ModelError, match="timeout") as failure:
+        Extractor(first, escalation=escalation).extract(t.card, event)
+    assert sent == [800] and not failure.value.unreadable
 
 
 def test_client_gives_up_loudly_and_reports_the_spend():

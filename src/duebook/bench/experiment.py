@@ -70,7 +70,7 @@ from ..card import Card
 from ..events import MessagePosted, other_side, remember_turn
 from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCache
 from ..extract.cost import Usage
-from ..extract.extractor import BATCH_TIMEOUT
+from ..extract.extractor import BATCH_TIMEOUT, reading_clients
 from ..extract.prompt import Bound
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
 from ..proposals import Proposal
@@ -193,8 +193,9 @@ def make_methods(
         if name in EVENT_MEMORY:
             extracting, verifying = EVENT_MEMORY[name]
             # Round 3 gave a reasoning extractor more time.
-            extractor = replace(reader, reasoning=extracting,
-                                timeout=120 if extracting == "low" else reader.timeout)
+            extractor, escalation = reading_clients(replace(
+                reader, reasoning=extracting,
+                timeout=120 if extracting == "low" else reader.timeout))
             # The verifier is called as ``cli.extractor`` calls it: the same
             # client, with the verifier's reasoning.
             verifier = (
@@ -204,7 +205,7 @@ def make_methods(
                                   http_retries=0, content_retries=0) if batch else None
             methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
                                        recorded=recorded if name == "event_memory" else None,
-                                       batch_model=batch_model))
+                                       batch_model=batch_model, escalation=escalation))
         elif name == "event_memory_bounded":
             methods.append(EventMemory(reader, ledger, cal, bound=Bound(), name=name))
         elif name == "full_context":

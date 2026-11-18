@@ -21,11 +21,17 @@ from ..proposals import Proposal
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
-from .client import Completion, ModelError
+from .client import ChatClient, Completion, ModelError
 from .cost import Usage
 from .prompt import Bound, build_batch, build_messages
 from .schema import BATCH_SCHEMA, OUTPUT_SCHEMA, Malformed, parse_output
 
+#: Round 4 answered in 79 output tokens a message on average. An answer that
+#: runs past this is looping, and is cut off rather than paid for to the end.
+ANSWER_TOKENS = 800
+#: The escalated read thinks first: reasoning "low" spends 1,000-2,800 hidden
+#: tokens before an answer of the same size.
+ESCALATED_TOKENS = 4_000
 MAX_BATCH_SIZE = 4
 BATCH_TIMEOUT = timedelta(seconds=10)
 ReadTurn = tuple[MessagePosted, MessagePosted | None]
@@ -74,6 +80,16 @@ def read_batch(reader: Reader, card: Card, turns: list[ReadTurn]) -> dict[int, E
         return prepared
 
 
+def reading_clients(client: ChatClient) -> tuple[ChatClient, ChatClient]:
+    """The extractor's client and its escalation.
+
+    At temperature 0 the same request fails the same way, so an unreadable
+    answer is not asked again: it is read once more with reasoning on.
+    """
+    first = replace(client, max_tokens=ANSWER_TOKENS, content_retries=0)
+    return first, replace(first, reasoning="low", max_tokens=ESCALATED_TOKENS)
+
+
 @dataclass(frozen=True, slots=True)
 class VerifierUsage:
     #: One call per proposal, including failures that report no usage.
@@ -108,6 +124,8 @@ class Extractor:
     #: None shows everything.
     bound: Bound | None = None
     batch_model: JsonModel | None = None
+    #: Asked once when ``model``'s answer is cut off or unreadable.
+    escalation: JsonModel | None = None
 
     def extract(self, card: Card, event: Event) -> Extraction:
         return self.extract_with_context(card, event, None)
@@ -121,9 +139,24 @@ class Extractor:
             return Extraction()
         messages, aliases = build_messages(card, event, self.cal, self.vocab, self.bound,
                                            previous=previous)  # fmt: skip
-        completion = self.model.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
+        completion = self._complete(messages)
         proposals, malformed = parse_output(completion.data, aliases)
         return Extraction(tuple(proposals), tuple(malformed), completion.usage, completion.retried)
+
+    def _complete(self, messages: list[dict[str, str]]) -> Completion:
+        try:
+            return self.model.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
+        except ModelError as error:
+            if not error.unreadable or self.escalation is None:
+                raise
+            first = error
+        try:
+            second = self.escalation.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
+        except ModelError as error:
+            error.usage += first.usage
+            raise
+        return replace(second, usage=first.usage + second.usage,
+                       retried=(str(first), *second.retried))  # fmt: skip
 
     def extract_batch(self, card: Card, turns: list[ReadTurn]) -> dict[int, Extraction]:
         if self.batch_model is None:

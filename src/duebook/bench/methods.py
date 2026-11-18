@@ -107,6 +107,8 @@ class EventMemory:
     #: asking ``model``. Only proposals without a verdict go to the verifier.
     recorded: dict[str, Recorded] | None = None
     batch_model: JsonModel | None = None
+    #: Reads a message again, with reasoning, when ``model``'s answer is unreadable.
+    escalation: JsonModel | None = None
 
     def run(self, ticket: SimTicket) -> MethodRun:
         meter = Meter(self.model, self.ledger)
@@ -115,8 +117,11 @@ class EventMemory:
             batch_meter = (
                 Meter(self.batch_model, self.ledger, meter.tally) if self.batch_model else None
             )
-            reader = _Sizing(Extractor(meter, self.cal, bound=self.bound, batch_model=batch_meter),
-                             sizes)  # fmt: skip
+            escalation = (
+                Meter(self.escalation, self.ledger, meter.tally) if self.escalation else None
+            )
+            reader = _Sizing(Extractor(meter, self.cal, bound=self.bound, batch_model=batch_meter,
+                                       escalation=escalation), sizes)  # fmt: skip
             before = Recorded((), Usage(), Usage(), 0.0, 0.0, {})
         else:
             before = self.recorded[ticket.ticket_id]

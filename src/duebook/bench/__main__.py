@@ -6,6 +6,7 @@ import argparse
 import os
 
 from ..extract import ChatClient, Extractor
+from ..extract.extractor import reading_clients
 from . import SPLITS, Oracle, Rewriter, evaluate, generate, require_different_models
 
 
@@ -46,7 +47,8 @@ def main() -> None:
     else:
         print("WARNING: template text only; pass --writer to rewrite it with another model")
 
-    extractor = Extractor(ChatClient(api_key=key, model=args.model))
+    first, escalation = reading_clients(ChatClient(api_key=key, model=args.model))
+    extractor = Extractor(first, escalation=escalation)
     print(f"extracted by {args.model}")
     print(evaluate(tickets, extractor, max_usd=args.max_usd - spent).summary())
 

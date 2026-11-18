@@ -129,15 +129,23 @@ model needs sent lives in a small presets table, `extract.client.PRESETS`
 (hosts and reasoning per model); `ChatClient(reasoning="low")` asks the same
 model to think. Every call records the host that answered, the prompt tokens
 served from cache and the hidden reasoning tokens. A 429 or 5xx is retried
-once, an empty or unreadable answer once, a timeout never — it may already
-have been generated and billed. A `ResponseCache` keeps answers to
-temperature-0 requests on disk, so re-running unchanged input costs nothing.
+once, a timeout never — it may already have been generated and billed. A
+`ResponseCache` keeps answers to temperature-0 requests on disk, so re-running
+unchanged input costs nothing.
+
+An extraction answer is capped at 800 tokens (Round 4 averaged 79). An answer
+cut off at the cap, empty or not JSON is not asked again: at temperature 0 the
+same request fails the same way. It is read once more with reasoning "low"
+(`extract.extractor.reading_clients`), a different read with room for 2,000-2,800
+hidden tokens.
 
 ```python
 from duebook import apply
 from duebook.extract import ChatClient, Extractor
+from duebook.extract.extractor import reading_clients
 
-extractor = Extractor(ChatClient(api_key=key))  # OpenRouter by default
+first, escalation = reading_clients(ChatClient(api_key=key))  # OpenRouter by default
+extractor = Extractor(first, escalation=escalation)
 extraction = extractor.extract(card, event)
 card = apply(card, event, extraction.proposals).card
 extraction.usage.usd()  # what this message cost

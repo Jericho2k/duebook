@@ -137,7 +137,7 @@ def extractor(settings: Settings):
     from dataclasses import replace
 
     from .extract import ChatClient, Extractor
-    from .extract.extractor import BATCH_TIMEOUT
+    from .extract.extractor import BATCH_TIMEOUT, reading_clients
     from .extract.verifier import verifying_reader
 
     if not settings.openrouter_api_key:
@@ -153,7 +153,8 @@ def extractor(settings: Settings):
                 content_retries=0)
         if settings.extraction_batching else None
     )  # fmt: skip
-    reader = Extractor(client, cal, batch_model=batch_model)
+    first, escalation = reading_clients(client)
+    reader = Extractor(first, cal, batch_model=batch_model, escalation=escalation)
     if settings.verifier_enabled:
         return verifying_reader(
             reader,
