@@ -74,7 +74,7 @@ from ..extract.cost import Usage
 from ..extract.extractor import reading_clients
 from ..extract.prompt import Bound
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
-from ..proposals import AssertFact, MakeCommitment, MakeConditional, Proposal
+from ..proposals import AssertFact, MakeCommitment, MakeConditional, Proposal, SettleConditional
 from ..reducer import UNGUARDED, Guards, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..store.codec import decode_proposals
@@ -390,7 +390,7 @@ def reread_changes(tickets: Sequence[SimTicket], runs: Sequence[MethodRun]) -> l
     """Per message read again: what the record and the live read proposed, and what was lost.
 
     A promise of a side, or a fact's slot, that the record had and the new read
-    has not is listed as lost; ``gold`` says what the label holds at that message.
+    has not is listed as lost, and as a regression when the label holds one too.
     """
     by_id = {t.ticket_id: t for t in tickets}
     rows = []
@@ -398,12 +398,19 @@ def reread_changes(tickets: Sequence[SimTicket], runs: Sequence[MethodRun]) -> l
         ticket = by_id[run.ticket_id]
         for seq, old, new in run.detail.get("reread", ()):
             old, new = (_items(decode_proposals(p)) for p in (old, new))
+            gold = _items(ticket.proposals[seq - 1])
+            lost = _lost(old, new, "promise") + _lost(old, new, "fact")
             rows.append({
                 "ticket": run.ticket_id, "seq": seq, "text": ticket.events[seq - 1].text,
-                "gold": _items(ticket.proposals[seq - 1]), "old": old, "new": new,
-                "lost_promises": _lost(old, new, "promise"), "lost_facts": _lost(old, new, "fact"),
+                "gold": gold, "old": old, "new": new, "lost": lost,
+                # Lost, and the label holds a promise of that side or a fact of that slot.
+                "regressions": [i for i in lost if i.split(":")[0] in _kinds(gold)],
             })  # fmt: skip
     return rows
+
+
+def _kinds(items: list[str]) -> set[str]:
+    return {i.split(":")[0] for i in items}
 
 
 def _items(proposals: Sequence[Proposal]) -> list[str]:
@@ -417,6 +424,8 @@ def _items(proposals: Sequence[Proposal]) -> list[str]:
                 out.append(f"fact {DEFAULT_VOCABULARY.normalise(p.slot)}: {p.value}")
             case MakeConditional():
                 out.append(f"offer {p.owner.side.value}: {p.action} | {p.condition}")
+            case SettleConditional():
+                out.append(f"condition {'holds' if p.holds else 'failed'}: {p.quote}")
             case _:
                 out.append(f"{type(p).__name__}: {p.quote}")
     return out
@@ -987,7 +996,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         tickets = [t for t in tickets if t.ticket_id in reread]
     methods = make_methods(names, args.model, ledger, cal, cache, recorded, reread)
     if reread is not None:
-        calls = sum(len(seqs) for seqs in reread.values())
+        calls = sum(len(reread[t.ticket_id]) for t in tickets)
         projected = project_reread(args.projection_from or args.replay, calls)
     elif args.projection_from:
         projected = project_from(args.projection_from, methods, tickets, subsets)
