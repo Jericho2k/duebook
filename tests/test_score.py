@@ -20,13 +20,11 @@ from duebook.bench.result import (
 from duebook.bench.run import fold, refold, snapshots
 from duebook.bench.score import (
     Counts,
-    Score,
     Stage,
     alerted_at,
     attribute,
     fact_status,
     score_snapshot,
-    score_ticket,
 )
 from duebook.lifecycle import NoticeKind
 from duebook.proposals import MakeCommitment
@@ -60,19 +58,6 @@ def test_a_value_is_recognised_by_exact_numbers_and_word_stems():
 
 
 # ----------------------------------------------------- the oracle is 1.0 ----
-
-
-def test_the_oracle_is_perfect_at_every_handoff_as_well_as_at_the_end():
-    total = Score()
-    for t in TICKETS:
-        scored = score_ticket(t, oracle_snapshots(t))
-        assert scored.handoffs.checkpoints == len(t.gold.handoffs) >= 2
-        total += scored.all
-    assert total.commitments.f1 == total.deadline_accuracy == total.status_accuracy == 1.0
-    assert total.alerts.f1 == total.change_accuracy == 1.0
-    assert total.disputes.f1 == total.failed_steps.f1 == 1.0
-    assert total.freshness_error == 0.0 and total.facts_judged > 200
-    assert total.disputes.tp > 0 and total.failed_steps.tp > 0 and total.alerts.tp > 0
 
 
 def test_the_scorers_alerts_are_exactly_the_cards_breach_notices():

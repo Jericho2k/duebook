@@ -196,6 +196,17 @@ def test_a_verifiers_verdict_is_stored_with_the_close_and_replay_needs_no_model(
     assert store.replay("T-1") == ticket.card
 
 
+def recorded_under(rules, store, conn, event, proposal):
+    """Store an event as one decided under an earlier version of the closing rules."""
+    store.ingest(event, START)
+    conn.execute(
+        "insert into event_proposals"
+        " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
+        " values (%s, %s, %s, '[]', %s, %s)",
+        (event.ticket_id, event.seq, Jsonb(encode([proposal])), START, rules),
+    )
+
+
 @pytest.mark.parametrize("rules", [1, 2])
 def test_old_closes_replay_under_their_original_rule(store, conn, rules):
     ticket = promise("T-1")
@@ -210,15 +221,8 @@ def test_old_closes_replay_under_their_original_rule(store, conn, rules):
         close = ResolveCommitment(call.id, quote, "Перезвоню вам", yes, "звонок насчёт монтажа")
     persist(store, ticket)
     ticket.say(ANNA, quote, close)
-    event, _ = ticket.log[-1]
     assert ticket.card.commitments[0].unresolved
-    store.ingest(event, START)
-    conn.execute(
-        "insert into event_proposals"
-        " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
-        " values (%s, %s, %s, '[]', %s, %s)",
-        (ticket.card.ticket_id, event.seq, Jsonb(encode([close])), START, rules),
-    )
+    recorded_under(rules, store, conn, ticket.log[-1][0], close)
     assert not store.replay("T-1").commitments[0].unresolved
 
 
@@ -230,14 +234,7 @@ def test_a_promise_recorded_before_decision_0003_replays_under_the_same_action_r
     again = MakeCommitment(call.owner, call.action, quote)
     ticket.say(IVAN, f"{quote}.", again)
     assert len(ticket.card.commitments) == 2
-    event, _ = ticket.log[-1]
-    store.ingest(event, START)
-    conn.execute(
-        "insert into event_proposals"
-        " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
-        " values (%s, %s, %s, '[]', %s, 3)",
-        ("T-1", event.seq, Jsonb(encode([again])), START),
-    )
+    recorded_under(3, store, conn, ticket.log[-1][0], again)
     assert len(store.replay("T-1").commitments) == 1
 
 
@@ -248,13 +245,6 @@ def test_a_second_order_recorded_before_decision_0005_replays_as_a_dispute(store
     t.say(IVAN, "Оформим возврат по заказу 538916", second)
     assert t.card.open_contradictions() == ()
     first, _ = t.log[0]
-    event, _ = t.log[-1]
     store.record(first, t.log[0][1], now=first.at)
-    store.ingest(event, START)
-    conn.execute(
-        "insert into event_proposals"
-        " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
-        " values (%s, %s, %s, '[]', %s, 4)",
-        ("T-1", event.seq, Jsonb(encode([second])), START),
-    )
+    recorded_under(4, store, conn, t.log[-1][0], second)
     assert len(store.replay("T-1").open_contradictions()) == 1

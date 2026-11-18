@@ -462,36 +462,32 @@ def test_client_retries_a_429_once_and_a_bad_answer_once_and_counts_what_each_co
     assert completion.usage.reported_usd == pytest.approx(0.00024)
 
 
+def timeout(request):
+    raise httpx.ReadTimeout("too slow", request=request)
+
+
 @pytest.mark.parametrize(
-    ("replies", "why"),
+    ("replies", "why", "calls"),
     [
-        ([httpx.Response(503), httpx.Response(502)], "http 502"),
-        ([chat_response(""), chat_response("not json")], "content is not valid JSON"),
-        ([httpx.Response(200, json=[]), chat_response([1])], "message content is not text"),
+        ([httpx.Response(503), httpx.Response(502)], "http 502", 2),
+        ([chat_response(""), chat_response("not json")], "content is not valid JSON", 2),
+        ([httpx.Response(200, json=[]), chat_response([1])], "message content is not text", 2),
+        # A timeout may already have been generated and billed.
+        ([timeout], "timeout, not retried", 1),
+        ([httpx.Response(401, text="bad key")], "http 401", 1),
     ],
 )
-def test_client_retries_each_kind_of_fault_only_once(replies, why):
-    calls = []
+def test_a_fault_is_retried_once_unless_retrying_cannot_help(replies, why, calls):
+    sent = []
 
     def handler(request):
-        calls.append(1)
-        return replies[len(calls) - 1]
+        reply = replies[len(sent)]
+        sent.append(1)
+        return reply(request) if callable(reply) else reply
 
     with pytest.raises(ModelError, match=why):
         client_for(handler).complete_json([], {})
-    assert len(calls) == 2
-
-
-def test_client_never_retries_a_timeout_which_may_already_be_billed():
-    calls = []
-
-    def handler(request):
-        calls.append(1)
-        raise httpx.ReadTimeout("too slow", request=request)
-
-    with pytest.raises(ModelError, match="timeout, not retried"):
-        client_for(handler).complete_json([], {})
-    assert len(calls) == 1
+    assert len(sent) == calls
 
 
 def test_an_answer_cut_off_at_the_output_limit_is_unreadable_and_not_asked_again():
@@ -553,18 +549,6 @@ def test_client_gives_up_loudly_and_reports_the_spend():
     assert "empty content" in str(failure.value)
     assert failure.value.usage.calls == 2
     assert failure.value.provider == "DeepInfra"
-
-
-def test_client_does_not_retry_a_request_that_can_never_succeed():
-    calls = []
-
-    def handler(request):
-        calls.append(1)
-        return httpx.Response(401, text="bad key")
-
-    with pytest.raises(ModelError, match="http 401"):
-        client_for(handler).complete_json([], {})
-    assert len(calls) == 1
 
 
 # ----------------------------------------------------------------- cost ----
