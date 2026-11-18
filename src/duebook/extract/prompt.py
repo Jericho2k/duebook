@@ -25,7 +25,7 @@ from ..temporal import WorkCalendar
 
 _INSTRUCTIONS = """\
 You maintain the record of a customer support ticket. You are given the record \
-so far and one or more new messages. Report only what each new message adds or changes.
+so far and ONE new message. Report only what this new message adds or changes.
 
 Hard rules:
 - Every item needs "quote": a short span copied character for character from \
@@ -33,8 +33,7 @@ the new message. Never paraphrase, translate or merge spans in a quote. If you \
 cannot quote it, do not report it.
 - Report only what the message states. No inference, no advice, no summary.
 - Write "action", "value" and "text" in the language of the message.
-- The "updates" array includes only groups with items. Set "type" to the section \
-name below and put its entries in "items". When nothing changes, use an empty array.
+- When the message adds nothing, return empty lists. Most messages add little.
 
 facts — stable details of the case (order number, product, plan, device, what \
 is broken, current state of the problem).

@@ -133,7 +133,7 @@ class Extractor:
         rows = completed.data.get("messages")
         if not isinstance(rows, list) or len(rows) != len(turns) or any(
             not isinstance(row, dict) or row.get("seq") != turn[0].seq
-            or not isinstance(row.get("reread"), bool) or not isinstance(row.get("updates"), list)
+            or not isinstance(row.get("reread"), bool)
             for row, turn in zip(rows, turns, strict=True)
         ):
             raise ModelError("batch response did not cover the requested messages", completed.usage)

@@ -47,7 +47,8 @@ def due(**fields):
 
 
 def output(**sections):
-    return {"updates": [{"type": key, "items": items} for key, items in sections.items()]}
+    empty = {key: [] for key in OUTPUT_SCHEMA["properties"]}
+    return {**empty, **sections}
 
 
 class FakeModel:
@@ -113,10 +114,8 @@ def test_a_close_names_its_target_twice_by_handle_and_by_its_wording():
         ResolveCommitment("e1#0", "деньги пришли", "вернём деньги"),
         CancelCommitment("e2#0", "не нужно", "замену"),
     ]
-    variants = OUTPUT_SCHEMA["properties"]["updates"]["items"]["anyOf"]
-    resolved, = [v["properties"]["items"] for v in variants
-                 if v["properties"]["type"]["enum"] == ["resolved"]]  # fmt: skip
-    assert resolved["items"]["required"] == ["id", "target_quote", "quote", "context_quote"]
+    required = OUTPUT_SCHEMA["properties"]["resolved"]["items"]["required"]
+    assert required == ["id", "target_quote", "quote", "context_quote"]
 
 
 def test_the_instructions_say_bare_thanks_confirms_nothing():

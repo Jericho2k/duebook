@@ -73,7 +73,8 @@ _DUE = _obj(
     }
 )
 
-_SECTIONS = {
+OUTPUT_SCHEMA: dict[str, Any] = _obj(
+    {
         "facts": _list({"slot": _STR, "value": _STR, "quote": _STR, "change": {"type": "boolean"}}),
         "commitments": _list(
             {
@@ -95,15 +96,10 @@ _SECTIONS = {
         "step_outcomes": _list({"id": _STR, "outcome": _enum(["worked", "failed"]), "quote": _STR}),
         "questions": _list({"text": _STR, "quote": _STR}),
         "answers": _list({"id": _STR, "quote": _STR}),
-}
-_UPDATES = {
-    "type": "array",
-    "items": {"anyOf": [_obj({"type": _enum([name]), "items": items})
-                        for name, items in _SECTIONS.items()]},
-}
-OUTPUT_SCHEMA = _obj({"updates": _UPDATES})
+    }
+)
 BATCH_SCHEMA = _obj({"messages": _list({
-    "seq": {"type": "integer"}, "reread": {"type": "boolean"}, "updates": _UPDATES,
+    "seq": {"type": "integer"}, "reread": {"type": "boolean"}, **OUTPUT_SCHEMA["properties"],
 })})
 
 
@@ -164,19 +160,6 @@ def parse_output(
 
     proposals: list[Proposal] = []
     malformed: list[Malformed] = []
-    if "updates" in raw:
-        sections: dict[str, list] = {}
-        items = raw["updates"]
-        if not isinstance(items, list):
-            return [], [Malformed("updates", items, "not a list")]
-        for update in items:
-            if (not isinstance(update, dict) or not isinstance(update.get("type"), str)
-                or update["type"] not in builders
-                or not isinstance(update.get("items"), list)):
-                malformed.append(Malformed("updates", update, "invalid section"))
-                continue
-            sections.setdefault(update["type"], []).extend(update["items"])
-        raw = sections
     for section, build in builders.items():
         items = raw.get(section) or []
         if not isinstance(items, list):
