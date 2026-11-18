@@ -266,6 +266,41 @@ def test_the_same_promise_twice_is_one_commitment():
     assert len(t.card.commitments) == 1
 
 
+def restore_access(t: Ticket, workspace: str, due: str, weekday: int):
+    quote = f"Восстановим доступ к рабочему пространству {workspace} {due}"
+    proposal = MakeCommitment(Party.COMPANY, "восстановить доступ", quote, due=WeekdayRef(weekday),
+                              due_quote=due)  # fmt: skip
+    return t.say(IVAN, f"{quote}.", proposal)
+
+
+def test_alike_promises_about_different_things_are_two_commitments():
+    t = Ticket()
+    restore_access(t, "Альфа", "до пятницы", 4)
+    assert reasons(restore_access(t, "Бета", "до пятницы", 4)) == []
+    assert len(t.card.commitments) == 2
+
+
+def test_a_restatement_with_another_deadline_is_kept():
+    t = Ticket()
+    restore_access(t, "Альфа", "до пятницы", 4)
+    assert reasons(restore_access(t, "Альфа", "до понедельника", 0)) == []
+    assert len(t.card.commitments) == 2
+
+
+def test_a_restatement_without_a_deadline_is_a_duplicate():
+    t = Ticket()
+    promise_refund(t)
+    again = promise_refund(t, quote="вернём деньги", due=None, due_quote=None)
+    assert reasons(again) == [Reason.DUPLICATE]
+
+
+def test_promises_that_name_nothing_are_not_merged():
+    t = Ticket()
+    for _ in range(2):
+        t.say(IVAN, "Сделаем всё.", MakeCommitment(Party.COMPANY, "сделать", "Сделаем всё"))
+    assert len(t.card.commitments) == 2
+
+
 def test_the_debtors_word_is_a_claim_until_the_other_side_confirms():
     t = Ticket()
     promise_refund(t)

@@ -25,6 +25,7 @@ event stream, so it can be rebuilt, audited, and inspected as of any moment.
 | Nobody can bind the other side | "You promised me a refund" is a customer's claim, not a company promise |
 | The debtor's "done" is a *claim*; only the other side or a system of record *verifies* | "We sent the refund" and "the refund arrived" are different facts |
 | The debtor cannot cancel their own promise, only renegotiate it | A dropped promise must stay visible |
+| A new promise is a duplicate only when it restates an open one: it names nothing the open one does not, and the reverse, with no other deadline | Two promises alike in action but about different things are both kept; dropping a real promise is silent ([decision 0003](docs/decisions/0003-promise-identity.md)) |
 | A close (done, cancelled, renegotiated) must name its promise twice and be about it; if not, the promise stays open and the close becomes a suggestion | A promise closed by mistake is never alerted on again; one left open still is |
 | One side updating its own statement *supersedes*; two sides disagreeing is a *contradiction* | A change is history, a disagreement is an open problem |
 | A promise follows the ticket on handoff and is marked *inherited*; with no assignee it is *orphaned* | Handoff is where promises are lost |

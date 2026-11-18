@@ -66,6 +66,7 @@ from .closing import (
     names_other,
     overlap,
     quote_identifies,
+    restates,
     vouches,
 )
 from .events import (
@@ -149,13 +150,17 @@ class Guards:
     exact_context: bool = True
     #: Reproduce decisions recorded before evidence was required for every close.
     legacy: bool = False
+    #: A new promise is a duplicate only when it restates an open one: same wording,
+    #: no other deadline (decision 0003). Off: the same action is enough.
+    identity: bool = True
 
 
 #: The reducer as it was before the guards: who may close, never what.
 UNGUARDED = Guards(target=False, relevance=False, ambiguity=False, verifier=False)
 #: The rules each stored event was decided under (``event_proposals.close_rules``),
 #: so a card is rebuilt as it was decided (decision 0001). Absent: the current rules.
-CLOSE_RULES = {1: Guards(legacy=True), 2: Guards(exact_context=False)}
+CLOSE_RULES = {1: Guards(legacy=True, identity=False),
+               2: Guards(exact_context=False, identity=False), 3: Guards(identity=False)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -409,11 +414,8 @@ def _make_commitment(
         # "You promised me a refund" is a customer's claim about the company,
         # not a promise by the company.
         return card, [Reason.OWNER_AUTHOR_MISMATCH]
-    if any(
-        c.unresolved and c.owner is p.owner and _norm(c.action) == _norm(p.action)
-        and c.id != p.supersedes
-        for c in card.commitments
-    ):  # fmt: skip
+    due, reasons = _due(event, p, text, cal)
+    if any(_same_promise(c, p, due, guards) for c in card.commitments):
         return card, [Reason.DUPLICATE]
 
     retired, refused = p.supersedes, None
@@ -432,7 +434,6 @@ def _make_commitment(
             hint = Suggestion(Closure.SUPERSEDED, source, refused.value, replacement=new_id)
             card = _put_commitment(card, _suggest(old, hint))
 
-    due, reasons = _due(event, p, text, cal)
     if refused is not None:
         reasons = [refused, *reasons]
 
@@ -461,6 +462,21 @@ def _make_commitment(
         for c in card.commitments
     )
     return replace(card, commitments=(*commitments, commitment)), reasons
+
+
+def _same_promise(c: Commitment, p: MakeCommitment, due: Due | None, guards: Guards) -> bool:
+    """Is ``p`` a restatement of the open commitment ``c``? When in doubt, no.
+
+    Dropping a real promise is silent and permanent; keeping a restatement
+    costs one visible extra alert (decision 0003).
+    """
+    if not c.unresolved or c.owner is not p.owner or c.id == p.supersedes:
+        return False
+    if not guards.identity:
+        return _norm(c.action) == _norm(p.action)
+    if c.due is not None and due is not None and c.due.deadline.due_at != due.deadline.due_at:
+        return False
+    return restates((p.quote, p.action), _wording(c))
 
 
 def _due(

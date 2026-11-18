@@ -222,7 +222,7 @@ def test_an_invented_promise_costs_precision_and_not_recall():
     def invent(event, proposals):
         extra = []
         if getattr(event, "text", "").startswith(("По нашим данным", "По накладной")):
-            extra = [MakeCommitment(Party.COMPANY, f"проверить {event.seq}", "По")]
+            extra = [MakeCommitment(Party.COMPANY, f"проверить {event.seq:03d}", "По")]
         return [*proposals, *extra]
 
     s = evaluated(invent)
