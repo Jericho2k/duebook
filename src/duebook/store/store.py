@@ -31,7 +31,7 @@ from ..card import Card
 from ..events import Event, MessagePosted, Role, Side, other_side, remember_turn
 from ..lifecycle import AlertPolicy, next_wakeup, notices
 from ..proposals import Proposal
-from ..reducer import CLOSE_RULES, Rejection, apply
+from ..reducer import Guards, Rejection, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
@@ -306,9 +306,9 @@ class Store:
         """The card rebuilt from the log alone — as of ``upto`` when given."""
         card, turns = Card(ticket_id), {}
         for row in self._applied(ticket_id, upto):
-            guards = CLOSE_RULES.get(row["close_rules"])
             event, proposals = decode_event(row["body"]), decode_proposals(row["proposals"])
-            card = apply(card, event, proposals, self.cal, self.vocab, guards=guards,
+            card = apply(card, event, proposals, self.cal, self.vocab,
+                         guards=Guards(rules=row["close_rules"]),
                          previous=turns.get(other_side(event))).card  # fmt: skip
             remember_turn(turns, event)
         return card

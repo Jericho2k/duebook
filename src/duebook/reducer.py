@@ -142,6 +142,14 @@ GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMB
                      Reason.SAYS_CONDITION_HOLDS})  # fmt: skip
 
 
+#: The closing rules new events are decided under. Each event stores its version
+#: (``event_proposals.close_rules``) and is replayed under it (decision 0001):
+#: 2 a verifier "no" vetoes a close and every close needs evidence; 3 a contextual
+#: close may not name another thing; 4 promise identity (decision 0003);
+#: 5 identifier slots hold a set (decision 0005).
+RULES = 5
+
+
 @dataclass(frozen=True, slots=True)
 class Guards:
     """The checks a close must pass. All on; switched off only to measure what they do."""
@@ -154,25 +162,28 @@ class Guards:
     ambiguity: bool = True
     #: Use the stored verdict when deciding the proposed change.
     verifier: bool = True
-    #: The question a contextual close relies on may name nothing the target does not.
-    exact_context: bool = True
-    #: Reproduce decisions recorded before evidence was required for every close.
-    legacy: bool = False
-    #: A new promise is a duplicate only when it restates an open one: same wording,
-    #: no other deadline (decision 0003). Off: the same action is enough.
-    identity: bool = True
-    #: An identifier slot holds a set; only an explicit correction disputes a value
-    #: (decision 0005). Off: one current value per slot.
-    identifiers: bool = True
+    #: The version of the closing rules, 1 to ``RULES``.
+    rules: int = RULES
+
+    @property
+    def legacy(self) -> bool:
+        return self.rules < 2
+
+    @property
+    def exact_context(self) -> bool:
+        return self.rules >= 3
+
+    @property
+    def identity(self) -> bool:
+        return self.rules >= 4
+
+    @property
+    def identifiers(self) -> bool:
+        return self.rules >= 5
 
 
 #: The reducer as it was before the guards: who may close, never what.
 UNGUARDED = Guards(target=False, relevance=False, ambiguity=False, verifier=False)
-#: The rules each stored event was decided under (``event_proposals.close_rules``),
-#: so a card is rebuilt as it was decided (decision 0001). Absent: the current rules.
-CLOSE_RULES = {1: Guards(legacy=True, identity=False, identifiers=False),
-               2: Guards(exact_context=False, identity=False, identifiers=False),
-               3: Guards(identity=False, identifiers=False), 4: Guards(identifiers=False)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -461,8 +472,8 @@ def _make_commitment(
             return card, [Reason.UNKNOWN_TARGET]
         if not old.unresolved:
             return card, [Reason.ALREADY_RESOLVED]
-        refused = _check_close(card, old, (p.quote, p.action), p.target_quote, guards,
-                               p.verification, event.text, restates=True)  # fmt: skip
+        refused = _check_close(old, _rivals(card, old), (p.quote, p.action), p.target_quote,
+                               guards, p.verification, event.text, restates=True)  # fmt: skip
         if refused is not None:
             # The new promise was made and is kept; the old one is NOT retired
             # on this evidence, only marked as possibly replaced.
@@ -566,8 +577,8 @@ def _resolve_commitment(
     if context and guards.exact_context and names_beyond(context.quote, _wording(c)):
         refused: Reason | None = Reason.CONTEXT_NAMES_OTHER
     else:
-        refused = _check_close(card, c, said, p.target_quote, guards, p.verification,
-                               event.text)  # fmt: skip
+        refused = _check_close(c, _rivals(card, c), said, p.target_quote, guards,
+                               p.verification, event.text)  # fmt: skip
     if refused is not None:
         hint = Suggestion(Closure.RESOLVED, source, refused.value)
         return _put_commitment(card, _suggest(c, hint)), [refused]
@@ -613,8 +624,8 @@ def _cancel_commitment(
         return card, [Reason.ALREADY_RESOLVED]
     if event.author.side is c.owner.side:
         return card, [Reason.DEBTOR_CANNOT_CANCEL]
-    refused = _check_close(card, c, (p.quote,), p.target_quote, guards, p.verification,
-                           event.text)  # fmt: skip
+    refused = _check_close(c, _rivals(card, c), (p.quote,), p.target_quote, guards,
+                           p.verification, event.text)  # fmt: skip
     if refused is not None:
         hint = Suggestion(Closure.CANCELLED, source, refused.value)
         return _put_commitment(card, _suggest(c, hint)), [refused]
@@ -657,7 +668,7 @@ def _settle_conditional(
     if not k.pending:
         return card, [Reason.ALREADY_RESOLVED]
     rivals = [r for r in card.conditionals if r.pending and r.id != k.id]
-    refused = _evidence(k, rivals, (p.quote,), p.target_quote, guards)
+    refused = _check_close(k, rivals, (p.quote,), p.target_quote, guards)
     if refused is None and not p.holds:
         if event.author.side is k.owner.side:
             refused = Reason.DEBTOR_CANNOT_CANCEL
@@ -666,7 +677,7 @@ def _settle_conditional(
     kind = Closure.ACTIVATED if p.holds else Closure.LAPSED
     if refused is not None:
         hint = Suggestion(kind, source, refused.value)
-        return _put_conditional(card, replace(k, suggestions=(*k.suggestions, hint))), [refused]
+        return _put_conditional(card, _suggest(k, hint)), [refused]
     if not p.holds:
         return _put_conditional(card, replace(k, state=ConditionalState.LAPSED, settled=source)), []
 
@@ -692,29 +703,14 @@ def _offered_due(k: Conditional, event: MessagePosted, cal: WorkCalendar) -> Due
     return Due(deadline, expr, Confidence.MEDIUM) if deadline.due_at > event.at else None
 
 
-def _evidence(
-    target, rivals: Sequence, said: Sequence[str], target_quote: str, guards: Guards
-) -> Reason | None:
-    """The deterministic checks of a close: the target is named twice, and only it fits."""
-    if guards.target and not quote_identifies(target_quote, target.source.quote):
-        return Reason.TARGET_MISMATCH
-    text = " ".join(said)
-    fit = overlap(text, _wording(target))
-    if guards.relevance and fit == 0:
-        return Reason.NOT_ABOUT_TARGET
-    if guards.ambiguity and any(overlap(text, _wording(r)) >= max(fit, 1) for r in rivals):
-        return Reason.AMBIGUOUS_TARGET
-    return None
-
-
 def _put_conditional(card: Card, updated: Conditional) -> Card:
     return replace(card, conditionals=tuple(updated if k.id == updated.id else k
                                             for k in card.conditionals))  # fmt: skip
 
 
 def _check_close(
-    card: Card,
-    target: Commitment,
+    target: Commitment | Conditional,
+    rivals: Sequence[Commitment | Conditional],
     said: Sequence[str],
     target_quote: str,
     guards: Guards,
@@ -722,7 +718,7 @@ def _check_close(
     message: str = "",
     restates: bool = False,
 ) -> Reason | None:
-    """Require evidence about this commitment before suppressing its alerts."""
+    """Require evidence about this target, and no rival, before suppressing its alerts."""
     if guards.target and not quote_identifies(target_quote, target.source.quote):
         return Reason.TARGET_MISMATCH
     verdict = verification.verdict if verification else None
@@ -732,10 +728,6 @@ def _check_close(
     if vouched:
         said = (*said, verification.evidence_quote)
     text = " ".join(said)
-    rivals = [
-        c for c in card.commitments
-        if c.unresolved and c.id != target.id and c.owner.side is target.owner.side
-    ]  # fmt: skip
     fit = overlap(text, _wording(target))
     unrelated = fit == 0 and not (guards.legacy and not rivals and confirms(text))
     if guards.relevance and unrelated and not vouched:
@@ -747,12 +739,19 @@ def _check_close(
     return None
 
 
+def _rivals(card: Card, target: Commitment) -> list[Commitment]:
+    """The other open commitments of the target's side: what a close could mean instead."""
+    side = target.owner.side
+    return [c for c in card.commitments if c.unresolved and c.id != target.id
+            and c.owner.side is side]  # fmt: skip
+
+
 def _wording(c: Commitment | Conditional) -> tuple[str, str]:
     """What a commitment is known by: the words it was made in, and its action."""
     return c.source.quote, c.action
 
 
-def _suggest(c: Commitment, hint: Suggestion) -> Commitment:
+def _suggest(c: Commitment | Conditional, hint: Suggestion) -> Commitment | Conditional:
     return replace(c, suggestions=(*c.suggestions, hint))
 
 

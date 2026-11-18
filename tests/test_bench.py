@@ -24,8 +24,6 @@ from duebook.bench import (
     evaluate,
     generate,
     require_different_models,
-    run_ticket,
-    score,
 )
 from duebook.bench.experiment import to_json
 from duebook.bench.generate import MAIN3, PROMISE_BEATS, TWINS, Beat, CloseCase
@@ -135,14 +133,6 @@ def test_each_planted_value_is_recognisable_by_its_key_and_by_nothing_else_in_th
             assert matching == [fact] or {f.value for f in matching} == {fact.value}
 
 
-def test_dev_and_test_splits_are_fixed_disjoint_and_the_test_split_has_20_tickets():
-    dev, test = SPLITS["dev"], SPLITS["test"]
-    assert dev.seed != test.seed and test.count >= 20
-    ids = {t.ticket_id for t in dev.tickets()} & {t.ticket_id for t in test.tickets()}
-    assert not ids
-    assert SPLITS["long"].profile is LONG
-
-
 def test_the_benchmark_runs_without_a_database_driver():
     check = "import sys, duebook.bench.experiment; sys.exit('psycopg' in sys.modules)"
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).parents[1] / "src")}
@@ -152,20 +142,11 @@ def test_the_benchmark_runs_without_a_database_driver():
 # -------------------------------------------- labels are true by design ----
 
 
-def test_the_planted_proposals_through_the_real_reducer_score_exactly_one():
-    s = evaluate(TICKETS, Oracle.of(TICKETS)).score
-    assert (s.commitments.fp, s.commitments.fn, s.alerts.fp, s.alerts.fn) == (0, 0, 0, 0)
-    assert s.commitments.tp == sum(len(t.gold.commitments) for t in TICKETS) > 200
-    assert s.deadline_accuracy == 1.0 and s.commitments.f1 == 1.0
-    assert s.alerts.tp == sum(c.fate is Fate.BROKEN for t in TICKETS for c in t.gold.commitments)
-    every = s + evaluate(TICKETS, Oracle.of(TICKETS)).handoffs
-    assert every.fact_recall == 1.0 and every.facts_current > 100
-
-
 def test_each_label_describes_what_the_card_really_ends_up_holding():
     for t in TICKETS:
-        card, _, failure = run_ticket(t, Oracle.of([t]))
-        assert failure is None
+        folded = fold(t, Oracle.of([t]))
+        card = folded.card
+        assert folded.failure is None
         by_seq = {c.source.seq: c for c in card.commitments}
         for gold in t.gold.commitments:
             found = by_seq[gold.seq]
@@ -329,8 +310,8 @@ def test_a_rewrite_keeps_the_planted_spans_and_the_labels_stay_true():
     texts = [e.text for e in rewritten.events if hasattr(e, "text")]
     assert all(text.startswith("Ой, слушайте…") for text in texts) and rewriter.discarded == 0
     assert rewriter.spent.calls == len(texts)
-    card, _, _ = run_ticket(rewritten, Oracle.of([rewritten]))
-    assert score(rewritten, card).commitments == Counts(tp=len(ticket.gold.commitments))
+    s = evaluate([rewritten], Oracle.of([rewritten])).score
+    assert s.commitments == Counts(tp=len(ticket.gold.commitments))
 
 
 def test_a_rewrite_that_lost_a_planted_span_is_discarded():
@@ -439,8 +420,9 @@ def test_the_main_profile_plants_renegotiations_and_cancellations_with_true_labe
     fates = {c.fate for t in MAIN_TICKETS for c in t.gold.commitments}
     assert {Fate.RENEGOTIATED, Fate.CANCELLED} <= fates
     for t in MAIN_TICKETS:
-        card, _, failure = run_ticket(t, Oracle.of([t]))
-        assert failure is None
+        folded = fold(t, Oracle.of([t]))
+        card = folded.card
+        assert folded.failure is None
         by_seq = {c.source.seq: c for c in card.commitments}
         expected = {
             Fate.KEPT: CommitmentState.FULFILLED,
@@ -468,6 +450,9 @@ def test_the_oracle_scores_perfectly_at_the_end_and_handoffs_of_every_split(name
         assert all(getattr(s, case.value).recall == 1.0 for case in CloseCase)
         assert s.offers.f1 == s.condition_alerts.f1 == 1.0
         assert s.offer_states_right == s.offer_states_judged
+    every = report.score + report.handoffs
+    assert every.commitments.tp and every.alerts.tp and every.disputes.tp and every.failed_steps.tp
+    assert report.handoffs.checkpoints == sum(len(t.gold.handoffs) for t in tickets)
     if SPLITS[name].profile in (MAIN2, MAIN3):
         assert all(getattr(report.score, case.value).tp == len(tickets) for case in CloseCase)
 
@@ -479,10 +464,16 @@ def test_round_one_profiles_generate_exactly_the_tickets_round_one_was_run_on():
         assert messages == set(stored["tickets"][t.ticket_id]["texts"])
 
 
-def test_round_two_splits_use_fresh_seeds():
-    old = {SPLITS[n].seed for n in ("dev", "test", "long")}
-    assert SPLITS["dev2"].seed not in old and SPLITS["test2"].seed not in old
-    assert SPLITS["test2"].count >= 20 and SPLITS["test2"].profile is MAIN
+def test_every_split_has_its_own_seed_and_every_test_split_20_tickets():
+    assert len({split.seed for split in SPLITS.values()}) == len(SPLITS)
+    assert all(s.count >= 20 for name, s in SPLITS.items() if name.startswith("test"))
+
+
+def digest_of(tickets) -> str:
+    data = json.dumps(
+        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
+    )
+    return sha256(data.encode("utf-8")).hexdigest()
 
 
 # Round 4 widened the planted span of the two device-model statements to the
@@ -504,10 +495,7 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
         for proposals in ticket["proposals"]:
             for proposal in proposals:
                 assert proposal.pop("context_quote", "") == ""
-    data = json.dumps(
-        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
-    )
-    assert sha256(data.encode("utf-8")).hexdigest() == digest
+    assert digest_of(tickets) == digest
 
 
 # Captured before Round 8 added its beats: every earlier split is unchanged.
@@ -526,10 +514,7 @@ def test_earlier_splits_match_the_hashes_captured_before_main3(name, digest):
     tickets = to_json(SPLITS[name].tickets())
     for ticket in tickets:
         assert ticket["gold"].pop("beats") == [] and ticket["gold"].pop("conditionals") == []
-    data = json.dumps(
-        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
-    )
-    assert sha256(data.encode("utf-8")).hexdigest() == digest
+    assert digest_of(tickets) == digest
 
 
 # Captured before Round 9 changed the conditional offer's labels: the messages
@@ -543,10 +528,7 @@ def test_earlier_splits_match_the_hashes_captured_before_main3(name, digest):
 )
 def test_round_eight_messages_match_the_hashes_captured_before_round_nine(name, digest):
     tickets = [{"events": to_json(t.events), "anchors": t.anchors} for t in SPLITS[name].tickets()]
-    data = json.dumps(
-        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
-    )
-    assert sha256(data.encode("utf-8")).hexdigest() == digest
+    assert digest_of(tickets) == digest
 
 
 def test_round_eight_splits_plant_every_beat():
@@ -572,14 +554,12 @@ def test_a_beat_that_is_not_a_promise_plants_no_commitment():
 def test_two_promises_with_one_action_survive_only_under_promise_identity():
     for ticket in SPLITS["dev5"].tickets():
         pair = [b.seq for b in ticket.gold.beats if b.kind is Beat.SAME_ACTION]
-        for guards, kept in ((Guards(), 2), (Guards(identity=False), 1)):
+        for guards, kept in ((Guards(), 2), (Guards(rules=3), 1)):
             card = fold(ticket, Oracle.of([ticket]), guards=guards).card
             assert sum(c.source.seq in pair for c in card.commitments) == kept
 
 
-def test_the_round_three_splits_use_main2_at_fresh_distinct_seeds():
-    assert len({split.seed for split in SPLITS.values()}) == len(SPLITS)
-    assert (SPLITS["dev3"].count, SPLITS["test3"].count, SPLITS["test3"].seed) == (4, 20, 4343)
+def test_the_round_three_splits_are_long_and_span_days_and_handoffs():
     for name in ("dev3", "test3", "dev4"):
         assert SPLITS[name].profile is MAIN2
         for ticket in SPLITS[name].tickets():

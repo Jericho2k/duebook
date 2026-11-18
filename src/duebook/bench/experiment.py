@@ -33,20 +33,20 @@ does not fit. A method too expensive for every ticket can be given a subset
 are then computed on those tickets only, and the record says so.
 
 A round is a configuration of this runner, not a module. The event memory
-runs as the product ships it (``event_memory``: reasoning off, guards, the
-verifier on closes) or as round 3's A (``event_memory_reasoning``). Its
-proposals, with the verifier's verdicts, are kept, and folded again through
-the reducer with the verdicts ignored (``event_memory_no_verifier``) and with
-the closing guards off (``event_memory_unguarded``): no model call, the same
-model output, so what the verifier and the guards do is isolated.
+runs as the product ships it (``event_memory``) or with a reasoning extractor
+and no verifier (``event_memory_reasoning``). Its proposals, with the
+verifier's verdicts, are kept and folded again with the verdicts ignored
+(``event_memory_no_verifier``) and with the closing guards off
+(``event_memory_unguarded``): the same model output, no model call, so what
+the verifier and the guards do is isolated.
 
-Two records can stand in for model calls. ``--replay`` folds the proposals a
-recorded ``event_memory`` run made, so a later reducer is measured on frozen
-model output, and only proposals without a verdict are put to the verifier.
-``--frozen`` takes every method not run now from a record and scores its
-snapshots again, so baselines are run once and re-scored for free. Finished
-runs are journalled under ``.cache/runs/``; an interrupted run resumes from
-the journal and the response cache, and never pays twice.
+Records stand in for model calls. ``--replay`` folds the proposals a recorded
+``event_memory`` run made (or, given ``oracle``, the planted ones), so a later
+reducer is measured on frozen model output; ``--reread`` reads the messages it
+lists again, live, against the card the replay rebuilds. ``--frozen`` takes
+every method not run now from a record and scores its snapshots again.
+Finished runs are journalled under ``.cache/runs/``; an interrupted run
+resumes from the journal and the response cache, and never pays twice.
 """
 
 from __future__ import annotations
@@ -72,7 +72,6 @@ from ..events import MessagePosted, other_side, remember_turn
 from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCache
 from ..extract.cost import Usage
 from ..extract.extractor import reading_clients
-from ..extract.prompt import Bound
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
 from ..proposals import AssertFact, MakeCommitment, MakeConditional, Proposal, SettleConditional
 from ..reducer import UNGUARDED, Guards, apply
@@ -80,7 +79,7 @@ from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
-from .generate import MAIN, MAIN2, MAIN3, MAIN4, SPLITS, CloseCase, SimTicket, Split
+from .generate import SPLITS, CloseCase, SimTicket, Split
 from .meter import Ledger, Meter
 from .methods import EventMemory, Method, MethodRun, Recorded
 from .result import Snapshot, checkpoints, snapshot_of
@@ -100,43 +99,26 @@ from .score import (
 #: messages, the one that reworded most without adding anything a label would
 #: have to account for (docs/results.md). Served as z-ai/glm-5.3-flash.
 WRITER = "~z-ai/glm-flash-latest"
-RESULTS = Path("results")
-ROUND2 = RESULTS / "round2"
-ROUND4 = RESULTS / "round4"
-ROUND7 = RESULTS / "round7"
-ROUND8 = RESULTS / "round8"
-ROUND9 = RESULTS / "round9"
 CACHE = Path(".cache/responses")
 #: ``--replay oracle``: the planted proposals stand in for a recorded run.
 ORACLE = Path("oracle")
 #: Finished (method, ticket) runs of a run in progress, to resume from.
 JOURNAL = Path(".cache/runs")
-#: What all live model calls of round 2 may cost together.
+#: What all live model calls logged in one results directory may cost together.
 SESSION_CAP = 1.50
 WRITER_ATTEMPTS = 3
 METHODS = ("event_memory", "full_context", "rolling_summary", "mem0", "graphiti")
 #: The event memory's configurations: (extractor reasoning, verifier reasoning
 #: or None for no verifier).
-EVENT_MEMORY = {
-    # As the product ships it since PR #8; round 3's B.
-    "event_memory": ("off", DEFAULT_VERIFIER_REASONING),
-    # Round 3's A.
-    "event_memory_reasoning": ("low", None),
-}
+EVENT_MEMORY = {"event_memory": ("off", DEFAULT_VERIFIER_REASONING),
+                "event_memory_reasoning": ("low", None)}  # fmt: skip
 #: The event memory's own proposals folded again under other rules: verdicts
-#: ignored (round 3's C, round 2's configuration), and the guards off as well.
+#: ignored, and the guards off as well.
 REFOLDS = {"event_memory_no_verifier": Guards(verifier=False),
            "event_memory_unguarded": UNGUARDED}  # fmt: skip
 
 
 # --------------------------------------------------------------- tickets ----
-
-
-def results_directory(split: Split) -> Path:
-    """The round that defined the split: its rewritten tickets are kept there."""
-    if split.name == "dev4":
-        return ROUND7
-    return {MAIN: ROUND2, MAIN2: ROUND4, MAIN3: ROUND8, MAIN4: ROUND9}.get(split.profile, RESULTS)
 
 
 def rewritten(
@@ -221,8 +203,6 @@ def make_methods(
             methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
                                        recorded=recorded if name == "event_memory" else None,
                                        escalation=escalation, reread=reread))
-        elif name == "event_memory_bounded":
-            methods.append(EventMemory(reader, ledger, cal, bound=Bound(), name=name))
         elif name == "full_context":
             from .baselines import FullContext
 
@@ -349,7 +329,7 @@ def project(
             units = sum(len(_transcript(t, cp.seq, cal)) for t in chosen for cp in checkpoints(t))
         else:
             per, units = len(sample.events), sum(len(t.events) for t in chosen)
-        scale = GROWTH.get(method.name.removesuffix("_bounded"), 2.0) * units / per
+        scale = GROWTH.get(method.name, 2.0) * units / per
         out[method.name] = {"sample_usd": made, "sample_charged": charged,
                             "upper": made * scale, "expected": charged * scale,
                             "reused": made - charged}  # fmt: skip
@@ -471,8 +451,7 @@ def recorded_proposals(path: Path, tickets: Sequence[SimTicket] = ()) -> dict[st
     The path ``oracle`` stands for the proposals planted in ``tickets``.
     """
     if path == ORACLE:
-        return {t.ticket_id: Recorded(t.proposals, Usage(), Usage(), 0.0, 0.0, {})
-                for t in tickets}  # fmt: skip
+        return {t.ticket_id: Recorded(t.proposals) for t in tickets}
     out = {}
     for run in load_runs(path):
         if run.method != "event_memory":
@@ -500,23 +479,13 @@ def guard_effects(
     the target was closed by another message.
     """
     by_id = {t.ticket_id: t for t in tickets}
-    kinds = {"false_close_prevented": 0, "true_close_blocked": 0,
-             "wrong_target_prevented": 0, "not_a_planted_promise": 0}  # fmt: skip
+    kinds = dict.fromkeys(PREVENTED.values(), 0)
     reasons: dict[str, dict[str, int]] = {}
     examples = []
     for run in runs:
         ticket = by_id[run.ticket_id]
-        gold = {c.seq: c for c in ticket.gold.commitments}
         for seq, reason, kind, target in run.detail.get("refused", []):
-            g = gold.get(target)
-            if g is None:
-                verdict = "not_a_planted_promise"
-            elif not g.closed(seq):
-                verdict = "false_close_prevented"
-            elif g.resolved_seq == seq:
-                verdict = "true_close_blocked"
-            else:
-                verdict = "wrong_target_prevented"
+            verdict = PREVENTED[_truth(ticket, target, seq)]
             kinds[verdict] += 1
             reasons.setdefault(reason, {}).setdefault(verdict, 0)
             reasons[reason][verdict] += 1
@@ -538,7 +507,6 @@ def audit(ticket: SimTicket, proposals: Sequence[Sequence[Proposal]],
     the target, "false" when the target was still owed, "wrong_target" when
     it was closed by another message, "unplanted" for a promise no label has.
     """
-    gold = {c.seq: c for c in ticket.gold.commitments}
     card, out, turns = Card(ticket.ticket_id), [], {}
     for event, ps in zip(ticket.events, proposals, strict=False):
         previous = turns.get(other_side(event))
@@ -550,15 +518,7 @@ def audit(ticket: SimTicket, proposals: Sequence[Sequence[Proposal]],
                 continue
             alone = apply(card, event, [p], cal, guards=Guards(verifier=False),
                           previous=previous).card
-            g = gold.get(target.source.seq)
-            if g is None:
-                truth = "unplanted"
-            elif not g.closed(event.seq):
-                truth = "false"
-            elif g.resolved_seq == event.seq:
-                truth = "true"
-            else:
-                truth = "wrong_target"
+            truth = _truth(ticket, target.source.seq, event.seq)
             out.append({
                 "ticket": ticket.ticket_id, "seq": event.seq, "kind": type(p).__name__,
                 "target_seq": target.source.seq, "verdict": v.verdict.value,
@@ -569,6 +529,21 @@ def audit(ticket: SimTicket, proposals: Sequence[Sequence[Proposal]],
         card = after
         remember_turn(turns, event)
     return out
+
+
+#: A refused close, by what the labels say it would have been.
+PREVENTED = {"false": "false_close_prevented", "true": "true_close_blocked",
+             "wrong_target": "wrong_target_prevented", "unplanted": "not_a_planted_promise"}
+
+
+def _truth(ticket: SimTicket, target_seq: int, seq: int) -> str:
+    """What closing the promise made at ``target_seq`` by message ``seq`` is, by the labels."""
+    g = next((c for c in ticket.gold.commitments if c.seq == target_seq), None)
+    if g is None:
+        return "unplanted"
+    if not g.closed(seq):
+        return "false"
+    return "true" if g.resolved_seq == seq else "wrong_target"
 
 
 def _closed(target, card: Card) -> bool:
@@ -691,8 +666,8 @@ def summarise(
         def at(indices) -> dict[str, float]:
             picked = [per[i] for i in indices]
             sums = {
-                "end": _sum(p.end for p in picked),
-                "handoffs": _sum(p.handoffs for p in picked),
+                "end": sum((p.end for p in picked), Score()),
+                "handoffs": sum((p.handoffs for p in picked), Score()),
             }
             sums["all"] = sums["end"] + sums["handoffs"]
             out = {k: f(sums[w], len(picked)) for k, (w, f) in METRICS.items()}
@@ -721,8 +696,8 @@ def summarise(
                 "diff_ci95": _interval(diffs),
             }
         rows["tickets"] = len(order)
-        total = _sum(scores[m, tid].all for tid in order)
-        end = _sum(scores[m, tid].end for tid in order)
+        total = sum((scores[m, tid].all for tid in order), Score())
+        end = sum((scores[m, tid].end for tid in order), Score())
         rows["counts_end"] = end.as_dict()
         rows["counts_all"] = total.as_dict()
         rows["failures"] = sum(1 for tid in order if runs_of[m, tid].failure)
@@ -780,13 +755,6 @@ def deadline_errors(tickets: Sequence[SimTicket], runs: Sequence[MethodRun]) -> 
                     "found": found.due_at.isoformat() if found.due_at else None,
                 })  # fmt: skip
     return {"kinds": kinds, "examples": examples}
-
-
-def _sum(scores) -> Score:
-    total = Score()
-    for s in scores:
-        total += s
-    return total
 
 
 def _interval(draws: list[float]) -> list[float]:
@@ -942,7 +910,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     split = SPLITS[args.split]
     if args.template and split.name.startswith("test"):
         parser.error("--template is only for development splits")
-    results = args.results or results_directory(split)
+    results = args.results or split.results
     out = args.out or results / f"{split.name}.json"
     if split.name.startswith("test") and out.exists():
         raise SystemExit(f"{out} exists: the test split is run once")
@@ -966,7 +934,7 @@ def main(argv: Sequence[str] | None = None) -> None:
                                 "reused_usd": ledger.reused.usd() or 0.0}) + "\n")  # fmt: skip
 
     try:
-        where = results_directory(split) / "tickets"
+        where = split.results / "tickets"
         if args.template:
             tickets = split.tickets()
             written = {"tickets": {t.ticket_id: {"discarded": 0} for t in tickets}}

@@ -58,6 +58,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import datetime, time, timedelta
 from enum import StrEnum
+from pathlib import Path
 
 from ..card import Party, StepOutcome
 from ..events import Actor, AssigneeChanged, Event, MessagePosted, Role, Side
@@ -331,6 +332,8 @@ class Split:
     seed: int
     count: int
     profile: Profile = STANDARD
+    #: Where the round that defined the split keeps its rewritten tickets and records.
+    results: Path = Path("results")
 
     def tickets(self, cal: WorkCalendar | None = None) -> list[SimTicket]:
         return generate(self.seed, self.count, cal, self.profile)
@@ -344,18 +347,18 @@ SPLITS = {
         # Two tickets of 200+ messages, to show how each method's cost scales.
         Split("long", seed=303, count=2, profile=LONG),
         # Round 2: long tickets are the main test. Fresh seeds.
-        Split("dev2", seed=4141, count=4, profile=MAIN),
-        Split("test2", seed=4242, count=20, profile=MAIN),
-        Split("dev3", seed=4444, count=4, profile=MAIN2),
-        Split("test3", seed=4343, count=20, profile=MAIN2),
+        Split("dev2", seed=4141, count=4, profile=MAIN, results=Path("results/round2")),
+        Split("test2", seed=4242, count=20, profile=MAIN, results=Path("results/round2")),
+        Split("dev3", seed=4444, count=4, profile=MAIN2, results=Path("results/round4")),
+        Split("test3", seed=4343, count=20, profile=MAIN2, results=Path("results/round4")),
         # Round 7: a larger development split, rewritten like test3.
-        Split("dev4", seed=4747, count=8, profile=MAIN2),
+        Split("dev4", seed=4747, count=8, profile=MAIN2, results=Path("results/round7")),
         # Round 8: who is accountable. test4 is never used for tuning.
-        Split("dev5", seed=5151, count=8, profile=MAIN3),
-        Split("test4", seed=5353, count=20, profile=MAIN3),
+        Split("dev5", seed=5151, count=8, profile=MAIN3, results=Path("results/round8")),
+        Split("test4", seed=5353, count=20, profile=MAIN3, results=Path("results/round8")),
         # Round 9: what became of each conditional offer, in template words. The
         # first seed from 6161 whose 8 tickets hold each outcome at least twice.
-        Split("dev6", seed=6174, count=8, profile=MAIN4),
+        Split("dev6", seed=6174, count=8, profile=MAIN4, results=Path("results/round9")),
     )
 }
 

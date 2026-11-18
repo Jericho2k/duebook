@@ -28,8 +28,8 @@ from .generate import (
     generate,
 )
 from .rewrite import Rewriter, SameModel, require_different_models
-from .run import Oracle, Report, evaluate, run_ticket
-from .score import Counts, Score, score
+from .run import Oracle, Report, evaluate
+from .score import Counts, Score
 
 __all__ = [
     "LONG",
@@ -57,6 +57,4 @@ __all__ = [
     "evaluate",
     "generate",
     "require_different_models",
-    "run_ticket",
-    "score",
 ]

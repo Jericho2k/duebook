@@ -170,11 +170,8 @@ def process(settings: Settings, args: argparse.Namespace, stopper: Stopper, read
             _report(pipeline.process(settings.process_batch, stopper))
             stopper.set()
             return
-        while not stopper():
-            done = pipeline.process(settings.process_batch, stopper)
-            _report(done)
-            if not done:
-                stopper.sleep(settings.process_idle.total_seconds())
+        pipeline.run(sleep=stopper.sleep, idle=settings.process_idle,
+                     limit=settings.process_batch, stop=stopper, report=_report)  # fmt: skip
 
     supervise(settings, stopper, body, "processor", args.once)
     return 0

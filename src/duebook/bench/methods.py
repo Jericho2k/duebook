@@ -76,13 +76,13 @@ class Recorded:
     """What an earlier run of the event memory proposed for one ticket, and what it cost."""
 
     #: Per event, in order; a proposal keeps the verifier's verdict if it had one.
-    proposals: tuple[tuple[Proposal, ...], ...]
-    extraction: Usage
-    verifier: Usage
+    proposals: tuple[tuple[Proposal, ...], ...] = ()
+    extraction: Usage = field(default_factory=Usage)
+    verifier: Usage = field(default_factory=Usage)
     #: Model seconds spent extracting, and verifying.
-    seconds: float
-    verifier_seconds: float
-    providers: dict[str, int]
+    seconds: float = 0.0
+    verifier_seconds: float = 0.0
+    providers: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(slots=True)
@@ -120,7 +120,7 @@ class EventMemory:
         reread: list[list] = []
         if self.recorded is None:
             reader = _Sizing(extractor, sizes)
-            before = Recorded((), Usage(), Usage(), 0.0, 0.0, {})
+            before = Recorded()
         else:
             before = self.recorded[ticket.ticket_id]
             answers = {e.id: p for e, p in zip(ticket.events, before.proposals, strict=False)}

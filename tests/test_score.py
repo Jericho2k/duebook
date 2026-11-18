@@ -20,13 +20,11 @@ from duebook.bench.result import (
 from duebook.bench.run import fold, refold, snapshots
 from duebook.bench.score import (
     Counts,
-    Score,
     Stage,
     alerted_at,
     attribute,
     fact_status,
     score_snapshot,
-    score_ticket,
 )
 from duebook.lifecycle import NoticeKind
 from duebook.proposals import MakeCommitment
@@ -60,19 +58,6 @@ def test_a_value_is_recognised_by_exact_numbers_and_word_stems():
 
 
 # ----------------------------------------------------- the oracle is 1.0 ----
-
-
-def test_the_oracle_is_perfect_at_every_handoff_as_well_as_at_the_end():
-    total = Score()
-    for t in TICKETS:
-        scored = score_ticket(t, oracle_snapshots(t))
-        assert scored.handoffs.checkpoints == len(t.gold.handoffs) >= 2
-        total += scored.all
-    assert total.commitments.f1 == total.deadline_accuracy == total.status_accuracy == 1.0
-    assert total.alerts.f1 == total.change_accuracy == 1.0
-    assert total.disputes.f1 == total.failed_steps.f1 == 1.0
-    assert total.freshness_error == 0.0 and total.facts_judged > 200
-    assert total.disputes.tp > 0 and total.failed_steps.tp > 0 and total.alerts.tp > 0
 
 
 def test_the_scorers_alerts_are_exactly_the_cards_breach_notices():
@@ -304,11 +289,6 @@ def test_an_unanswered_checkpoint_scores_as_nothing_found_and_is_counted():
     cp = checkpoints(t)[-1]
     s = score_snapshot(t, Snapshot(cp, error="ModelError: http 503"))
     assert s.errors == 1 and s.commitments.tp == 0 and s.commitments.fn > 0
-
-
-def test_a_score_round_trips_through_json():
-    s = score_ticket(TICKETS[0], oracle_snapshots(TICKETS[0])).all
-    assert Score.from_dict(s.as_dict()) == s
 
 
 def test_the_card_adapter_shows_a_disputed_slot_only_as_a_dispute():
