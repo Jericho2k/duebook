@@ -17,8 +17,7 @@ cards can still be rebuilt from the log, without changing alert history.
 
 ## Amendment: a contextual close must not name another thing
 
-Status **Proposed** (Round 6). The Round 6 task brief reports the owner's
-approval in chat; the owner confirms it by accepting this pull request.
+Status **Accepted by the owner** (Round 6; confirmed in chat on 2026-11-18).
 
 In Round 5 a customer confirmed "возмещение стоимости монтажа", asked about in
 the preceding turn. The installation refund had never reached the card, and
