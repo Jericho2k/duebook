@@ -466,6 +466,8 @@ def test_the_oracle_scores_perfectly_at_the_end_and_handoffs_of_every_split(name
         assert s.change_accuracy == s.fact_recall == 1.0 and s.freshness_error == 0.0
         assert s.closes_missed == s.suggestions_right == s.suggestions_wrong == s.errors == 0
         assert all(getattr(s, case.value).recall == 1.0 for case in CloseCase)
+        assert s.offers.f1 == s.condition_alerts.f1 == 1.0
+        assert s.offer_states_right == s.offer_states_judged
     if SPLITS[name].profile in (MAIN2, MAIN3):
         assert all(getattr(report.score, case.value).tp == len(tickets) for case in CloseCase)
 
@@ -498,6 +500,7 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
     for ticket in tickets:
         # Compare the full round-2 record using its original schema.
         assert ticket["gold"].pop("close_cases") == [] and ticket["gold"].pop("beats") == []
+        assert ticket["gold"].pop("conditionals") == []
         for proposals in ticket["proposals"]:
             for proposal in proposals:
                 assert proposal.pop("context_quote", "") == ""
@@ -522,7 +525,24 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
 def test_earlier_splits_match_the_hashes_captured_before_main3(name, digest):
     tickets = to_json(SPLITS[name].tickets())
     for ticket in tickets:
-        assert ticket["gold"].pop("beats") == []
+        assert ticket["gold"].pop("beats") == [] and ticket["gold"].pop("conditionals") == []
+    data = json.dumps(
+        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
+    )
+    assert sha256(data.encode("utf-8")).hexdigest() == digest
+
+
+# Captured before Round 9 changed the conditional offer's labels: the messages
+# Round 8 rewrote and read are unchanged.
+@pytest.mark.parametrize(
+    ("name", "digest"),
+    [
+        ("dev5", "c615074f51281724c4044090a23f2cca10598efcbe5ee89ba625b71e7c21a31a"),
+        ("test4", "2eccd59915fb8e9739afc8fb7617496749b8bb9a11fe1d1c2fb0474f47ad3db4"),
+    ],
+)
+def test_round_eight_messages_match_the_hashes_captured_before_round_nine(name, digest):
+    tickets = [{"events": to_json(t.events), "anchors": t.anchors} for t in SPLITS[name].tickets()]
     data = json.dumps(
         tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
     )

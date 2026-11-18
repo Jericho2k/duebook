@@ -53,6 +53,14 @@ value is current, stale (it was changed, or lost a dispute) or contested.
   against the planted failed fixes. A step is recognised by any message it
   rests on or by a word stem of the step.
 
+**Conditional offers** (decision 0004) — an offer is identified by its
+message. *Offers* — precision and recall of the offers held against the ones
+planted. *Offer states* — of those found, the share pending, activated or
+lapsed as the label says by the checkpoint. *Condition-due alerts* — an
+offer still pending past its condition's deadline must raise one, and no
+other may. A commitment an activated offer became is judged here, not among
+the promises.
+
 **Where a promise was lost** (``attribute``) — every gold promise at the end
 of a ticket is in one stage: *right*; *missed by the model* (no commitment of
 its side proposed at its message); *dropped by the reducer* (proposed, never
@@ -157,6 +165,10 @@ class Score:
     rescue_close_correct: Counts = field(default_factory=Counts)
     ambiguous_close_refrained: Counts = field(default_factory=Counts)
     wrong_thing_not_closed: Counts = field(default_factory=Counts)
+    offers: Counts = field(default_factory=Counts)
+    offer_states_right: int = 0
+    offer_states_judged: int = 0
+    condition_alerts: Counts = field(default_factory=Counts)
 
     def __add__(self, other: Score) -> Score:
         return Score(*(getattr(self, f.name) + getattr(other, f.name) for f in fields(self)))
@@ -243,13 +255,14 @@ def score(ticket: SimTicket, card: Card, policy: AlertPolicy | None = None) -> S
 def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
     cp, gold = snap.checkpoint, ticket.gold
     planted = tuple(c for c in gold.commitments if c.seq <= cp.seq)
-    pairs, spurious, missed = match(planted, snap.promises)
+    promises = _unconditional(snap)
+    pairs, spurious, missed = match(planted, promises)
 
     deadlines = sum(1 for g, f in pairs if same_deadline(g.due_at, f.due_at))
     statuses = sum(1 for g, f in pairs if _state(f.status) == _gold_state(g, cp))
     closes = _closes(pairs, cp)
 
-    alerted = [f for f in snap.promises if alerted_at(f, cp)]
+    alerted = [f for f in promises if alerted_at(f, cp)]
     matched = {id(f): g for g, f in pairs}
     true_alerts = sum(1 for f in alerted if id(f) in matched and _breached(matched[id(f)], cp))
     breached = sum(1 for g in planted if _breached(g, cp))
@@ -279,7 +292,29 @@ def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
         errors=int(snap.error is not None),
         facts_current=current,
         facts_recalled=recalled,
+        **_offers(ticket, snap),
     )
+
+
+def _unconditional(snap: Snapshot) -> list[Promise]:
+    """The promises judged as promises: an activated offer is judged as an offer."""
+    return [f for f in snap.promises if f.activated_seq is None]
+
+
+def _offers(ticket: SimTicket, snap: Snapshot) -> dict:
+    cp = snap.checkpoint
+    gold = [g for g in ticket.gold.conditionals if g.seq <= cp.seq]
+    found = {o.seq: o for o in snap.offers}
+    hit = [g for g in gold if g.seq in found]
+    due = {g.seq for g in gold if g.state_at(cp.seq) == "pending" and g.due_at <= cp.at}
+    raised = {o.seq for o in snap.offers
+              if o.state == "pending" and o.alertable and o.due_at and o.due_at <= cp.at}
+    return {
+        "offers": Counts(len(hit), len(found.keys() - {g.seq for g in gold}), len(gold) - len(hit)),
+        "offer_states_right": sum(found[g.seq].state == g.state_at(cp.seq) for g in hit),
+        "offer_states_judged": len(hit),
+        "condition_alerts": Counts(len(raised & due), len(raised - due), len(due - raised)),
+    }  # fmt: skip
 
 
 # ------------------------------------------------------------- promises ----
@@ -514,7 +549,7 @@ def attribute(
     """The stage each gold promise is in at the end, by the message it was made in."""
     cp = end.checkpoint
     pairs, _, missed = match([c for c in ticket.gold.commitments if c.seq <= cp.seq],
-                             end.promises)  # fmt: skip
+                             _unconditional(end))  # fmt: skip
     out = {}
     for g, f in pairs:
         wrong = _state(f.status) != _gold_state(g, cp) or alerted_at(f, cp) != _breached(g, cp)
@@ -534,7 +569,8 @@ def beat_outcomes(
 ) -> dict[str, Counter[str]]:
     """Per Round 8 beat: its promise's stage, or whether a promise was wrongly made."""
     out: dict[str, Counter[str]] = {}
-    promised = {f.seq for f in end.promises}
+    promised = {f.seq for f in _unconditional(end)}
+    offered = {o.seq for o in end.offers}
     for beat in ticket.gold.beats:
         counts = out.setdefault(beat.kind.value, Counter())
         if beat.kind in PROMISE_BEATS:
@@ -542,7 +578,5 @@ def beat_outcomes(
             continue
         counts["promise_made" if beat.seq in promised else "no_promise"] += 1
         if beat.kind is Beat.CONDITIONAL:
-            (fact,) = [f for f in ticket.gold.facts if f.seq == beat.seq]
-            shown = any(mentions(item.text, fact.key) for item in end.facts)
-            counts["offer_shown" if shown else "offer_not_shown"] += 1
+            counts["offer_recorded" if beat.seq in offered else "offer_missing"] += 1
     return out

@@ -79,7 +79,7 @@ from ..reducer import UNGUARDED, Guards, apply
 from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
-from .generate import MAIN, MAIN2, MAIN3, SPLITS, CloseCase, SimTicket, Split
+from .generate import MAIN, MAIN2, MAIN3, MAIN4, SPLITS, CloseCase, SimTicket, Split
 from .meter import Ledger, Meter
 from .methods import EventMemory, Method, MethodRun, Recorded
 from .result import Snapshot, checkpoints, snapshot_of
@@ -104,6 +104,7 @@ ROUND2 = RESULTS / "round2"
 ROUND4 = RESULTS / "round4"
 ROUND7 = RESULTS / "round7"
 ROUND8 = RESULTS / "round8"
+ROUND9 = RESULTS / "round9"
 CACHE = Path(".cache/responses")
 #: Finished (method, ticket) runs of a run in progress, to resume from.
 JOURNAL = Path(".cache/runs")
@@ -132,7 +133,7 @@ def results_directory(split: Split) -> Path:
     """The round that defined the split: its rewritten tickets are kept there."""
     if split.name == "dev4":
         return ROUND7
-    return {MAIN: ROUND2, MAIN2: ROUND4, MAIN3: ROUND8}.get(split.profile, RESULTS)
+    return {MAIN: ROUND2, MAIN2: ROUND4, MAIN3: ROUND8, MAIN4: ROUND9}.get(split.profile, RESULTS)
 
 
 def rewritten(
@@ -561,6 +562,13 @@ METRICS: dict[str, tuple[str, Callable[[Score, int], float]]] = {
     "close_precision": ("end", lambda s, n: s.close_precision),
     "suggestions_per_ticket": ("end", lambda s, n: (s.suggestions_right + s.suggestions_wrong) / n),
     "false_closes_any_checkpoint": ("all", lambda s, n: s.closes_false / n),
+    # Conditional offers (decision 0004), at every checkpoint.
+    "offer_recall": ("all", lambda s, n: s.offers.recall),
+    "offer_precision": ("all", lambda s, n: s.offers.precision),
+    "offer_state_accuracy": ("all",
+                             lambda s, n: s.offer_states_right / max(s.offer_states_judged, 1)),
+    "condition_alert_recall": ("all", lambda s, n: s.condition_alerts.recall),
+    "false_condition_alerts_per_ticket": ("all", lambda s, n: s.condition_alerts.fp / n),
 }
 #: name -> value per ticket; averaged over tickets.
 COSTS: dict[str, Callable[[MethodRun, SimTicket], float]] = {
