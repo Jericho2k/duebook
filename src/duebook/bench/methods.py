@@ -106,7 +106,6 @@ class EventMemory:
     #: Per ticket id, proposals an earlier run made: folded again instead of
     #: asking ``model``. Only proposals without a verdict go to the verifier.
     recorded: dict[str, Recorded] | None = None
-    batch_model: JsonModel | None = None
     #: Reads a message again, with reasoning, when ``model``'s answer is unreadable.
     escalation: JsonModel | None = None
 
@@ -114,14 +113,11 @@ class EventMemory:
         meter = Meter(self.model, self.ledger)
         sizes: list[list[int]] = []
         if self.recorded is None:
-            batch_meter = (
-                Meter(self.batch_model, self.ledger, meter.tally) if self.batch_model else None
-            )
             escalation = (
                 Meter(self.escalation, self.ledger, meter.tally) if self.escalation else None
             )
-            reader = _Sizing(Extractor(meter, self.cal, bound=self.bound, batch_model=batch_meter,
-                                       escalation=escalation), sizes)  # fmt: skip
+            reader = _Sizing(Extractor(meter, self.cal, bound=self.bound, escalation=escalation),
+                             sizes)  # fmt: skip
             before = Recorded((), Usage(), Usage(), 0.0, 0.0, {})
         else:
             before = self.recorded[ticket.ticket_id]
@@ -130,8 +126,7 @@ class EventMemory:
         checker = Meter(self.verifier, self.ledger) if self.verifier is not None else None
         if checker is not None:
             reader = verifying_reader(reader, checker, self.cal)
-        folded = fold(ticket, reader, [cp.seq for cp in checkpoints(ticket)], self.cal,
-                      batch=self.batch_model is not None and self.recorded is None)  # fmt: skip
+        folded = fold(ticket, reader, [cp.seq for cp in checkpoints(ticket)], self.cal)
         snaps = snapshots(ticket, folded, self.policy)
         failure = folded.failure[2] if folded.failure else None
         extraction = before.extraction + meter.tally.usage
@@ -158,8 +153,6 @@ class EventMemory:
             "cache_hits": tally.cache_hits,
             "providers": tally.providers,
             "extraction_usage": asdict(extraction),
-            "batches": folded.batches,
-            "single_extract_seconds": meter.tally.single_extract_seconds,
         }
         if checker is not None:
             detail["verifier"] = {"usage": asdict(verifier), "usd": verifier.usd(),
@@ -178,9 +171,6 @@ class _Sizing:
 
     def extract(self, card: Card, event: Event) -> Extraction:
         return self.extract_with_context(card, event, None)
-
-    def extract_batch(self, card, turns):
-        return self.extractor.extract_batch(card, turns)
 
     def extract_with_context(
         self, card: Card, event: Event, previous: MessagePosted | None,

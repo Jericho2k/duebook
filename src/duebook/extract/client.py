@@ -26,7 +26,6 @@ costs nothing, and a re-run reads exactly the answers it read before.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import os
@@ -203,8 +202,6 @@ class ChatClient:
     #: Retries after an empty or unreadable answer.
     content_retries: int = 1
     timeout: float = 60.0
-    #: Optional wall-clock limit for a request across all transport phases.
-    total_timeout: float | None = None
     #: Extra request fields, merged last. Provider routing, reasoning effort, etc.
     extra: dict[str, Any] = field(default_factory=dict)
     http: httpx.Client | None = None
@@ -329,23 +326,13 @@ class ChatClient:
             return Completion(data, spent, tuple(problems), provider=provider)
 
     def _post(self, body: dict[str, Any]) -> httpx.Response:
-        args = {
-            "url": f"{self.base_url.rstrip('/')}/chat/completions",
-            "json": body,
-            "headers": {"Authorization": f"Bearer {self.api_key}"},
-            "timeout": self.timeout,
-        }
-        if self.total_timeout is not None:
-            try:
-                return asyncio.run(self._post_with_deadline(args))
-            except TimeoutError:
-                raise httpx.ReadTimeout("request exceeded its wall-clock deadline") from None
         http = self.http or httpx
-        return http.post(**args)
-
-    async def _post_with_deadline(self, args: dict[str, Any]) -> httpx.Response:
-        async with asyncio.timeout(self.total_timeout), httpx.AsyncClient() as http:
-            return await http.post(**args)
+        return http.post(
+            f"{self.base_url.rstrip('/')}/chat/completions",
+            json=body,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=self.timeout,
+        )
 
 
 def openrouter_fields(settings: ModelSettings) -> dict[str, Any]:

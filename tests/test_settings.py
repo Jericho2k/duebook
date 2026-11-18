@@ -16,7 +16,6 @@ def test_every_setting_is_read_from_a_prefixed_environment_variable():
         "DUEBOOK_VERIFIER_ENABLED": "False",
         "DUEBOOK_VERIFIER_MODEL": "some/verifier",
         "DUEBOOK_VERIFIER_REASONING": "off",
-        "DUEBOOK_EXTRACTION_BATCHING": "TRUE",
         "DUEBOOK_WEBHOOK_SECRET": "hook",
         "DUEBOOK_API_KEY": "api",
         "DUEBOOK_ALERT_CHANNEL": "Webhook",
@@ -32,7 +31,7 @@ def test_every_setting_is_read_from_a_prefixed_environment_variable():
     })  # fmt: skip
     assert s.database_url == "postgresql://db/duebook" and s.openrouter_model == "some/model"
     assert not s.verifier_enabled and s.verifier_model == "some/verifier"
-    assert s.verifier_reasoning == "off" and s.extraction_batching
+    assert s.verifier_reasoning == "off"
     assert s.alert_channel == "webhook" and s.alert_secret == "out"
     assert s.calendar().tz == ZoneInfo("Asia/Yekaterinburg")
     assert s.policy().alerts_since == datetime(2026, 12, 31, 21, 0, tzinfo=UTC)
@@ -45,7 +44,7 @@ def test_nothing_set_gives_working_defaults_except_the_database():
     assert s.alert_channel == "log" and s.policy().alerts_since is None
     assert s.webhook_secret == "" and s.api_key == ""
     assert s.verifier_enabled and s.verifier_model == DEFAULT_MODEL
-    assert s.verifier_reasoning == "low" and not s.extraction_batching
+    assert s.verifier_reasoning == "low"
     assert s.worker("deliver").startswith("deliver@")
     with pytest.raises(ConfigError, match="DUEBOOK_DATABASE_URL"):
         s.require_database()
@@ -62,7 +61,6 @@ def test_nothing_set_gives_working_defaults_except_the_database():
         ({"DUEBOOK_PORT": "eighty"}, "PORT"),
         ({"DUEBOOK_VERIFIER_ENABLED": "perhaps"}, "VERIFIER_ENABLED"),
         ({"DUEBOOK_VERIFIER_REASONING": "high"}, "VERIFIER_REASONING"),
-        ({"DUEBOOK_EXTRACTION_BATCHING": "sometimes"}, "EXTRACTION_BATCHING"),
     ],
 )
 def test_a_bad_setting_is_refused_at_startup_naming_the_variable(env, names):

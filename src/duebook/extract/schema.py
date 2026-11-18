@@ -98,9 +98,6 @@ OUTPUT_SCHEMA: dict[str, Any] = _obj(
         "answers": _list({"id": _STR, "quote": _STR}),
     }
 )
-BATCH_SCHEMA = _obj({"messages": _list({
-    "seq": {"type": "integer"}, "reread": {"type": "boolean"}, **OUTPUT_SCHEMA["properties"],
-})})
 
 
 @dataclass(frozen=True, slots=True)

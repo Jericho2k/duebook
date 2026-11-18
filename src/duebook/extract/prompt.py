@@ -265,16 +265,3 @@ def render_turn(event: MessagePosted, cal: WorkCalendar, previous: MessagePosted
         return message
     return (f"PRECEDING TURN (read-only, message {previous.seq}, "
             f"{previous.author.role.value}):\n{previous.text}\n\n{message}")
-
-
-def build_batch(card, turns, cal, vocab, bound):
-    """Share one card while grounding each result in its own message."""
-    rendered = render_card(card, turns[0][0].at, cal, bound)
-    sections = [rendered.text, "Return one row per seq, including empty rows. Read in order. "
-                "Never use a later message to interpret an earlier one. Set reread true if "
-                "the message refers to a promise, step or question first added in this batch, "
-                "or you need the updated card to decide what this message changes."]
-    for event, previous in turns:
-        sections.append(f"SEQ {event.seq}\n{render_turn(event, cal, previous)}")
-    return ([{"role": "system", "content": system_prompt(vocab)},
-             {"role": "user", "content": "\n\n".join(sections)}], rendered.aliases)

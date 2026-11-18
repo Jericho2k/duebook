@@ -70,7 +70,7 @@ from ..card import Card
 from ..events import MessagePosted, other_side, remember_turn
 from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCache
 from ..extract.cost import Usage
-from ..extract.extractor import BATCH_TIMEOUT, reading_clients
+from ..extract.extractor import reading_clients
 from ..extract.prompt import Bound
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
 from ..proposals import Proposal
@@ -180,7 +180,6 @@ def rewritten(
 def make_methods(
     names: Sequence[str], model: str, ledger: Ledger, cal: WorkCalendar,
     cache: ResponseCache | None = None, recorded: dict[str, Recorded] | None = None,
-    *, batch: bool = False,
 ) -> list:  # fmt: skip
     """The methods by name; ``recorded`` replays proposals for ``event_memory``."""
     key = os.environ.get("DUEBOOK_OPENROUTER_API_KEY", "proxy-injected")
@@ -201,11 +200,9 @@ def make_methods(
             verifier = (
                 replace(reader, reasoning=verifying) if verifying and recorded is None else None
             )
-            batch_model = replace(extractor, total_timeout=BATCH_TIMEOUT.total_seconds(),
-                                  http_retries=0, content_retries=0) if batch else None
             methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
                                        recorded=recorded if name == "event_memory" else None,
-                                       batch_model=batch_model, escalation=escalation))
+                                       escalation=escalation))
         elif name == "event_memory_bounded":
             methods.append(EventMemory(reader, ledger, cal, bound=Bound(), name=name))
         elif name == "full_context":
@@ -816,7 +813,6 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--project-only", action="store_true",
                         help="print the cost projection (its sample is charged), then stop")
     parser.add_argument("--workers", type=int, default=8)
-    parser.add_argument("--batch", action="store_true", help="batch contiguous backlogged messages")
     parser.add_argument("--template", action="store_true", help="use original development tickets")
     parser.add_argument("--compare-frozen-event-memory", action="store_true",
                         help="score the original event memory as event_memory_previous")
@@ -877,7 +873,7 @@ def main(argv: Sequence[str] | None = None) -> None:
           f"${args.session_cap:.2f}", file=sys.stderr)  # fmt: skip
 
     recorded = recorded_proposals(args.replay) if args.replay else None
-    methods = make_methods(names, args.model, ledger, cal, cache, recorded, batch=args.batch)
+    methods = make_methods(names, args.model, ledger, cal, cache, recorded)
     projected = (project_from(args.projection_from, methods, tickets, subsets)
                  if args.projection_from else project(methods, tickets, subsets, ledger, cal,
                                                      args.sample_events))  # fmt: skip
@@ -925,7 +921,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         "model": args.model,
         "writer": args.writer,
         "template": args.template,
-        "batch": args.batch,
         "methods": {m: EVENT_MEMORY.get(m) for m in names},
         "replayed_from": str(args.replay) if args.replay else None,
         "frozen_from": str(args.frozen) if args.frozen else None,

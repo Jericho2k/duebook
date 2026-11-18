@@ -67,8 +67,6 @@ class Settings:
     verifier_enabled: bool = True
     verifier_model: str = DEFAULT_MODEL
     verifier_reasoning: str = DEFAULT_VERIFIER_REASONING
-    #: Read queued messages of one ticket in one request; off by default (docs/results.md).
-    extraction_batching: bool = False
 
     def __post_init__(self) -> None:
         if self.verifier_reasoning not in REASONING:
@@ -138,7 +136,6 @@ class Settings:
             verifier_enabled=flag("VERIFIER_ENABLED", "true"),
             verifier_model=get("VERIFIER_MODEL", DEFAULT_MODEL),
             verifier_reasoning=get("VERIFIER_REASONING", DEFAULT_VERIFIER_REASONING),
-            extraction_batching=flag("EXTRACTION_BATCHING", "false"),
         )
 
     def require_database(self) -> str:

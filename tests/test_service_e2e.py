@@ -87,12 +87,11 @@ def deliver(client: TestClient, event) -> dict:
     return response.json()
 
 
-@pytest.mark.parametrize("outcome", ["yes", "disabled", "timeout", "batched"])
+@pytest.mark.parametrize("outcome", ["yes", "disabled", "timeout"])
 def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
     conn, dsn, monkeypatch, caplog, outcome,
 ):
-    yes = outcome in ("yes", "batched")
-    verdict = Verification(Verdict.YES, RECEIVED, DEFAULT_MODEL) if yes else None
+    verdict = Verification(Verdict.YES, RECEIVED, DEFAULT_MODEL) if outcome == "yes" else None
     ticket = conversation(verdict)
     events = [event for event, _ in ticket.log]
     clock = Clock(START + timedelta(hours=1))
@@ -104,8 +103,6 @@ def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
     }
     if outcome == "disabled":
         env["DUEBOOK_VERIFIER_ENABLED"] = "false"
-    if outcome == "batched":
-        env["DUEBOOK_EXTRACTION_BATCHING"] = "true"
     settings = Settings.from_env(env)
     store = Store(conn, CAL, settings.policy())
     extracted = iter([
@@ -123,14 +120,6 @@ def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
     def stub_post(_, body):
         name = body["response_format"]["json_schema"]["name"]
         asked.append(name)
-        if name == "ticket_batch":
-            start = 2 if len(asked) == 1 else 5
-            rows = [{"seq": start, "reread": False, **next(extracted)}]
-            if start == 2:
-                rows.append({"seq": 3, "reread": False, **next(extracted)})
-            else:
-                rows.append({"seq": 6, "reread": True, **output()})
-            return chat_response(json.dumps({"messages": rows}))
         if name == "ticket_update":
             return chat_response(json.dumps(next(extracted)))
         assert name == "context_verdict" and outcome != "disabled"
@@ -170,8 +159,7 @@ def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
             assert cli.process(settings, args, cli.Stopper()) == 0
         enabled = outcome != "disabled"
         counts = {"verifier_calls": int(enabled), "verifier_failures": int(outcome == "timeout")}
-        expected_calls = (["ticket_batch", "ticket_batch", "ticket_update"] if outcome == "batched"
-                          else ["ticket_update"] * 4)  # fmt: skip
+        expected_calls = ["ticket_update"] * 4
         if enabled:
             expected_calls.append("context_verdict")
         assert asked == expected_calls and store.card("T-77") == ticket.card
@@ -186,7 +174,7 @@ def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
         assert close["usage"]["reasoning_tokens"] == 0
         stored_verdict = close["proposals"][0]["verification"]
         verification = close["verifier_usage"]
-        if yes:
+        if outcome == "yes":
             assert stored_verdict == encode(verdict)
             assert verification == {
                 "calls": 1, "failures": 0, "providers": {"DeepInfra": 1},
@@ -232,7 +220,7 @@ def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
         card = client.get("/tickets/T-77/card", headers=auth).json()
         assert card["commitment_status"] == {
             "e3#0": "breached",
-            "e5#0": "fulfilled" if yes else "open",
+            "e5#0": "fulfilled" if outcome == "yes" else "open",
         }
         replayed = client.get("/tickets/T-77/card", params={"as_of": 6}, headers=auth).json()
         assert replayed["card"] == card["card"] and asked == expected_calls
