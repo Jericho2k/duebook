@@ -52,6 +52,7 @@ from .card import (
 )
 from .events import Side
 from .lifecycle import AlertPolicy, Status, status_at
+from .reducer import Reason
 from .temporal import Precision, WorkCalendar
 
 _WEEKDAYS = ["пн", "вт", "ср", "чт", "пт", "сб", "вс"]
@@ -172,10 +173,12 @@ class _Writer:
             sources.append(c.resolution)
         for hint in c.suggestions:
             # A close the reducer would not admit: still owed, but worth a look.
-            parts.append(
-                f"{_MAYBE[hint.kind]} по сообщению №{hint.source.seq} — подтвердите "
-                f"{self.ref(hint.source)}"
-            )
+            if hint.reason == Reason.CONTEXT_NAMES_OTHER:
+                parts.append(f"подтверждение в сообщении №{hint.source.seq} относится, похоже, "
+                             f"к тому, чего нет в карточке — проверьте {self.ref(hint.source)}")
+            else:
+                parts.append(f"{_MAYBE[hint.kind]} по сообщению №{hint.source.seq} — подтвердите "
+                             f"{self.ref(hint.source)}")  # fmt: skip
             sources.append(hint.source)
         if c.owner is not Party.CUSTOMER:
             if c.orphaned:

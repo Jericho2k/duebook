@@ -21,7 +21,6 @@ from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .extract.client import DEFAULT_MODEL, OPENROUTER_URL, REASONING
-from .extract.extractor import BATCH_TIMEOUT
 from .extract.verifier import DEFAULT_VERIFIER_REASONING
 from .lifecycle import AlertPolicy
 from .temporal import WorkCalendar
@@ -68,11 +67,10 @@ class Settings:
     verifier_enabled: bool = True
     verifier_model: str = DEFAULT_MODEL
     verifier_reasoning: str = DEFAULT_VERIFIER_REASONING
-    extraction_batch_timeout: timedelta = BATCH_TIMEOUT
+    #: Read queued messages of one ticket in one request; off by default (docs/results.md).
+    extraction_batching: bool = False
 
     def __post_init__(self) -> None:
-        if self.extraction_batch_timeout < timedelta():
-            raise ConfigError(f"{PREFIX}EXTRACTION_BATCH_TIMEOUT_SECONDS must be non-negative")
         if self.verifier_reasoning not in REASONING:
             raise ConfigError(f"{PREFIX}VERIFIER_REASONING must be one of: {', '.join(REASONING)}")
         if self.alert_channel not in CHANNELS:
@@ -109,9 +107,11 @@ class Settings:
         except ValueError as error:
             raise ConfigError(f"{PREFIX}ALERTS_SINCE is not an ISO 8601 time: {since!r}") from error
 
-        verifier_enabled = get("VERIFIER_ENABLED", "true").lower()
-        if verifier_enabled not in ("true", "false"):
-            raise ConfigError(f"{PREFIX}VERIFIER_ENABLED must be true or false")
+        def flag(name: str, default: str) -> bool:
+            value = get(name, default).lower()
+            if value not in ("true", "false"):
+                raise ConfigError(f"{PREFIX}{name} must be true or false")
+            return value == "true"
 
         return cls(
             database_url=get("DATABASE_URL"),
@@ -135,11 +135,10 @@ class Settings:
             port=int(number("PORT", 8000)),
             pool_min=int(number("POOL_MIN", 1)),
             pool_max=int(number("POOL_MAX", 10)),
-            verifier_enabled=verifier_enabled == "true",
+            verifier_enabled=flag("VERIFIER_ENABLED", "true"),
             verifier_model=get("VERIFIER_MODEL", DEFAULT_MODEL),
             verifier_reasoning=get("VERIFIER_REASONING", DEFAULT_VERIFIER_REASONING),
-            extraction_batch_timeout=seconds("EXTRACTION_BATCH_TIMEOUT_SECONDS",
-                                             BATCH_TIMEOUT.total_seconds()),  # fmt: skip
+            extraction_batching=flag("EXTRACTION_BATCHING", "false"),
         )
 
     def require_database(self) -> str:

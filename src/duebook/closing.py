@@ -33,7 +33,9 @@ support tickets: every entry makes some pair of promises harder to tell apart.
 
 A short reply can confirm a deed named in the preceding public turn. The
 reducer uses both sources to check that the confirmation identifies one
-promise. Legacy replay alone retains the old weak confirmation rules.
+promise, and that the question names nothing the promise does not
+(``names_beyond``): two twin promises share every word but one. Legacy replay
+alone retains the old weak confirmation rules.
 """
 
 from __future__ import annotations
@@ -207,9 +209,25 @@ def names_other(text: str, target: Iterable[str]) -> bool:
     """
     mine = content(text)
     theirs = [s for t in target for s in content(t)]
-    added = [s for s in mine if not any(s.meets(t) for t in theirs)]
     dropped = [t for t in theirs if not any(t.meets(s) for s in mine)]
-    return bool(added) and bool(dropped)
+    return bool(_added(mine, theirs)) and bool(dropped)
+
+
+def names_beyond(question: str, target: Iterable[str]) -> bool:
+    """Does the question a reply confirms name something ``target`` does not?
+
+    "Поступило ли возмещение стоимости монтажа?" is not about "Возместим
+    стоимость сборки". Only the sentences that ask are compared: a remark
+    beside the question ("По другой позиции ещё уточняем") is not confirmed.
+    """
+    sentences = [s for s in re.split(r"(?<=[.!?])\s+", question) if s.strip()]
+    asking = [s for s in sentences if asks_to_confirm(s)] or [question]
+    mine = [s for q in asking for s in content(q) if s.word not in _ASKING_WORDS]
+    return bool(_added(mine, [s for t in target for s in content(t, generic=True)]))
+
+
+def _added(mine: list[Stem], theirs: list[Stem]) -> list[Stem]:
+    return [s for s in mine if not any(s.meets(t) for t in theirs)]
 
 
 def confirms(text: str) -> bool:
@@ -225,12 +243,15 @@ def confirms_reply(text: str) -> bool:
     return confirms(text) or "на месте" in _ws(text) or _ws(text).strip(".!?") in {"да", "yes"}
 
 
+#: How a turn asks the other side to confirm something.
+_ASKING = ("проверьте", "подтвердите", "скажите", "напишите", "confirm", "check whether",
+           "let me know", "please check")  # fmt: skip
+_ASKING_WORDS = frozenset(w for phrase in _ASKING for w in phrase.split())
+
+
 def asks_to_confirm(text: str) -> bool:
     folded = _ws(text)
-    return "?" in folded or any(word in folded for word in (
-        "проверьте", "подтвердите", "скажите", "напишите", "confirm", "check whether",
-        "let me know", "please check",
-    ))
+    return "?" in folded or any(word in folded for word in _ASKING)
 
 
 def quote_identifies(target_quote: str, source_quote: str) -> bool:

@@ -61,6 +61,7 @@ from .closing import (
     asks_to_confirm,
     confirms,
     confirms_reply,
+    names_beyond,
     names_other,
     overlap,
     quote_identifies,
@@ -119,12 +120,15 @@ class Reason(StrEnum):
     #: The closing words fit another open commitment at least as well.
     AMBIGUOUS_TARGET = "ambiguous_target"
     VERIFIER_REJECTED = "verifier_rejected"
+    #: The question a reply confirms names something the target does not:
+    #: what was confirmed is probably not on the card.
+    CONTEXT_NAMES_OTHER = "context_names_other"
 
 
 PARTIAL = frozenset({Reason.DEADLINE_UNGROUNDED, Reason.DEADLINE_INVALID, Reason.DEADLINE_IN_PAST})
 #: Refusals of a close that leave a suggestion behind.
-GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET,
-                     Reason.AMBIGUOUS_TARGET, Reason.VERIFIER_REJECTED})  # fmt: skip
+GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMBIGUOUS_TARGET,
+                     Reason.VERIFIER_REJECTED, Reason.CONTEXT_NAMES_OTHER})  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
@@ -139,13 +143,17 @@ class Guards:
     ambiguity: bool = True
     #: Use the stored verdict when deciding the proposed change.
     verifier: bool = True
+    #: The question a contextual close relies on may name nothing the target does not.
+    exact_context: bool = True
     #: Reproduce decisions recorded before evidence was required for every close.
     legacy: bool = False
 
 
 #: The reducer as it was before the guards: who may close, never what.
 UNGUARDED = Guards(target=False, relevance=False, ambiguity=False, verifier=False)
-LEGACY_GUARDS = Guards(legacy=True)
+#: The rules each stored event was decided under (``event_proposals.close_rules``),
+#: so a card is rebuilt as it was decided (decision 0001). Absent: the current rules.
+CLOSE_RULES = {1: Guards(legacy=True), 2: Guards(exact_context=False)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -497,8 +505,11 @@ def _resolve_commitment(
     context = _resolution_context(event, p, c, previous, guards)
     # A short excerpt must not hide a second possible subject in the question.
     said = (p.quote, previous.text) if context and previous else (p.quote,)
-    refused = _check_close(card, c, said, p.target_quote, guards, p.verification,
-                           event.text)  # fmt: skip
+    if context and guards.exact_context and names_beyond(context.quote, _wording(c)):
+        refused: Reason | None = Reason.CONTEXT_NAMES_OTHER
+    else:
+        refused = _check_close(card, c, said, p.target_quote, guards, p.verification,
+                               event.text)  # fmt: skip
     if refused is not None:
         hint = Suggestion(Closure.RESOLVED, source, refused.value)
         return _put_commitment(card, _suggest(c, hint)), [refused]

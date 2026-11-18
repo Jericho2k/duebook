@@ -137,6 +137,7 @@ def extractor(settings: Settings):
     from dataclasses import replace
 
     from .extract import ChatClient, Extractor
+    from .extract.extractor import BATCH_TIMEOUT
     from .extract.verifier import verifying_reader
 
     if not settings.openrouter_api_key:
@@ -147,11 +148,11 @@ def extractor(settings: Settings):
         base_url=settings.openrouter_base_url,
     )
     cal = settings.calendar()
-    timeout = settings.extraction_batch_timeout.total_seconds()
     batch_model = (
-        replace(client, total_timeout=timeout, http_retries=0, content_retries=0)
-        if timeout else None
-    )
+        replace(client, total_timeout=BATCH_TIMEOUT.total_seconds(), http_retries=0,
+                content_retries=0)
+        if settings.extraction_batching else None
+    )  # fmt: skip
     reader = Extractor(client, cal, batch_model=batch_model)
     if settings.verifier_enabled:
         return verifying_reader(
@@ -170,8 +171,7 @@ def process(settings: Settings, args: argparse.Namespace, stopper: Stopper, read
     reader = reader or extractor(settings)
 
     def body(store) -> None:
-        pipeline = Pipeline(store, reader, clock=_now,
-                            batch_timeout=settings.extraction_batch_timeout)
+        pipeline = Pipeline(store, reader, clock=_now, batching=settings.extraction_batching)
         if args.once:
             _report(pipeline.process(settings.process_batch, stopper))
             stopper.set()

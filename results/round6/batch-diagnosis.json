@@ -1,0 +1,1907 @@
+{
+ "what": "Round 5's batched test3 messages read again one at a time: same prompt, preceding turn and compact output; reasoning off; no verifier",
+ "card": "missed promises, neighbours and disputes: the card the batch saw (folded from round 5's frozen proposals); step failures: the card after the preceding message",
+ "batches_rebuilt": "from round 5's frozen proposals and recorded batch sizes; a timed-out batch fell back for its first message only, as round 5's live code did",
+ "summary": {
+  "missed_promises": 14,
+  "in_a_batch": 14,
+  "first_in_batch": 5,
+  "made_when_read_alone": 12,
+  "still_missed_read_alone": [
+   [
+    "SIM-4343-M0003",
+    114
+   ],
+   [
+    "SIM-4343-M0010",
+    143
+   ]
+  ],
+  "neighbours_read": 38,
+  "neighbour_commitments_round5": 0,
+  "neighbour_commitments_alone": 1,
+  "lost_step_failures": 12,
+  "step_failure_reported_round5": 7,
+  "step_failure_reported_alone": 12,
+  "lost_disputes": 4,
+  "lost_disputes_with_both_values_in_one_batch": 0,
+  "disputes_recorded_alone": 4,
+  "calls": 68,
+  "usd": 0.003986332
+ },
+ "rows": [
+  {
+   "ticket": "SIM-4343-M0003",
+   "seq": 114,
+   "role": "missed",
+   "batch": [
+    114,
+    115,
+    116,
+    117
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.status",
+     "value": "курьер заберёт товар",
+     "quote": "Курьер заберёт товар.",
+     "change": false
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0003",
+   "seq": 115,
+   "role": "neighbour",
+   "batch": [
+    114,
+    115,
+    116,
+    117
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0003",
+   "seq": 116,
+   "role": "neighbour",
+   "batch": [
+    114,
+    115,
+    116,
+    117
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0003",
+   "seq": 117,
+   "role": "neighbour",
+   "batch": [
+    114,
+    115,
+    116,
+    117
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "VC-982",
+     "quote": "Мне пришёл пылесос модели VC-982.",
+     "change": false
+    }
+   ],
+   "round5": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "VC-982",
+     "quote": "пылесос модели VC-982",
+     "change": false
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 19,
+   "role": "missed",
+   "batch": [
+    19,
+    20,
+    21,
+    22
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "Восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 20,
+   "role": "neighbour",
+   "batch": [
+    19,
+    20,
+    21,
+    22
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 21,
+   "role": "neighbour",
+   "batch": [
+    19,
+    20,
+    21,
+    22
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "AnswerQuestion",
+     "question_id": "e18#0",
+     "quote": "Ваш запрос принят в обработку, мы уже занимаемся этим вопросом."
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 22,
+   "role": "neighbour",
+   "batch": [
+    19,
+    20,
+    21,
+    22
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 118,
+   "role": "missed",
+   "batch": [
+    118,
+    119,
+    120,
+    121
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выслать смету",
+     "quote": "Вышлем вам смету",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 119,
+   "role": "neighbour",
+   "batch": [
+    118,
+    119,
+    120,
+    121
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "customer",
+     "action": "Напишите, пожалуйста, какое получите первым",
+     "quote": "Напишите, пожалуйста, какое получите первым.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    },
+    {
+     "type": "AskQuestion",
+     "text": "Напишите, пожалуйста, какое получите первым.",
+     "quote": "Напишите, пожалуйста, какое получите первым."
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 120,
+   "role": "neighbour",
+   "batch": [
+    118,
+    119,
+    120,
+    121
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e117#0",
+     "quote": "Одно уже получила, спасибо.",
+     "target_quote": "Вышлем вам сертификат.",
+     "verification": null,
+     "context_quote": "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым."
+    }
+   ],
+   "round5": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e117#0",
+     "quote": "Одно уже получила",
+     "target_quote": "Вышлем вам сертификат.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "unsure",
+      "evidence_quote": "",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0009",
+   "seq": 121,
+   "role": "neighbour",
+   "batch": [
+    118,
+    119,
+    120,
+    121
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 141,
+   "role": "neighbour",
+   "batch": [
+    141,
+    142,
+    143,
+    144
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "Попробуйте переустановить приложение.",
+     "quote": "Попробуйте переустановить приложение.",
+     "outcome": "pending"
+    }
+   ],
+   "round5": [
+    {
+     "type": "RecordStep",
+     "action": "Попробуйте переустановить приложение.",
+     "quote": "Попробуйте переустановить приложение.",
+     "outcome": "pending"
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 142,
+   "role": "neighbour",
+   "batch": [
+    141,
+    142,
+    143,
+    144
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 143,
+   "role": "missed",
+   "batch": [
+    141,
+    142,
+    143,
+    144
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.status",
+     "value": "Курьер заберёт товар",
+     "quote": "Курьер заберёт товар.",
+     "change": false
+    }
+   ],
+   "round5": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.status",
+     "value": "Курьер заберёт товар.",
+     "quote": "Курьер заберёт товар.",
+     "change": false
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 144,
+   "role": "neighbour",
+   "batch": [
+    141,
+    142,
+    143,
+    144
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 177,
+   "role": "neighbour",
+   "batch": [
+    177,
+    178,
+    179,
+    180
+   ],
+   "card_as_individual": true,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 178,
+   "role": "missed",
+   "batch": [
+    177,
+    178,
+    179,
+    180
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "проверить статус возврата и отписаться",
+     "quote": "Я проверю статус возврата и отпишусь в течение 3 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 3,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 3 рабочих дней",
+     "supersedes": "e108#0",
+     "target_quote": "Я проверю статус возврата и отпишусь в течение 3 рабочих дней.",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 179,
+   "role": "neighbour",
+   "batch": [
+    177,
+    178,
+    179,
+    180
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 180,
+   "role": "neighbour",
+   "batch": [
+    177,
+    178,
+    179,
+    180
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "AskQuestion",
+     "text": "Здравствуйте! Подскажите, есть ли какие-то новости по моему обращению?",
+     "quote": "Здравствуйте! Подскажите, есть ли какие-то новости по моему обращению? | waiting on company"
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 3,
+   "role": "missed",
+   "batch": [
+    3,
+    4,
+    5,
+    6
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "связаться с клиентом по телефону",
+     "quote": "Я свяжусь с вами по телефону до 12 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 12,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 12 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 4,
+   "role": "neighbour",
+   "batch": [
+    3,
+    4,
+    5,
+    6
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "C1",
+     "quote": "деньги за прошлый заказ пришли",
+     "target_quote": "Я свяжусь с вами по телефону до 12 января.",
+     "verification": null,
+     "context_quote": ""
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 5,
+   "role": "neighbour",
+   "batch": [
+    3,
+    4,
+    5,
+    6
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 6,
+   "role": "neighbour",
+   "batch": [
+    3,
+    4,
+    5,
+    6
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 48,
+   "role": "neighbour",
+   "batch": [
+    48,
+    49,
+    50,
+    51
+   ],
+   "card_as_individual": true,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 49,
+   "role": "missed",
+   "batch": [
+    48,
+    49,
+    50,
+    51
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "Передать вопрос в бухгалтерию и сообщить результат",
+     "quote": "Передам вопрос в бухгалтерию и сообщу результат до 20 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 20,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 20 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 50,
+   "role": "missed",
+   "batch": [
+    48,
+    49,
+    50,
+    51
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "Возместить стоимость монтажа",
+     "quote": "Возместим стоимость монтажа до 16 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 16,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 16 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 51,
+   "role": "neighbour",
+   "batch": [
+    48,
+    49,
+    50,
+    51
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 75,
+   "role": "missed",
+   "batch": [
+    75,
+    76,
+    77,
+    78
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "Уточнить на складе и написать клиенту",
+     "quote": "Уточню на складе и напишу вам завтра до 15:00",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 1,
+      "at": "15:00:00"
+     },
+     "due_quote": "завтра до 15:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 76,
+   "role": "neighbour",
+   "batch": [
+    75,
+    76,
+    77,
+    78
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 77,
+   "role": "neighbour",
+   "batch": [
+    75,
+    76,
+    77,
+    78
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 78,
+   "role": "neighbour",
+   "batch": [
+    75,
+    76,
+    77,
+    78
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 83,
+   "role": "neighbour",
+   "batch": [
+    83,
+    84,
+    85,
+    86
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e80#0",
+     "quote": "Ага, вижу.",
+     "target_quote": "Возместим стоимость монтажа до 22 января.",
+     "verification": null,
+     "context_quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа."
+    }
+   ],
+   "round5": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e80#0",
+     "quote": "Ага, вижу.",
+     "target_quote": "Возместим стоимость монтажа до 22 января.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Ага, вижу.",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа. По другой позиции ещё уточняем."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 84,
+   "role": "missed",
+   "batch": [
+    83,
+    84,
+    85,
+    86
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "customer",
+     "action": "Прислать скриншот ошибки",
+     "quote": "Пришлю скриншот ошибки завтра до 15:00.",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 1,
+      "at": "15:00:00"
+     },
+     "due_quote": "завтра до 15:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e79#0",
+     "quote": "Пришлю скриншот ошибки завтра до 15:00.",
+     "target_quote": "Возместим стоимость сборки до 22 января.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "no",
+      "evidence_quote": "",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа. По другой позиции ещё уточняем."
+    }
+   ],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 85,
+   "role": "neighbour",
+   "batch": [
+    83,
+    84,
+    85,
+    86
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "BL-819",
+     "quote": "По накладной вам отправлен BL-819.",
+     "change": false
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 86,
+   "role": "neighbour",
+   "batch": [
+    83,
+    84,
+    85,
+    86
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 179,
+   "role": "neighbour",
+   "batch": [
+    179,
+    180,
+    181,
+    182
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, есть какие-нибудь новости?",
+     "quote": "Подскажите, есть какие-нибудь новости?"
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 180,
+   "role": "missed",
+   "batch": [
+    179,
+    180,
+    181,
+    182
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "Отправить замену",
+     "quote": "Отправим вам замену.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 181,
+   "role": "neighbour",
+   "batch": [
+    179,
+    180,
+    181,
+    182
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 182,
+   "role": "neighbour",
+   "batch": [
+    179,
+    180,
+    181,
+    182
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0016",
+   "seq": 93,
+   "role": "neighbour",
+   "batch": [
+    93,
+    94,
+    95,
+    96
+   ],
+   "card_as_individual": true,
+   "individual": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, есть ли какое-то продвижение по моему обращению?",
+     "quote": "Подскажите, есть ли какое-то продвижение по моему обращению?"
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0016",
+   "seq": 94,
+   "role": "missed",
+   "batch": [
+    93,
+    94,
+    95,
+    96
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "customer",
+     "action": "прислать скриншот ошибки",
+     "quote": "Пришлю скриншот ошибки сегодня до 18:00.",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 0,
+      "at": "18:00:00"
+     },
+     "due_quote": "сегодня до 18:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0016",
+   "seq": 95,
+   "role": "neighbour",
+   "batch": [
+    93,
+    94,
+    95,
+    96
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0016",
+   "seq": 96,
+   "role": "neighbour",
+   "batch": [
+    93,
+    94,
+    95,
+    96
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0017",
+   "seq": 47,
+   "role": "neighbour",
+   "batch": [
+    47,
+    48,
+    49,
+    50
+   ],
+   "card_as_individual": true,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0017",
+   "seq": 48,
+   "role": "neighbour",
+   "batch": [
+    47,
+    48,
+    49,
+    50
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "AskQuestion",
+     "text": "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа.",
+     "quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа."
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0017",
+   "seq": 49,
+   "role": "neighbour",
+   "batch": [
+    47,
+    48,
+    49,
+    50
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e43#0",
+     "quote": "Получила, спасибо.",
+     "target_quote": "Возместим стоимость монтажа до 19 января.",
+     "verification": null,
+     "context_quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа."
+    }
+   ],
+   "round5": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e43#0",
+     "quote": "Получила, спасибо.",
+     "target_quote": "Возместим стоимость монтажа до 19 января.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Получила, спасибо.",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0017",
+   "seq": 50,
+   "role": "missed",
+   "batch": [
+    47,
+    48,
+    49,
+    50
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "проверить статус возврата и отписаться",
+     "quote": "Я проверю статус возврата и отпишусь в течение 3 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 3,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 3 рабочих дней",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0019",
+   "seq": 97,
+   "role": "neighbour",
+   "batch": [
+    97,
+    98,
+    99,
+    100
+   ],
+   "card_as_individual": true,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0019",
+   "seq": 98,
+   "role": "missed",
+   "batch": [
+    97,
+    98,
+    99,
+    100
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "Передать вопрос в бухгалтерию и сообщить результат",
+     "quote": "Передам вопрос в бухгалтерию и сообщу результат до среды.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 2,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до среды",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ],
+   "round5": [],
+   "individual_commitment": true,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0019",
+   "seq": 99,
+   "role": "neighbour",
+   "batch": [
+    97,
+    98,
+    99,
+    100
+   ],
+   "card_as_individual": false,
+   "individual": [],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0019",
+   "seq": 100,
+   "role": "neighbour",
+   "batch": [
+    97,
+    98,
+    99,
+    100
+   ],
+   "card_as_individual": false,
+   "individual": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e84#0",
+     "quote": "Скриншот получили",
+     "target_quote": "Пришлю скриншот ошибки до конца недели",
+     "verification": null,
+     "context_quote": ""
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": false,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0000",
+   "seq": 68,
+   "role": "step_failure",
+   "batch": [
+    65,
+    66,
+    67,
+    68
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "Переустановить приложение",
+     "quote": "переустановила приложение",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e67#0",
+     "outcome": "failed",
+     "quote": "переустановила приложение — не помогло"
+    }
+   ],
+   "round5": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S1",
+     "outcome": "failed",
+     "quote": "переустановила приложение — не помогло"
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": true
+  },
+  {
+   "ticket": "SIM-4343-M0000",
+   "seq": 148,
+   "role": "step_failure",
+   "batch": [
+    145,
+    146,
+    147,
+    148
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "Перезапустила телефон",
+     "quote": "Перезапустила телефон",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e147#0",
+     "outcome": "failed",
+     "quote": "это не помогло"
+    }
+   ],
+   "round5": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S4",
+     "outcome": "failed",
+     "quote": "Перезапустила телефон, это не помогло."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": true
+  },
+  {
+   "ticket": "SIM-4343-M0002",
+   "seq": 22,
+   "role": "step_failure",
+   "batch": [
+    19,
+    20,
+    21,
+    22
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "сбросить пароль",
+     "quote": "Сбросила пароль",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S1",
+     "outcome": "failed",
+     "quote": "всё равно не помогло"
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0002",
+   "seq": 99,
+   "role": "step_failure",
+   "batch": [
+    97,
+    98,
+    99,
+    100
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "перезайти в приложение",
+     "quote": "перезашла в приложение",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e31#0",
+     "outcome": "failed",
+     "quote": "не помогло"
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0002",
+   "seq": 134,
+   "role": "step_failure",
+   "batch": [
+    131,
+    132,
+    133,
+    134
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "обновить приложение до последней версии",
+     "quote": "Обновила приложение",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e133#0",
+     "outcome": "failed",
+     "quote": "всё равно не помогло"
+    }
+   ],
+   "round5": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S3",
+     "outcome": "failed",
+     "quote": "Обновила приложение — всё равно не помогло."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": true
+  },
+  {
+   "ticket": "SIM-4343-M0003",
+   "seq": 73,
+   "role": "step_failure",
+   "batch": [
+    71,
+    72,
+    73,
+    74
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "Попробуйте очистить кэш браузера.",
+     "quote": "Кэш почистила",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e71#0",
+     "outcome": "failed",
+     "quote": "не помогло"
+    }
+   ],
+   "round5": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S1",
+     "outcome": "failed",
+     "quote": "Кэш почистила, не помогло."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": true
+  },
+  {
+   "ticket": "SIM-4343-M0005",
+   "seq": 28,
+   "role": "step_failure",
+   "batch": [
+    27,
+    28,
+    29,
+    30
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "Попробуйте перезайти в приложение",
+     "quote": "перезашла в приложение",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e27#0",
+     "outcome": "failed",
+     "quote": "не помогло"
+    }
+   ],
+   "round5": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S1",
+     "outcome": "failed",
+     "quote": "перезашла в приложение, не помогло"
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": true
+  },
+  {
+   "ticket": "SIM-4343-M0006",
+   "seq": 128,
+   "role": "step_failure",
+   "batch": [
+    126,
+    127,
+    128,
+    129
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "перезагрузить телефон",
+     "quote": "Перезапустила телефон",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e49#0",
+     "outcome": "failed",
+     "quote": "не помогло"
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0010",
+   "seq": 93,
+   "role": "step_failure",
+   "batch": [
+    91,
+    92,
+    93,
+    94
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "Сбросить пароль",
+     "quote": "Сбросила пароль",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e51#0",
+     "outcome": "failed",
+     "quote": "но не помогло"
+    },
+    {
+     "type": "AnswerQuestion",
+     "question_id": "e59#1",
+     "quote": "Сбросила пароль, но не помогло."
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0012",
+   "seq": 26,
+   "role": "step_failure",
+   "batch": [
+    23,
+    24,
+    25,
+    26
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "reinstall_app",
+     "quote": "Переустановила приложение",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e25#0",
+     "outcome": "failed",
+     "quote": "но это не помогло"
+    }
+   ],
+   "round5": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S1",
+     "outcome": "failed",
+     "quote": "Переустановила приложение, но это не помогло."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": true
+  },
+  {
+   "ticket": "SIM-4343-M0014",
+   "seq": 66,
+   "role": "step_failure",
+   "batch": [
+    64,
+    65,
+    66,
+    67
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "перезайти в приложение",
+     "quote": "перезашла в приложение",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e26#0",
+     "outcome": "failed",
+     "quote": "не помогло"
+    }
+   ],
+   "round5": [],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": false
+  },
+  {
+   "ticket": "SIM-4343-M0014",
+   "seq": 108,
+   "role": "step_failure",
+   "batch": [
+    106,
+    107,
+    108,
+    109
+   ],
+   "card_as_individual": null,
+   "individual": [
+    {
+     "type": "RecordStep",
+     "action": "очистить кэш браузера",
+     "quote": "Кэш почистила",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e107#0",
+     "outcome": "failed",
+     "quote": "не помогло"
+    }
+   ],
+   "round5": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "S3",
+     "outcome": "failed",
+     "quote": "Кэш почистила, не помогло."
+    }
+   ],
+   "individual_commitment": false,
+   "round5_commitment": false,
+   "individual_step_outcome": true,
+   "round5_step_outcome": true
+  }
+ ],
+ "disputes": [
+  {
+   "ticket": "SIM-4343-M0001",
+   "seq": 126,
+   "batch": [
+    126,
+    127,
+    128,
+    129
+   ],
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "BL-823",
+     "quote": "По накладной вам отправлен BL-823.",
+     "change": false
+    }
+   ],
+   "round5": [],
+   "individual_dispute": true,
+   "round5_dispute": false
+  },
+  {
+   "ticket": "SIM-4343-M0008",
+   "seq": 108,
+   "batch": [
+    105,
+    106,
+    107,
+    108
+   ],
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "VC-633",
+     "quote": "вам отправлен VC-633",
+     "change": false
+    },
+    {
+     "type": "RecordStep",
+     "action": "очистить кэш браузера",
+     "quote": "Кэш почистила, не помогло.",
+     "outcome": "failed"
+    },
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e97#0",
+     "outcome": "failed",
+     "quote": "Кэш почистила, не помогло."
+    }
+   ],
+   "round5": [],
+   "individual_dispute": true,
+   "round5_dispute": false
+  },
+  {
+   "ticket": "SIM-4343-M0015",
+   "seq": 85,
+   "batch": [
+    83,
+    84,
+    85,
+    86
+   ],
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "BL-819",
+     "quote": "По накладной вам отправлен BL-819.",
+     "change": false
+    }
+   ],
+   "round5": [],
+   "individual_dispute": true,
+   "round5_dispute": false
+  },
+  {
+   "ticket": "SIM-4343-M0017",
+   "seq": 84,
+   "batch": [
+    83,
+    84,
+    85,
+    86
+   ],
+   "individual": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "BL-706",
+     "quote": "вам отправлен BL-706",
+     "change": false
+    }
+   ],
+   "round5": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.status",
+     "value": "вам отправлен BL-706",
+     "quote": "вам отправлен BL-706",
+     "change": false
+    }
+   ],
+   "individual_dispute": true,
+   "round5_dispute": false
+  }
+ ]
+}

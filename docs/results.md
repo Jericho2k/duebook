@@ -1,8 +1,144 @@
 # Results: event memory against the baselines
 
-Five rounds, run on 2026-11-17 and 18. Round 5 reuses the frozen Round 4
+Six rounds, run on 2026-11-17 and 18. Rounds 5 and 6 reuse the frozen Round 4
 comparison. Round 4 contains the original run on a fresh test split. The
 earlier rounds follow in reverse order.
+
+## Round 6 — batching off, and a tighter contextual close
+
+Round 5's batching caused its missing promises. Read alone, 12 of the 14
+promises absent from its card are made. With batching off, Round 6 is missing
+one gold promise among the messages it read, the same one Round 4 missed. It
+made no false close at any checkpoint, raised 0.20 false alerts per ticket,
+and kept 18 of 20 context-dependent closes. Two problems are new to this run,
+and neither comes from batching. Two tickets stopped on a message the model
+answers with looping, truncated JSON. Free-text "facts" now open false disputes
+(2.55 per ticket). This is the third look at `test3` for our method (Rounds 4,
+5 and 6), so these are follow-up numbers on a known set, not a fresh test.
+
+### What caused the missing promises
+
+Round 5's batch groups were rebuilt from its frozen proposals and recorded
+batch sizes. Its live code fell back for only the first message of a
+timed-out batch, and the rebuild matches every recorded size. All 14 missing
+promises had been read in a batch that succeeded, and 5 of them came first in
+their batch. Their messages and 38 neighbours were read again one at a time:
+the same prompt, preceding turn, compact output and card the batch saw
+(52 calls).
+[Record](../results/round6/batch-diagnosis.json)
+
+- **Promises: ruled in.** 12 of 14 are made when read alone. The other two
+  (M0003 seq 114, M0010 seq 143) are the two Round 4 also missed.
+  Neighbours: no promise in Round 5's batches, one when read alone.
+- **Second hypothesis, failed steps: ruled in.** Of 13 failed fixes lost by
+  the end of a ticket, 12 had the suggestion and its "не помогло" in one
+  batch. 12 of 29 such pairs were lost, against 1 of 25 pairs split across
+  batches. In 7 of the 12, the batch named a step handle its card did not
+  have. Read alone against the card that holds the step, all 12 report the
+  failure (12 calls).
+- **Second hypothesis, disputes: ruled out.** None of the 4 lost disputes had
+  both values in one batch, so the earlier value was already on the card.
+  Read alone, all 4 counter-claims land in the right slot (4 calls). Batching
+  lost them, but not by hiding the earlier value.
+
+The calls cost $0.0040. Batching is now off by default in the service and the
+benchmark (`DUEBOOK_EXTRACTION_BATCHING`, `--batch`).
+
+**Safe batching was not built.** Timestamps in `test3` are minute-granular,
+and only 4.0% of consecutive message pairs arrive within 60 s (1.8% in the
+same minute). A two-message window would batch about 2% of reads. A
+10-ticket development run would hold roughly 70 batched pairs, too few to
+show that recall matches. A deadline-phrase guard would also have left 5 of
+the 14 lost promises exposed: they had no deadline ("Вышлем вам смету").
+Batching stays off.
+
+### The contextual-close rule, replayed
+
+A close that relies on the preceding turn is now refused when the asking
+sentences of the quoted question name something the target's wording does
+not ([amendment to decision 0001](decisions/0001-verifier-veto.md), recorded
+as proposed for the owner's confirmation). Round 5's frozen proposals and
+verdicts were folded again at $0. On `test3`, false closes dropped from 0.05 to
+0.00 per ticket at the end and from 0.15 to 0.00 across checkpoints. M0012 is
+refused as `context_names_other`. All 17 true contextual closes are kept, as
+are all 4 on `dev3`. Status accuracy went from 0.957 to 0.960, and
+breach-alert recall from 0.961 to 0.969.
+[Replay](../results/round6/rule-replay.json)
+
+### Round 6 on `test3`
+
+One live run, with batching off, the amended rule, and the verifier on. All
+else is as in Round 5, scored against the frozen baselines. Round 5's
+and Round 4's event memories are rescored with the same code and paired over
+the same tickets.
+[Record](../results/round6/test3.json) · [Rounds compared](../results/round6/compare-rounds.json)
+
+| Measure | Round 4 | Round 5 | Round 6 | Full context | Mem0 | Graphiti | Rolling summary |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Gold promises missing from the card | 2 | 14 | **1** + 11 unread | — | — | — | — |
+| False closes per ticket | 0.20 | 0.05 | **0.00** | 0.10 | 0.15 | 0.80 | 0.25 |
+| False closes across checkpoints per ticket | 0.90 | 0.15 | **0.00** | 0.30 | 0.65 | 1.90 | 0.50 |
+| Wrong-target closes per ticket | 0.05 | 0.00 | **0.00** | 0.30 | 0.20 | 0.10 | 0.00 |
+| False alerts per ticket | 1.10 | 0.45 | **0.20** | 0.45 | 0.40 | 0.40 | 0.75 |
+| Context-dependent close recovered | 0.00 | 0.85 | **0.90** | 0.85 | 0.90 | 0.60 | 0.50 |
+| Ambiguous close refrained | 1.00 | 0.95 | **1.00** | 0.95 | 0.85 | 0.60 | 0.50 |
+| Unrelated confirmation handled | 0.80 | 0.95 | **1.00** | 1.00 | 1.00 | 1.00 | 1.00 |
+| Dispute recall | 1.000 | 0.879 | 0.978 | 0.560 | 0.604 | 0.192 | 0.667 |
+| False disputes per ticket | 0.30 | 0.40 | **2.55** | 0.00 | 0.10 | 0.10 | 2.00 |
+| Failed-step precision | 1.000 | 0.776 | 0.777 | 0.792 | 0.771 | 0.771 | 0.963 |
+| Freshness error | 0.000 | 0.064 | 0.016 | 0.291 | 0.310 | 0.278 | 0.333 |
+| Commitment F1 | 0.989 | 0.975 | 0.970 | 0.997 | 0.990 | 0.942 | 0.797 |
+| Status accuracy | 0.926 | 0.957 | **0.989** | 0.948 | 0.945 | 0.913 | 0.915 |
+| Breach-alert precision / recall | 0.850 / 0.969 | 0.932 / 0.961 | 0.969 / 0.977 | 0.934 / 0.992 | 0.941 / 0.984 | 0.933 / 0.862 | 0.864 / 0.760 |
+| Cost per ticket | $0.01337 | $0.01102 | $0.01401 | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
+| Cost per incoming message | $0.0000769 | $0.0000635 | $0.0000807 | $0.0000249 | $0.000304 | $0.000911 | $0.000530 |
+
+Graphiti covers 10 tickets and the rolling summary four. Against Round 5,
+paired over tickets, Round 6 has fewer false alerts (−0.25 [−0.55, 0.00]),
+better failed-step recall (+0.232 [+0.112, +0.364]) and status accuracy
+(+0.031 [+0.014, +0.049]), more false disputes (+2.15 [+1.1, +3.2]), and costs
+$0.0030 [0.0020, 0.0039] more per ticket. The dispute recall gain, +0.099,
+has an interval that includes zero.
+
+What is still wrong:
+
+- **Two tickets stopped** (M0000 at event 133, M0003 at event 97). On "Письма
+  придут по отдельности. Напишите, пожалуйста, какое получите первым." the
+  model loops until the 4,000-token output limit, so its JSON is cut off. It
+  did so on both attempts in both tickets and again in one reproduction
+  ($0.0017 a try). At
+  temperature 0, a service would hold such a ticket and pay for every retry.
+  The 11 promises after the stops were never read. On the 18 finished
+  tickets, commitment recall is 0.997 (Round 4 0.997, Round 5 0.958), and
+  precision is 0.971 (0.982 and 0.994).
+- **False disputes.** 11 of the 13 open at ticket end pit an `issue.summary`
+  complaint against a status report ("Ваша заявка сейчас рассматривается").
+  Round 5's compact prompt does this when it reads each message alone. Its
+  batches happened to skip that filler, and Round 4's prompt did not do it.
+- **Failed-step precision stays at 0.777.** A failure report is also
+  recorded as a new failed step beside the listed one. All 12 single reads in
+  the diagnosis did this. Round 5's prompt causes it, not batching.
+
+Both prompt problems need a prompt change and a live development run. They
+are left for the next round.
+
+**Spend.** The session charged **$0.3032** of the $0.60 cap: $0.0040 for the
+diagnosis, $0.2773 for the test run, and $0.0017 to reproduce the truncation.
+A further $0.0203 went to a mistaken start of rewriting `dev3` during the
+free replay, stopped by its $0.01 run cap. Round 5's `dev3` uses template text
+(`--template`). [Spend log](../results/round6/spend.jsonl)
+
+```bash
+# the test run (live, once)
+python -m duebook.bench.experiment --split test3 --methods event_memory \
+    --max-usd 0.40 --session-cap 0.60 --results results/round6 \
+    --frozen results/round4/test3.json --compare-frozen-event-memory
+# the rule replay ($0)
+python -m duebook.bench.experiment --split test3 --methods event_memory \
+    --max-usd 0.01 --results /tmp/duebook-round6-replay \
+    --replay results/round5/test3.json --frozen results/round4/test3.json \
+    --compare-frozen-event-memory
+```
 
 ## Round 5 — contextual closes and queued extraction
 
