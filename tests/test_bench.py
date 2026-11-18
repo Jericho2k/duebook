@@ -483,6 +483,9 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
     for ticket in tickets:
         # Compare the full round-2 record using its original schema.
         assert ticket["gold"].pop("close_cases") == []
+        for proposals in ticket["proposals"]:
+            for proposal in proposals:
+                assert proposal.pop("context_quote", "") == ""
     data = json.dumps(
         tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
     )

@@ -1,8 +1,134 @@
 # Results: event memory against the baselines
 
-Four rounds, run on 2026-11-17 and 18. Round 4, the final comparison on a
-fresh test split, comes first; then rounds 3b and 3 (dev only) and round 2;
-round 1 follows as it was written.
+Five rounds, run on 2026-11-17 and 18. Round 5 reuses the frozen Round 4
+comparison. Round 4 contains the original run on a fresh test split. The
+earlier rounds follow in reverse order.
+
+## Round 5 — contextual closes and queued extraction
+
+Round 5 cut false alerts from **1.10 to 0.45 per ticket** and recovered
+**17 of 20** context-dependent closes. It cost **$0.01102 per ticket**, 17.5%
+less than Round 4. The combined change falls short of a quality release gate.
+Commitment recall dropped from 0.995 to 0.959, and dispute recall fell from
+1.000 to 0.879. The experiment changed the context, response format, and
+batching together, so it cannot isolate the cause of the extraction losses.
+
+### Reducer replay before live work
+
+The recorded Round 4 proposals and verifier verdicts were folded under the
+[new closing rule](decisions/0001-verifier-veto.md) at $0. This was a post-hoc
+replay on `test3` with the original extraction. It reduced false closes at
+ticket end from four to zero and wrong-target closes from one to zero. The
+unrelated-refund case improved from 16/20 to 20/20. At ticket end, breach
+alerts went from 125 correct, 22 false, and four missed to 128 correct, 23
+false, and one missed. Context-dependent closes remained at 0/20. Status
+accuracy went from 0.926 to 0.937. Commitment F1 went from 0.989 to 0.988.
+[Replay scores](../results/round5/reducer-replay.json)
+
+### Live comparison
+
+One run on the four original `dev3` tickets recovered all four contextual
+closes, kept all four ambiguous and unrelated cases open, and made zero false
+closes. One live run of the selected configuration processed all 20 archived
+`test3` tickets, with no failed tickets. Both used DeepSeek V4.1 Flash on
+DeepInfra. The verifier used low reasoning. The extractor used reasoning off,
+compact responses, and groups of up to four consecutive messages. The run
+treated adjacent archived messages as already queued, which models a backlog.
+The frequency of groups in a live helpdesk depends on arrivals. `test3` had
+already informed the design through Round 4, so these are follow-up results on
+a known synthetic set. All baselines were read from their frozen records.
+[Development record](../results/round5/dev3.json) · [Test record](../results/round5/test3.json)
+
+| Measure | Round 4 | Rule replay | Round 5 | Full context | Mem0 | Graphiti | Rolling summary |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| False closes per ticket | 0.20 | 0.00 | **0.05** | 0.10 | 0.15 | 0.80 | 0.25 |
+| False closes across checkpoints per ticket | 0.90 | 0.00 | **0.15** | 0.30 | 0.65 | 1.90 | 0.50 |
+| Wrong-target closes per ticket | 0.05 | 0.00 | **0.00** | 0.30 | 0.20 | 0.10 | 0.00 |
+| False alerts per ticket | 1.10 | 1.15 | **0.45** | 0.45 | 0.40 | 0.40 | 0.75 |
+| Context-dependent close recovered | 0.00 | 0.00 | **0.85** | 0.85 | 0.90 | 0.60 | 0.50 |
+| Ambiguous close refrained | 1.00 | 1.00 | 0.95 | 0.95 | 0.85 | 0.60 | 0.50 |
+| Unrelated confirmation handled | 0.80 | 1.00 | 0.95 | 1.00 | 1.00 | 1.00 | 1.00 |
+| Breach-alert precision | 0.850 | 0.848 | **0.932** | 0.934 | 0.941 | 0.933 | 0.864 |
+| Breach-alert recall | 0.969 | 0.992 | 0.961 | 0.992 | 0.984 | 0.862 | 0.760 |
+| Status accuracy | 0.926 | 0.937 | **0.957** | 0.948 | 0.945 | 0.913 | 0.915 |
+| Commitment F1 | 0.989 | 0.988 | 0.975 | 0.997 | 0.990 | 0.942 | 0.797 |
+| Deadline accuracy | 1.000 | 1.000 | 1.000 | 0.935 | 0.909 | 0.932 | 0.915 |
+| Freshness error | 0.000 | 0.000 | 0.064 | 0.291 | 0.310 | 0.278 | 0.333 |
+| Dispute recall | 1.000 | 1.000 | 0.879 | 0.560 | 0.604 | 0.192 | 0.667 |
+| Failed-step precision | 1.000 | 1.000 | 0.776 | 0.792 | 0.771 | 0.771 | 0.963 |
+| Recorded model cost per ticket | $0.01337 | $0.01337 | $0.01102 | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
+
+Graphiti covers 10 tickets and rolling summary covers four. The replay cost
+column carries the original calls' cost for comparison. The replay itself
+charged $0. The record
+contains ticket-level paired intervals and counts. There were 124 correct,
+nine false, and five missed breach alerts at ticket end. Without verifier
+verdicts, replaying the same Round 5 proposals recovered 0/20 contextual
+closes. One contextual `yes` closed the assembly refund when the installation
+refund was the intended target and had never been recorded (M0012). The
+unrelated-confirmation case also failed on M0012 because the callback itself
+was missing. The ambiguous-case failure on M0009 was a missing promise.
+Both labels require every affected promise to be present.
+
+### Cost and latency during active tickets
+
+| Measure | Round 4 Duebook | Round 5 Duebook |
+|---|---:|---:|
+| Model cost per ticket | $0.01337 | $0.01102 |
+| Model cost per incoming message | $0.00007679 | $0.00006332 |
+| Model calls per ticket, including verifier | 182.65 | 63.00 |
+| Provider prompt tokens served from cache | 88.7% | 72.6% |
+| Extraction output tokens per extraction call | 79.0 | 211.3 |
+| Extraction output tokens per incoming message | 79.0 | 66.2 |
+| All output tokens per model call | 85.8 | 214.7 |
+| Model seconds per incoming message | 1.462 | 0.808 |
+
+Output per call grows because a batch describes several messages. Output
+per incoming message dropped 16.1%. The run attempted 884 batches, of which
+835 had four messages, 25 had three, and 24 had two. It scheduled 186
+individual rereads within those groups. Batching adds zero deliberate wait
+for arrivals. The first event in a group waited a median of 1.93 s (p95
+3.61 s) for the batch request. Recorded individual extraction calls took a
+median of 1.38 s (p95 2.39 s). The observed first-event differences were
+0.55 s at the median and 1.23 s at p95 between these unpaired samples.
+Seven measured batch requests exceeded 10 s under HTTP phase timeouts. The
+production path now enforces a total wall-clock deadline and falls back for
+the whole group. That change was tested with a stalled transport stub.
+A related check against the whole preceding question preserved all 88 live
+checkpoints in a free replay. The test split made one live pass, so its
+latency measurements are from before the transport hardening.
+
+| Comparison | Calls on 20 tickets | Cost per ticket | Cost per incoming message |
+|---|---:|---:|---:|
+| Full context at handoffs and end, measured | 88 | $0.00434 | $0.00002493 |
+| Full context after every message, projected at the observed cache share | 3,481 | $0.15710 | $0.00090259 |
+| Full context after every message, projected with all input cached | 3,481 | $0.07478 | $0.00042962 |
+| Duebook maintaining the card, measured in Round 5 | 1,260 | $0.01102 | $0.00006332 |
+
+The full-context projection uses the original 416,339 prompt and 86,064
+output tokens at 88 checkpoints. For each ticket, scale its observed prompt
+tokens by the ratio of total rendered prompt characters at all message
+prefixes to those at its checkpoints. Hold its mean output length per answer
+fixed. At the recorded DeepInfra prices, 14.02M prompt and 3.42M output tokens
+cost $3.14 at the observed 13.5% cache share and $1.50 with all input cached.
+These are estimates for re-answering the same full card after every message.
+Round 5 still uses the stored card for reads and the scheduler for alerts,
+both with zero model calls. [Projection inputs](../results/round5/continuous-cost.json)
+
+The development projection was $0.0524. The test projection from the four
+development tickets was $0.2260 expected and $0.4046 at the upper estimate,
+without sampling any test messages. OpenRouter charged **$0.26386** in total
+($0.04390 development and $0.21997 test), within the $0.60 cap. [Spend log](../results/round5/spend.jsonl)
+
+To refold only the saved Round 5 proposals and rescore the frozen comparison
+at zero model cost:
+
+```bash
+python -m duebook.bench.experiment --split test3 --methods event_memory \
+    --max-usd 0.01 --results /tmp/duebook-round5-replay \
+    --replay results/round5/test3.json --frozen results/round4/test3.json \
+    --compare-frozen-event-memory
+```
 
 ## Round 4: final comparison on `test3`
 

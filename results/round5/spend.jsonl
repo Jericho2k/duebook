@@ -1,0 +1,2 @@
+{"at": "2026-11-18T13:52:43.712377+00:00", "split": "dev3", "what": "run", "methods": "event_memory", "label": "", "usd": 0.043897268800000035, "reused_usd": 0.0015653624000000002}
+{"at": "2026-11-18T13:56:47.072329+00:00", "split": "test3", "what": "run", "methods": "event_memory", "label": "", "usd": 0.21996574319999956, "reused_usd": 0.00045080559999999997}

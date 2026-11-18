@@ -1,30 +1,8 @@
-"""A second opinion on the few proposals that would close a promise.
+"""Verify proposed changes that would stop a promise from being tracked.
 
-    reader = VerifyingReader(Extractor(cheap), Verifier(careful))
-    extraction = reader.extract(card, event)   # proposals carry their verdicts
-    card = apply(card, event, extraction.proposals).card
-
-Closing a promise by mistake is silent: it raises no alert and leaves the
-brief. The reducer's lexical checks (``closing``) stop most such closes, but
-they also stop some true ones — "Спасибо, всё получила" shares no word with
-"вернём деньги за доставку". So every proposal that would resolve, cancel or
-replace an open commitment — a few per ticket, never an ordinary message — is
-put to a separate model call that sees only that commitment (who owes what,
-in what words, by when) and the new message with its author, and answers
-yes / no / unsure with the words of the message that show it.
-
-The verdict does not decide anything here. It is attached to the proposal
-(``Verification``) and the reducer weighs it: a yes whose evidence is really
-in the message can stand in for the lexical relevance check, and for nothing
-else. Because the verdict travels with the proposal and is stored with it, a
-replay reproduces the card without calling any model; the reducer stays pure.
-
-The verifier fails safe. A call that cannot be made, or an answer that cannot
-be read, becomes an UNSURE verdict with the error noted — the close is then
-judged by the deterministic checks alone, exactly as without a verifier.
-
-The instructions come first and never change; the commitment and the message
-follow, so a provider's prompt cache can serve the fixed part.
+The verifier checks a named target for direct evidence. If a reply depends on
+the preceding public turn, it compares every open commitment of the owing
+side. The reducer makes the decision from the stored verdict and evidence.
 """
 
 from __future__ import annotations
@@ -36,6 +14,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from ..card import Card, Commitment
+from ..closing import NAMING, asks_to_confirm, confirms_reply, overlap
 from ..events import Event, MessagePosted
 from ..proposals import (
     CancelCommitment,
@@ -48,7 +27,15 @@ from ..proposals import (
 from ..temporal import WorkCalendar
 from .client import DEFAULT_MODEL, ChatClient, ModelError
 from .cost import Usage
-from .extractor import Extraction, JsonModel, Reader, VerifierUsage
+from .extractor import (
+    Extraction,
+    JsonModel,
+    Reader,
+    ReadTurn,
+    VerifierUsage,
+    read_batch,
+    read_event,
+)
 
 DEFAULT_VERIFIER_REASONING = "low"
 log = logging.getLogger(__name__)
@@ -62,6 +49,26 @@ VERIFY_SCHEMA: dict[str, Any] = {
     "required": ["verdict", "evidence_quote"],
     "additionalProperties": False,
 }
+
+CONTEXT_SCHEMA = {
+    **VERIFY_SCHEMA,
+    "properties": {**VERIFY_SCHEMA["properties"], **dict.fromkeys(
+        ("id", "target_quote", "context_quote"), {"type": "string"}
+    )},
+    "required": [*VERIFY_SCHEMA["required"], "id", "target_quote", "context_quote"],
+}
+
+CONTEXT_PROMPT = """\
+Check whether the NEW MESSAGE confirms that exactly one listed promise was fulfilled. \
+Compare all candidates. The PRECEDING TURN can identify the subject of a short reply. \
+If the reply confirms the action and the preceding question uniquely identifies the promise, \
+return verdict yes, its id, an exact target_quote from its original wording, context_quote \
+copied from the preceding question naming that subject, and evidence_quote copied from the reply. \
+If the reply directly names the subject, use an empty context_quote. \
+When the reply could refer to multiple promises, says only thanks, says one of several \
+arrived without saying which, or fails to confirm completion, return unsure or no and use \
+empty strings for id and all quotes. Never guess based on relative ages or deadlines.\
+"""
 
 VERIFIER_PROMPT = """\
 You check ONE proposed change to the record of a customer support ticket. \
@@ -152,12 +159,37 @@ class Verifier:
             {"role": "system", "content": VERIFIER_PROMPT},
             {"role": "user", "content": render_request(target, proposal, event, self.cal)},
         ]
+        verdict, usage, provider, _ = self._ask(messages, VERIFY_SCHEMA, "verdict")
+        return verdict, usage, provider
+
+    def verify_context(
+        self, candidates: list[Commitment], proposal: ResolveCommitment, event: MessagePosted,
+        previous: MessagePosted,
+    ) -> tuple[ResolveCommitment, Usage, str | None]:
+        ids = {f"C{i}": c for i, c in enumerate(candidates, 1)}
+        lines = [f"{id_} [{c.owner.value}] {c.action} | said: {c.source.quote}"
+                 for id_, c in ids.items()]  # fmt: skip
+        lines += ["", "PRECEDING TURN", previous.text, "", "NEW MESSAGE", event.text]
+        messages = [{"role": "system", "content": CONTEXT_PROMPT},
+                    {"role": "user", "content": "\n".join(lines)}]  # fmt: skip
+        verdict, usage, provider, data = self._ask(messages, CONTEXT_SCHEMA, "context_verdict")
+        if verdict.verdict is Verdict.YES:
+            target = ids.get(str(data.get("id", "")).upper())
+            quote, context = data.get("target_quote"), data.get("context_quote")
+            if target and isinstance(quote, str) and quote and isinstance(context, str):
+                proposal = replace(proposal, commitment_id=target.id, target_quote=quote,
+                                   context_quote=context, quote=verdict.evidence_quote)
+            else:
+                verdict = replace(verdict, verdict=Verdict.UNSURE, error="unreadable target")
+        return replace(proposal, verification=verdict), usage, provider
+
+    def _ask(self, messages, schema, output):
         name = _model_name(self.model)
         try:
-            completion = self.model.complete_json(messages, VERIFY_SCHEMA, name="verdict")
+            completion = self.model.complete_json(messages, schema, name=output)
         except ModelError as error:  # fail safe: as if no verifier had been asked
             failure = Verification(Verdict.UNSURE, model=name, error=f"ModelError: {error}")
-            return failure, error.usage, error.provider
+            return failure, error.usage, error.provider, {}
         try:
             verdict = Verdict(completion.data["verdict"])
             evidence = completion.data["evidence_quote"]
@@ -168,7 +200,7 @@ class Verifier:
                                         error=f"unreadable verdict: {error}")  # fmt: skip
         else:
             verification = Verification(verdict, evidence.strip(), model=name)
-        return verification, completion.usage, completion.provider
+        return verification, completion.usage, completion.provider, completion.data
 
 
 @dataclass(slots=True)
@@ -184,17 +216,42 @@ class VerifyingReader:
     verifier: Verifier
 
     def extract(self, card: Card, event: Event) -> Extraction:
-        extraction = self.reader.extract(card, event)
+        return self.extract_with_context(card, event, None)
+
+    def extract_batch(self, card: Card, turns: list[ReadTurn]) -> dict[int, Extraction]:
+        return read_batch(self.reader, card, turns)
+
+    def extract_with_context(
+        self, card: Card, event: Event, previous: MessagePosted | None,
+    ) -> Extraction:
+        return self.verify_extraction(card, event, previous,
+                                      read_event(self.reader, card, event, previous))
+
+    def verify_extraction(
+        self, card: Card, event: Event, previous: MessagePosted | None, extraction: Extraction,
+    ) -> Extraction:
         if not isinstance(event, MessagePosted):
             return extraction
+        pending = extraction.proposals
+        if previous is not None and not any(isinstance(p, ResolveCommitment) for p in pending):
+            pending = (*pending, *_possible_reply(card, event, previous))
         spent, proposals = Usage(), []
         providers: Counter[str] = Counter()
         failures = 0
-        for p in extraction.proposals:
+        for p in pending:
             target = card.commitment(target_of(p) or "")
             if target is not None and target.unresolved and p.verification is None:
-                verdict, cost, provider = self.verifier.verify(target, p, event)
-                p, spent = replace(p, verification=verdict), spent + cost
+                if (previous is not None and isinstance(p, ResolveCommitment)
+                    and previous.author.side is target.owner.side
+                    and (p.context_quote or overlap(p.quote, (target.source.quote,)) < NAMING)):
+                    candidates = [c for c in card.commitments
+                                  if c.unresolved and c.owner.side is target.owner.side]
+                    p, cost, provider = self.verifier.verify_context(candidates, p, event, previous)
+                    verdict = p.verification
+                else:
+                    verdict, cost, provider = self.verifier.verify(target, p, event)
+                    p = replace(p, verification=verdict)
+                spent += cost
                 providers[provider or "unknown"] += 1
                 if verdict.error:
                     failures += 1
@@ -205,6 +262,25 @@ class VerifyingReader:
             return extraction
         usage = VerifierUsage(providers.total(), failures, spent, dict(providers))
         return replace(extraction, proposals=tuple(proposals), verifier_usage=usage)
+
+
+def _possible_reply(
+    card: Card, event: MessagePosted, previous: MessagePosted,
+) -> tuple[Proposal, ...]:
+    if not confirms_reply(event.text) or not asks_to_confirm(previous.text):
+        return ()
+    candidates = [c for c in card.commitments
+                  if c.unresolved and c.owner.side is previous.author.side]
+    if not candidates:
+        return ()
+    def fit(c: Commitment) -> int:
+        return overlap(previous.text, (c.source.quote, c.action))
+
+    target = max(candidates, key=fit)
+    if fit(target) < NAMING:
+        return ()
+    return (ResolveCommitment(target.id, event.text.strip(), target.source.quote,
+                              context_quote=previous.text.strip()),)
 
 
 def _model_name(model: object) -> str:

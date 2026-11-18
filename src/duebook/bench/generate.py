@@ -883,7 +883,9 @@ def _close_twins(
             target_seq = made[objects.index(target)]
             quote = wording.replace("{obj}", target).format(due="").strip()
             verification = Verification(Verdict.YES, reply)
-            proposal = ResolveCommitment(f"e{target_seq}#0", reply, quote, verification)
+            context_quote = context.split(". ", 1)[0]
+            proposal = ResolveCommitment(f"e{target_seq}#0", reply, quote, verification,
+                                         context_quote)  # fmt: skip
             seq = b.say(Role.CUSTOMER, reply, proposal, verbatim=True)
             _settled(b, target_seq, seq)
             case = GoldCloseCase(CloseCase.RESCUE, seq, tuple(made), target_seq)

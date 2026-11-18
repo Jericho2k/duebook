@@ -27,10 +27,17 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 
 from ..card import Card
-from ..events import Event
+from ..events import Event, MessagePosted, other_side, remember_turn
 from ..extract.cost import Usage
-from ..extract.extractor import Extraction, Reader
-from ..lifecycle import AlertPolicy
+from ..extract.extractor import (
+    BATCH_TIMEOUT,
+    MAX_BATCH_SIZE,
+    Extraction,
+    Reader,
+    read_batch,
+    read_event,
+)
+from ..lifecycle import AlertPolicy, next_wakeup
 from ..proposals import CancelCommitment, MakeCommitment, Proposal, ResolveCommitment
 from ..reducer import GUARDED, Guards, apply
 from ..temporal import WorkCalendar
@@ -135,6 +142,8 @@ class Folded:
     proposals: tuple[tuple[Proposal, ...], ...] = ()
     #: Every close the guards refused.
     refused: tuple[Refused, ...] = ()
+    #: Batch size, wall time, and messages needing individual extraction.
+    batches: tuple[tuple[int, float, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,6 +165,8 @@ def fold(
     stops: Iterable[int] = (),
     cal: WorkCalendar | None = None,
     guards: Guards | None = None,
+    *,
+    batch: bool = False,
 ) -> Folded:
     """Read a ticket event by event, keeping the card at each of ``stops``."""
     wanted = set(stops)
@@ -165,10 +176,27 @@ def fold(
     read: list[tuple[Proposal, ...]] = []
     refused: list[Refused] = []
     failure = None
-    for event in ticket.events:
+    turns, prepared, batches = {}, {}, []
+    for index, event in enumerate(ticket.events):
         started = time.perf_counter()
+        previous = turns.get(other_side(event))
         try:
-            extraction = extractor.extract(card, event)
+            wakeup = next_wakeup(card, event.at) if batch and not prepared else None
+            if batch and not prepared and (wakeup is None or wakeup > event.at + BATCH_TIMEOUT):
+                joined, upcoming = [], dict(turns)
+                for e in ticket.events[index : index + MAX_BATCH_SIZE]:
+                    if not isinstance(e, MessagePosted) or not e.text.strip():
+                        break
+                    joined.append((e, upcoming.get(other_side(e))))
+                    remember_turn(upcoming, e)
+                prepared = read_batch(extractor, card, joined)
+                if prepared:
+                    retries = sum(
+                        e.seq not in prepared or prepared[e.seq].reread for e, _ in joined
+                    )
+                    batches.append((len(joined), time.perf_counter() - started, retries))
+            extraction = read_event(extractor, card, event, previous,
+                                    prepared.pop(event.seq, None))  # fmt: skip
         except Exception as error:  # held at this event, as the pipeline would
             seconds += time.perf_counter() - started
             spent += getattr(error, "usage", None) or Usage()
@@ -180,7 +208,8 @@ def fold(
         if usage.calls:
             prompts.append((event.seq, usage.prompt_tokens))
         read.append(extraction.proposals)
-        outcome = apply(card, event, extraction.proposals, cal, guards=guards)
+        outcome = apply(card, event, extraction.proposals, cal, guards=guards, previous=previous)
+        remember_turn(turns, event)
         refused += [_refused(card, event.seq, r.proposal, r.reason)
                     for r in outcome.rejections if r.reason in GUARDED]  # fmt: skip
         card = outcome.card
@@ -190,7 +219,7 @@ def fold(
     for seq in wanted - set(cards):
         cards[seq] = card
     return Folded(card, cards, spent, failure, seconds, tuple(prompts), tuple(read),
-                  tuple(refused))  # fmt: skip
+                  tuple(refused), tuple(batches))  # fmt: skip
 
 
 def _refused(card: Card, seq: int, proposal: Proposal, reason) -> Refused:

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import date, time
 
@@ -21,6 +22,7 @@ from duebook.extract import (
     parse_output,
     settings_for,
 )
+from duebook.extract.extractor import read_batch
 from duebook.extract.prompt import SYSTEM_PROMPT, Bound, build_messages, render_card
 from duebook.extract.schema import OUTPUT_SCHEMA, parse_due_expr
 from duebook.proposals import (
@@ -45,8 +47,7 @@ def due(**fields):
 
 
 def output(**sections):
-    empty = {key: [] for key in OUTPUT_SCHEMA["properties"]}
-    return {**empty, **sections}
+    return {"updates": [{"type": key, "items": items} for key, items in sections.items()]}
 
 
 class FakeModel:
@@ -112,8 +113,10 @@ def test_a_close_names_its_target_twice_by_handle_and_by_its_wording():
         ResolveCommitment("e1#0", "деньги пришли", "вернём деньги"),
         CancelCommitment("e2#0", "не нужно", "замену"),
     ]
-    required = OUTPUT_SCHEMA["properties"]["resolved"]["items"]["required"]
-    assert required == ["id", "target_quote", "quote"]
+    variants = OUTPUT_SCHEMA["properties"]["updates"]["items"]["anyOf"]
+    resolved, = [v["properties"]["items"] for v in variants
+                 if v["properties"]["type"]["enum"] == ["resolved"]]  # fmt: skip
+    assert resolved["items"]["required"] == ["id", "target_quote", "quote", "context_quote"]
 
 
 def test_the_instructions_say_bare_thanks_confirms_nothing():
@@ -298,6 +301,29 @@ def chat_response(content, cost=0.00012, provider="DeepInfra", reasoning=0):
 def client_for(handler, **options):
     http = httpx.Client(transport=httpx.MockTransport(handler))
     return ChatClient(api_key="test-key", http=http, sleep=lambda _: None, **options)
+
+
+def test_a_batch_wall_clock_timeout_falls_back_for_the_whole_group(monkeypatch):
+    waiting = []
+
+    async def stalled(request):
+        waiting.append("started")
+        try:
+            await asyncio.sleep(5)
+        finally:
+            waiting.append("cancelled")
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(stalled))
+    monkeypatch.setattr(httpx, "AsyncClient", lambda: http)
+    batch = ChatClient("test-key", total_timeout=0.02)
+    reader = Extractor(FakeModel(), CAL, batch_model=batch)
+    ticket = Ticket()
+    ticket.say(ANNA, "Оплатила заказ.")
+    ticket.say(IVAN, "Возврат оформим.")
+    turns = [(event, None) for event, _ in ticket.log]
+    prepared = read_batch(reader, Ticket().card, turns)
+    assert list(prepared) == [1, 2] and all(result.reread for result in prepared.values())
+    assert waiting == ["started", "cancelled"]
 
 
 def test_client_sends_a_strict_schema_and_reads_usage():

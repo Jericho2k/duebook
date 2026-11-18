@@ -16,11 +16,12 @@ from __future__ import annotations
 import os
 import socket
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .extract.client import DEFAULT_MODEL, OPENROUTER_URL, REASONING
+from .extract.extractor import BATCH_TIMEOUT
 from .extract.verifier import DEFAULT_VERIFIER_REASONING
 from .lifecycle import AlertPolicy
 from .temporal import WorkCalendar
@@ -39,7 +40,7 @@ class Settings:
     #: The OpenAI-compatible endpoint the extractor calls.
     openrouter_base_url: str = OPENROUTER_URL
     openrouter_model: str = DEFAULT_MODEL
-    openrouter_api_key: str = ""
+    openrouter_api_key: str = field(default="", repr=False)
     #: When set, ``POST /events`` requires a valid ``X-Duebook-Signature``.
     webhook_secret: str = ""
     #: When set, read endpoints require ``Authorization: Bearer <key>``.
@@ -67,8 +68,11 @@ class Settings:
     verifier_enabled: bool = True
     verifier_model: str = DEFAULT_MODEL
     verifier_reasoning: str = DEFAULT_VERIFIER_REASONING
+    extraction_batch_timeout: timedelta = BATCH_TIMEOUT
 
     def __post_init__(self) -> None:
+        if self.extraction_batch_timeout < timedelta():
+            raise ConfigError(f"{PREFIX}EXTRACTION_BATCH_TIMEOUT_SECONDS must be non-negative")
         if self.verifier_reasoning not in REASONING:
             raise ConfigError(f"{PREFIX}VERIFIER_REASONING must be one of: {', '.join(REASONING)}")
         if self.alert_channel not in CHANNELS:
@@ -134,6 +138,8 @@ class Settings:
             verifier_enabled=verifier_enabled == "true",
             verifier_model=get("VERIFIER_MODEL", DEFAULT_MODEL),
             verifier_reasoning=get("VERIFIER_REASONING", DEFAULT_VERIFIER_REASONING),
+            extraction_batch_timeout=seconds("EXTRACTION_BATCH_TIMEOUT_SECONDS",
+                                             BATCH_TIMEOUT.total_seconds()),  # fmt: skip
         )
 
     def require_database(self) -> str:

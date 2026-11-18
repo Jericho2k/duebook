@@ -31,17 +31,9 @@ A few nouns and verbs of one deed have different roots ("возврат" and
 "вернуть"); ``SYNONYMS`` joins them. It is short on purpose and specific to
 support tickets: every entry makes some pair of promises harder to tell apart.
 
-A message with no content word in common can still close a promise when it
-plainly confirms that something was done ("всё получила", "пришло") and only
-one promise of that side is open: then there is nothing else it could mean.
-
-Or when a second model, asked about that one close, says yes and quotes the
-message for it (``vouches``). The verifier can only stand in for the lexical
-relevance check — "Спасибо, всё получила" names no word of "вернём деньги за
-доставку", yet plainly confirms it. It can never override the checks that
-rest on positive evidence: who may close, the span of the target's wording,
-two open promises that the closing words fit equally, a renegotiation that
-names a different thing.
+A short reply can confirm a deed named in the preceding public turn. The
+reducer uses both sources to check that the confirmation identifies one
+promise. Legacy replay alone retains the old weak confirmation rules.
 """
 
 from __future__ import annotations
@@ -223,6 +215,22 @@ def names_other(text: str, target: Iterable[str]) -> bool:
 def confirms(text: str) -> bool:
     """Does the text say that something was done (not merely thank)?"""
     return any(w.startswith(c) for w in words(text) for c in CONFIRMING)
+
+
+def confirms_reply(text: str) -> bool:
+    """A short reply can confirm a deed, including one named in the question."""
+    tokens = set(words(text))
+    if tokens & {"не", "нет", "жду", "одно", "один", "одна", "not", "no", "one", "waiting"}:
+        return False
+    return confirms(text) or "на месте" in _ws(text) or _ws(text).strip(".!?") in {"да", "yes"}
+
+
+def asks_to_confirm(text: str) -> bool:
+    folded = _ws(text)
+    return "?" in folded or any(word in folded for word in (
+        "проверьте", "подтвердите", "скажите", "напишите", "confirm", "check whether",
+        "let me know", "please check",
+    ))
 
 
 def quote_identifies(target_quote: str, source_quote: str) -> bool:

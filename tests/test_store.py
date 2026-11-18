@@ -4,12 +4,14 @@ from datetime import timedelta
 import psycopg
 import pytest
 from helpers import ANNA, CAL, IVAN, START, persist, promise, story
+from psycopg.types.json import Jsonb
 
 from duebook import AlertPolicy, Card, Reason
 from duebook.brief import compose
 from duebook.proposals import AssertFact, ResolveCommitment, Verdict, Verification
 from duebook.reducer import OutOfOrder
 from duebook.store import Conflict, Store, connect
+from duebook.store.codec import encode
 
 pytestmark = pytest.mark.usefixtures("conn")
 
@@ -186,3 +188,22 @@ def test_a_verifiers_verdict_is_stored_with_the_close_and_replay_needs_no_model(
     row = conn.execute("select * from event_proposals where seq = 3").fetchone()
     assert row["proposals"][0]["verification"]["verdict"] == "yes"
     assert store.replay("T-1") == ticket.card
+
+
+def test_old_closes_replay_under_their_original_rule(store, conn):
+    ticket = promise("T-1")
+    persist(store, ticket)
+    call = ticket.card.commitments[0]
+    quote = "Деньги пришли"
+    close = ResolveCommitment(call.id, quote, "Перезвоню вам", Verification(Verdict.NO))
+    ticket.say(ANNA, quote, close)
+    event, _ = ticket.log[-1]
+    assert ticket.card.commitments[0].unresolved
+    store.ingest(event, START)
+    conn.execute(
+        "insert into event_proposals"
+        " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
+        " values (%s, %s, %s, '[]', %s, 1)",
+        (ticket.card.ticket_id, event.seq, Jsonb(encode([close])), START),
+    )
+    assert not store.replay("T-1").commitments[0].unresolved

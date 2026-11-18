@@ -158,6 +158,7 @@ class Commitment:
     #: Closes that were proposed and refused, oldest first. The commitment is
     #: still open; these are for a person to confirm.
     suggestions: tuple[Suggestion, ...] = ()
+    resolution_context: Source | None = None
 
     @property
     def unresolved(self) -> bool:

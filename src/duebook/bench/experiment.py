@@ -53,6 +53,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import threading
@@ -66,9 +67,10 @@ from pathlib import Path
 from typing import Any
 
 from ..card import Card
-from ..events import MessagePosted
+from ..events import MessagePosted, other_side, remember_turn
 from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCache
 from ..extract.cost import Usage
+from ..extract.extractor import BATCH_TIMEOUT
 from ..extract.prompt import Bound
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
 from ..proposals import Proposal
@@ -178,11 +180,13 @@ def rewritten(
 def make_methods(
     names: Sequence[str], model: str, ledger: Ledger, cal: WorkCalendar,
     cache: ResponseCache | None = None, recorded: dict[str, Recorded] | None = None,
+    *, batch: bool = False,
 ) -> list:  # fmt: skip
     """The methods by name; ``recorded`` replays proposals for ``event_memory``."""
-    reader = ChatClient(api_key="proxy-injected", model=model, cache=cache)
+    key = os.environ.get("DUEBOOK_OPENROUTER_API_KEY", "proxy-injected")
+    reader = ChatClient(api_key=key, model=model, cache=cache)
     # Answering a checkpoint means writing out the whole account; it needs room.
-    answerer = ChatClient(api_key="proxy-injected", model=model, max_tokens=12_000, timeout=240,
+    answerer = ChatClient(api_key=key, model=model, max_tokens=12_000, timeout=240,
                           cache=cache)  # fmt: skip
     methods: list[Method] = []
     for name in names:
@@ -193,9 +197,14 @@ def make_methods(
                                 timeout=120 if extracting == "low" else reader.timeout)
             # The verifier is called as ``cli.extractor`` calls it: the same
             # client, with the verifier's reasoning.
-            verifier = replace(reader, reasoning=verifying) if verifying else None
+            verifier = (
+                replace(reader, reasoning=verifying) if verifying and recorded is None else None
+            )
+            batch_model = replace(extractor, total_timeout=BATCH_TIMEOUT.total_seconds(),
+                                  http_retries=0, content_retries=0) if batch else None
             methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
-                                       recorded=recorded if name == "event_memory" else None))
+                                       recorded=recorded if name == "event_memory" else None,
+                                       batch_model=batch_model))
         elif name == "event_memory_bounded":
             methods.append(EventMemory(reader, ledger, cal, bound=Bound(), name=name))
         elif name == "full_context":
@@ -331,6 +340,25 @@ def project(
     return out
 
 
+def project_from(path: Path, methods, tickets, subsets) -> dict[str, dict[str, float]]:
+    """Budget a held-out run without querying any held-out message first."""
+    previous = json.loads(path.read_text())
+    counts = {t["id"]: t["messages"] for t in previous["tickets"]}
+    estimates = {}
+    for method in methods:
+        runs = [r for r in load_runs(path) if r.method == method.name]
+        if not runs or any(r.failure or r.usage.usd() is None for r in runs):
+            raise SystemExit(f"{path}: projection requires completed {method.name} runs")
+        messages = sum(t.messages for t in tickets[: subsets.get(method.name, len(tickets))])
+        rates = [r.usage.usd() / counts[r.ticket_id] for r in runs]
+        upper, expected = 1.5 * max(rates), sum(rates) / len(rates)
+        estimates[method.name] = {
+            "upper": upper * messages, "expected": expected * messages,
+            "sample_usd": 0.0, "sample_charged": 0.0, "reused": 0.0,
+        }
+    return estimates
+
+
 def _transcript(ticket: SimTicket, seq: int, cal: WorkCalendar) -> str:
     return "\n".join(render_event(e, cal) for e in ticket.events[:seq])
 
@@ -424,15 +452,17 @@ def audit(ticket: SimTicket, proposals: Sequence[Sequence[Proposal]],
     it was closed by another message, "unplanted" for a promise no label has.
     """
     gold = {c.seq: c for c in ticket.gold.commitments}
-    card, out = Card(ticket.ticket_id), []
+    card, out, turns = Card(ticket.ticket_id), [], {}
     for event, ps in zip(ticket.events, proposals, strict=False):
-        after = apply(card, event, ps, cal).card
+        previous = turns.get(other_side(event))
+        after = apply(card, event, ps, cal, previous=previous).card
         for p in ps:
             v = getattr(p, "verification", None)
             target = card.commitment(target_of(p) or "")
             if v is None or target is None:
                 continue
-            alone = apply(card, event, [p], cal, guards=Guards(verifier=False)).card
+            alone = apply(card, event, [p], cal, guards=Guards(verifier=False),
+                          previous=previous).card
             g = gold.get(target.source.seq)
             if g is None:
                 truth = "unplanted"
@@ -450,6 +480,7 @@ def audit(ticket: SimTicket, proposals: Sequence[Sequence[Proposal]],
                 "truth": truth, "text": getattr(event, "text", ""),
             })  # fmt: skip
         card = after
+        remember_turn(turns, event)
     return out
 
 
@@ -773,6 +804,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                         help="a result whose runs of the methods not run now are scored again")
     parser.add_argument("--sample-events", type=int, default=30,
                         help="events of the first ticket read to project the cost")
+    parser.add_argument("--projection-from", type=Path,
+                        help="project from a completed development run with the same method")
     parser.add_argument("--expected", action="store_true",
                         help="judge the projection by what the sample was charged (trusting the "
                              "response cache) instead of what it would cost uncached")
@@ -782,6 +815,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--project-only", action="store_true",
                         help="print the cost projection (its sample is charged), then stop")
     parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--batch", action="store_true", help="batch contiguous backlogged messages")
+    parser.add_argument("--template", action="store_true", help="use original development tickets")
+    parser.add_argument("--compare-frozen-event-memory", action="store_true",
+                        help="score the original event memory as event_memory_previous")
     parser.add_argument("--out", type=Path, help="default: <results>/<split>.json")
     parser.add_argument("--label", default="", help="a note for the spend log")
     parser.add_argument("--results", type=Path,
@@ -790,6 +827,8 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     require_different_models(args.writer, args.model)
     split = SPLITS[args.split]
+    if args.template and split.name.startswith("test"):
+        parser.error("--template is only for development splits")
     results = args.results or results_directory(split)
     out = args.out or results / f"{split.name}.json"
     if split.name.startswith("test") and out.exists():
@@ -815,7 +854,11 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     try:
         where = results_directory(split) / "tickets"
-        tickets, written = rewritten(split, args.writer, ledger, where, args.workers)
+        if args.template:
+            tickets = split.tickets()
+            written = {"tickets": {t.ticket_id: {"discarded": 0} for t in tickets}}
+        else:
+            tickets, written = rewritten(split, args.writer, ledger, where, args.workers)
     except BaseException as error:
         spend(f"rewriting, stopped: {type(error).__name__}")
         raise
@@ -833,8 +876,10 @@ def main(argv: Sequence[str] | None = None) -> None:
           f"${args.session_cap:.2f}", file=sys.stderr)  # fmt: skip
 
     recorded = recorded_proposals(args.replay) if args.replay else None
-    methods = make_methods(names, args.model, ledger, cal, cache, recorded)
-    projected = project(methods, tickets, subsets, ledger, cal, args.sample_events)
+    methods = make_methods(names, args.model, ledger, cal, cache, recorded, batch=args.batch)
+    projected = (project_from(args.projection_from, methods, tickets, subsets)
+                 if args.projection_from else project(methods, tickets, subsets, ledger, cal,
+                                                     args.sample_events))  # fmt: skip
     judged = "expected" if args.expected else "upper"
     total = sum(p[judged] for p in projected.values())
     for name, p in projected.items():
@@ -858,6 +903,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         spend("run")
     by_id = {t.ticket_id: t for t in tickets}
     frozen = [r for r in load_runs(args.frozen) if r.method not in names and r.ticket_id in by_id]
+    if args.compare_frozen_event_memory:
+        frozen += [replace(r, method="event_memory_previous") for r in load_runs(args.frozen)
+                   if r.method == "event_memory" and r.ticket_id in by_id]
     runs += frozen
     reference = [r for r in runs if r.method == "event_memory"]
     replays = [refolded(r, by_id[r.ticket_id], cal, name) for name in REFOLDS for r in reference]
@@ -875,6 +923,8 @@ def main(argv: Sequence[str] | None = None) -> None:
         "profile": split.profile.name,
         "model": args.model,
         "writer": args.writer,
+        "template": args.template,
+        "batch": args.batch,
         "methods": {m: EVENT_MEMORY.get(m) for m in names},
         "replayed_from": str(args.replay) if args.replay else None,
         "frozen_from": str(args.frozen) if args.frozen else None,
@@ -897,6 +947,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "spent_usd": {"writing": writing, "total": ledger.usd(),
                       "reused_from_cache": ledger.reused.usd() or 0.0},
         "projection": projected,
+        "projection_from": str(args.projection_from) if args.projection_from else None,
         "guard_effects": effects,
         "verifier": verdict_table(verified) | {"rows": verified},
         "summary": summary,

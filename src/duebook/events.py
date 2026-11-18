@@ -70,6 +70,18 @@ class MessagePosted(Event):
     public: bool = True
 
 
+def other_side(event: Event) -> Side | None:
+    """Only shared conversation turns supply evidence for a reply."""
+    if isinstance(event, MessagePosted) and event.public:
+        return {Side.CUSTOMER: Side.COMPANY, Side.COMPANY: Side.CUSTOMER}.get(event.author.side)
+    return None
+
+
+def remember_turn(turns: dict[Side, MessagePosted], event: Event) -> None:
+    if isinstance(event, MessagePosted) and event.public and event.text.strip():
+        turns[event.author.side] = event
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AssigneeChanged(Event):
     previous: str | None

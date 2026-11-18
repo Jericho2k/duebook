@@ -56,8 +56,26 @@ from .card import (
     StepOutcome,
     Suggestion,
 )
-from .closing import confirms, names_other, overlap, quote_identifies, vouches
-from .events import AssigneeChanged, Event, MessagePosted, Role, Side, StatusChanged
+from .closing import (
+    NAMING,
+    asks_to_confirm,
+    confirms,
+    confirms_reply,
+    names_other,
+    overlap,
+    quote_identifies,
+    vouches,
+)
+from .events import (
+    AssigneeChanged,
+    Event,
+    MessagePosted,
+    Role,
+    Side,
+    StatusChanged,
+    other_side,
+    remember_turn,
+)
 from .proposals import (
     AnswerQuestion,
     AskQuestion,
@@ -68,6 +86,7 @@ from .proposals import (
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    Verdict,
     Verification,
 )
 from .slots import DEFAULT as DEFAULT_VOCABULARY
@@ -99,11 +118,13 @@ class Reason(StrEnum):
     NOT_ABOUT_TARGET = "not_about_target"
     #: The closing words fit another open commitment at least as well.
     AMBIGUOUS_TARGET = "ambiguous_target"
+    VERIFIER_REJECTED = "verifier_rejected"
 
 
 PARTIAL = frozenset({Reason.DEADLINE_UNGROUNDED, Reason.DEADLINE_INVALID, Reason.DEADLINE_IN_PAST})
 #: Refusals of a close that leave a suggestion behind.
-GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMBIGUOUS_TARGET})
+GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET,
+                     Reason.AMBIGUOUS_TARGET, Reason.VERIFIER_REJECTED})  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,18 +133,19 @@ class Guards:
 
     #: The span of the target's wording must be in the target's source quote.
     target: bool = True
-    #: The closing words must share content with the target, or plainly
-    #: confirm a deed when the target is the only open commitment of its side.
+    #: The closing words must identify the target.
     relevance: bool = True
     #: No other open commitment of the same side may fit the closing words as well.
     ambiguity: bool = True
-    #: A verifier's yes, with its evidence in the message, may stand in for
-    #: ``relevance`` — never for the others, nor for who may close.
+    #: Use the stored verdict when deciding the proposed change.
     verifier: bool = True
+    #: Reproduce decisions recorded before evidence was required for every close.
+    legacy: bool = False
 
 
 #: The reducer as it was before the guards: who may close, never what.
-UNGUARDED = Guards(target=False, relevance=False, ambiguity=False)
+UNGUARDED = Guards(target=False, relevance=False, ambiguity=False, verifier=False)
+LEGACY_GUARDS = Guards(legacy=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,6 +181,8 @@ def apply(
     cal: WorkCalendar | None = None,
     vocab: Vocabulary | None = None,
     guards: Guards | None = None,
+    *,
+    previous: MessagePosted | None = None,
 ) -> Outcome:
     if event.ticket_id != card.ticket_id:
         raise ValueError(f"event {event.id} belongs to ticket {event.ticket_id}")
@@ -189,7 +213,8 @@ def apply(
             continue
         source = Source(event.id, event.seq, event.author.id, event.author.side, proposal.quote)
         new_id = f"{event.id}#{index}"
-        card, reasons = _admit(card, event, proposal, source, new_id, text, cal, vocab, guards)
+        card, reasons = _admit(card, event, proposal, source, new_id, text, cal, vocab, guards,
+                               previous)  # fmt: skip
         rejections += [Rejection(proposal, reason) for reason in reasons]
 
     return Outcome(card, tuple(rejections))
@@ -203,9 +228,11 @@ def replay(
     guards: Guards | None = None,
 ) -> Card:
     """Fold a whole ticket. Stop the stream early to get the card as of that point."""
-    card = Card(ticket_id)
+    card, turns = Card(ticket_id), {}
     for event, proposals in stream:
-        card = apply(card, event, proposals, cal, vocab, guards).card
+        card = apply(card, event, proposals, cal, vocab, guards,
+                     previous=turns.get(other_side(event))).card  # fmt: skip
+        remember_turn(turns, event)
     return card
 
 
@@ -255,6 +282,7 @@ def _admit(
     cal: WorkCalendar,
     vocab: Vocabulary,
     guards: Guards,
+    previous: MessagePosted | None,
 ) -> tuple[Card, list[Reason]]:
     match proposal:
         case AssertFact():
@@ -262,7 +290,7 @@ def _admit(
         case MakeCommitment():
             return _make_commitment(card, event, proposal, source, new_id, text, cal, guards)
         case ResolveCommitment():
-            return _resolve_commitment(card, event, proposal, source, guards)
+            return _resolve_commitment(card, event, proposal, source, guards, previous)
         case CancelCommitment():
             return _cancel_commitment(card, event, proposal, source, guards)
         case RecordStep():
@@ -458,14 +486,18 @@ def _due(
 
 
 def _resolve_commitment(
-    card: Card, event: MessagePosted, p: ResolveCommitment, source: Source, guards: Guards
+    card: Card, event: MessagePosted, p: ResolveCommitment, source: Source, guards: Guards,
+    previous: MessagePosted | None,
 ) -> tuple[Card, list[Reason]]:
     c = card.commitment(p.commitment_id)
     if c is None:
         return card, [Reason.UNKNOWN_TARGET]
     if not c.unresolved:
         return card, [Reason.ALREADY_RESOLVED]
-    refused = _check_close(card, c, (p.quote,), p.target_quote, guards, p.verification,
+    context = _resolution_context(event, p, c, previous, guards)
+    # A short excerpt must not hide a second possible subject in the question.
+    said = (p.quote, previous.text) if context and previous else (p.quote,)
+    refused = _check_close(card, c, said, p.target_quote, guards, p.verification,
                            event.text)  # fmt: skip
     if refused is not None:
         hint = Suggestion(Closure.RESOLVED, source, refused.value)
@@ -478,9 +510,28 @@ def _resolve_commitment(
         updated = replace(c, state=CommitmentState.CLAIMED, claimed_at=event.at, resolution=source)
     else:
         updated = replace(
-            c, state=CommitmentState.FULFILLED, resolved_at=event.at, resolution=source
+            c, state=CommitmentState.FULFILLED, resolved_at=event.at, resolution=source,
+            resolution_context=context,
         )
     return _put_commitment(card, updated), []
+
+
+def _resolution_context(
+    event: MessagePosted, proposal: ResolveCommitment, target: Commitment,
+    previous: MessagePosted | None, guards: Guards,
+) -> Source | None:
+    quote = proposal.context_quote
+    if (
+        not quote or previous is None or not guards.verifier or guards.legacy
+        or previous.ticket_id != event.ticket_id or previous.seq >= event.seq
+        or not previous.public or previous.author.side is not other_side(event)
+        or previous.author.side is not target.owner.side
+        or quote not in previous.text or not asks_to_confirm(previous.text)
+        or not vouches(proposal.verification, event.text) or not confirms_reply(proposal.quote)
+        or overlap(quote, _wording(target)) < NAMING
+    ):
+        return None
+    return Source(previous.id, previous.seq, previous.author.id, previous.author.side, quote)
 
 
 def _cancel_commitment(
@@ -512,29 +563,13 @@ def _check_close(
     message: str = "",
     restates: bool = False,
 ) -> Reason | None:
-    """Why a close of ``target`` on the words ``said`` must not be admitted, or None.
-
-    Two independent references must agree: the id the model gave, and a span
-    it copied from the target's original wording. Then the closing words must
-    be about the target — share a content word with it, or, when the target is
-    the only open commitment its side owes, at least say that something was
-    done — and fit no other open commitment of that side as well. Bare thanks
-    passes none of this, which is the point: "спасибо" closes nothing.
-
-    The one SOFT check is the first of those: a verifier that said yes, and
-    quoted the ``message`` for it, can stand in for shared words. Everything
-    else is HARD — the verifier is not consulted — and its evidence is added
-    to the closing words, so a quote that fits another open commitment as
-    well makes the close ambiguous rather than certain.
-
-    A renegotiation (``restates``) must also be about the same thing: a
-    promise naming something the old one did not, and leaving out something
-    it did, is a second promise, not a new date for the first. That is
-    evidence against, not a lack of evidence for, so it is hard as well.
-    """
+    """Require evidence about this commitment before suppressing its alerts."""
     if guards.target and not quote_identifies(target_quote, target.source.quote):
         return Reason.TARGET_MISMATCH
-    vouched = guards.verifier and vouches(verification, message)
+    verdict = verification.verdict if verification else None
+    if guards.verifier and not guards.legacy and verdict is Verdict.NO:
+        return Reason.VERIFIER_REJECTED
+    vouched = guards.verifier and guards.legacy and vouches(verification, message)
     if vouched:
         said = (*said, verification.evidence_quote)
     text = " ".join(said)
@@ -543,7 +578,7 @@ def _check_close(
         if c.unresolved and c.id != target.id and c.owner.side is target.owner.side
     ]  # fmt: skip
     fit = overlap(text, _wording(target))
-    unrelated = fit == 0 and (rivals or not confirms(text))
+    unrelated = fit == 0 and not (guards.legacy and not rivals and confirms(text))
     if guards.relevance and unrelated and not vouched:
         return Reason.NOT_ABOUT_TARGET
     if guards.relevance and restates and names_other(text, _wording(target)):

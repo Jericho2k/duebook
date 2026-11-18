@@ -35,6 +35,9 @@ of a task.
 7. Every model call goes through `extract/client.py` and its presets.
 8. The database changes only through numbered migrations in `store/migrations`.
 
+The closing rule and its historical replay behavior are recorded in
+[decision 0001](docs/decisions/0001-verifier-veto.md).
+
 If a task cannot be done well within these rules, do not change them. Do the
 part that fits, and write the proposed change as a decision record in
 `docs/decisions/NNNN-title.md` (context, options considered, proposal,
