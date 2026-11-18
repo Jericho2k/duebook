@@ -1,14 +1,14 @@
 """The comparison: every method on the same rewritten tickets, scored by the same code.
 
     python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
-    python -m duebook.bench.experiment --split test2 --max-usd 1.0   # once
+    python -m duebook.bench.experiment --split test3 --max-usd 4.5   # once
 
 Steps:
 
 1. **Tickets.** The split's tickets are generated from its seed, and their
    text is rewritten by the writer model — never the extracting one. The
-   rewritten text is cached under ``results/tickets/`` so every method, and
-   every later run, reads exactly the same words.
+   rewritten text is kept under the split's round (``<round>/tickets/``) so
+   every method, and every later run, reads exactly the same words.
 2. **Methods.** The event memory and the baselines read each ticket;
    (method, ticket) pairs run in parallel threads.
 3. **Scores.** Every snapshot is scored; per method, metrics are
@@ -32,9 +32,21 @@ does not fit. A method too expensive for every ticket can be given a subset
 (``--subset mem0=3``); its intervals and its differences to the event memory
 are then computed on those tickets only, and the record says so.
 
-The event memory's proposals are kept, and folded again through the reducer
-with its closing guards switched off (``event_memory_unguarded``). That costs
-nothing and isolates what the guards do on exactly the same model output.
+A round is a configuration of this runner, not a module. The event memory
+runs as the product ships it (``event_memory``: reasoning off, guards, the
+verifier on closes) or as round 3's A (``event_memory_reasoning``). Its
+proposals, with the verifier's verdicts, are kept, and folded again through
+the reducer with the verdicts ignored (``event_memory_no_verifier``) and with
+the closing guards off (``event_memory_unguarded``): no model call, the same
+model output, so what the verifier and the guards do is isolated.
+
+Two records can stand in for model calls. ``--replay`` folds the proposals a
+recorded ``event_memory`` run made, so a later reducer is measured on frozen
+model output, and only proposals without a verdict are put to the verifier.
+``--frozen`` takes every method not run now from a record and scores its
+snapshots again, so baselines are run once and re-scored for free. Finished
+runs are journalled under ``.cache/runs/``; an interrupted run resumes from
+the journal and the response cache, and never pays twice.
 """
 
 from __future__ import annotations
@@ -43,6 +55,7 @@ import argparse
 import json
 import random
 import sys
+import threading
 import time
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
@@ -52,18 +65,21 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from ..card import Card
 from ..events import MessagePosted
-from ..extract.client import DEFAULT_MODEL, ChatClient, ResponseCache
-from ..extract.cost import PRICES, Usage
+from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCache
+from ..extract.cost import Usage
 from ..extract.prompt import Bound
-from ..reducer import UNGUARDED
+from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
+from ..proposals import Proposal
+from ..reducer import UNGUARDED, Guards, apply
 from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
 from .generate import MAIN, MAIN2, SPLITS, CloseCase, SimTicket, Split
-from .meter import Ledger, Meter, OverBudget
-from .methods import EventMemory, Method, MethodRun
-from .result import Snapshot, checkpoints
+from .meter import Ledger, Meter
+from .methods import EventMemory, Method, MethodRun, Recorded
+from .result import Snapshot, checkpoints, snapshot_of
 from .rewrite import Rewriter, require_different_models, with_rewritten_text
 from .run import refold, snapshots
 from .score import Score, TicketScore, match, same_deadline, score_ticket
@@ -74,19 +90,34 @@ from .score import Score, TicketScore, match, same_deadline, score_ticket
 WRITER = "~z-ai/glm-flash-latest"
 RESULTS = Path("results")
 ROUND2 = RESULTS / "round2"
-ROUND3 = RESULTS / "round3"
+ROUND4 = RESULTS / "round4"
 CACHE = Path(".cache/responses")
+#: Finished (method, ticket) runs of a run in progress, to resume from.
+JOURNAL = Path(".cache/runs")
 #: What all live model calls of round 2 may cost together.
 SESSION_CAP = 1.50
+WRITER_ATTEMPTS = 3
 METHODS = ("event_memory", "full_context", "rolling_summary", "mem0", "graphiti")
-UNGUARDED_RUN = "event_memory_unguarded"
+#: The event memory's configurations: (extractor reasoning, verifier reasoning
+#: or None for no verifier).
+EVENT_MEMORY = {
+    # As the product ships it since PR #8; round 3's B.
+    "event_memory": ("off", DEFAULT_VERIFIER_REASONING),
+    # Round 3's A.
+    "event_memory_reasoning": ("low", None),
+}
+#: The event memory's own proposals folded again under other rules: verdicts
+#: ignored (round 3's C, round 2's configuration), and the guards off as well.
+REFOLDS = {"event_memory_no_verifier": Guards(verifier=False),
+           "event_memory_unguarded": UNGUARDED}  # fmt: skip
 
 
 # --------------------------------------------------------------- tickets ----
 
 
 def results_directory(split: Split) -> Path:
-    return {MAIN: ROUND2, MAIN2: ROUND3}.get(split.profile, RESULTS)
+    """The round that defined the split: its rewritten tickets are kept there."""
+    return {MAIN: ROUND2, MAIN2: ROUND4}.get(split.profile, RESULTS)
 
 
 def rewritten(
@@ -111,7 +142,16 @@ def rewritten(
         def one(job) -> tuple[str, str, str, int, Usage]:
             ticket, event = job
             rewriter = Rewriter(Meter(client, ledger))
-            text = rewriter.text(event, ticket.anchors.get(event.id, ()))
+            # A broken connection costs one message, not the paid rewrites of
+            # the whole split: it is tried again, then left in template words.
+            for attempt in range(WRITER_ATTEMPTS):
+                try:
+                    text = rewriter.text(event, ticket.anchors.get(event.id, ()))
+                    break
+                except ModelError as error:
+                    rewriter.spent += error.usage
+                    if attempt == WRITER_ATTEMPTS - 1:
+                        text, rewriter.discarded = event.text, rewriter.discarded + 1
             return ticket.ticket_id, event.id, text, rewriter.discarded, rewriter.spent
 
         out: dict[str, Any] = {
@@ -137,16 +177,25 @@ def rewritten(
 
 def make_methods(
     names: Sequence[str], model: str, ledger: Ledger, cal: WorkCalendar,
-    cache: ResponseCache | None = None,
+    cache: ResponseCache | None = None, recorded: dict[str, Recorded] | None = None,
 ) -> list:  # fmt: skip
+    """The methods by name; ``recorded`` replays proposals for ``event_memory``."""
     reader = ChatClient(api_key="proxy-injected", model=model, cache=cache)
     # Answering a checkpoint means writing out the whole account; it needs room.
     answerer = ChatClient(api_key="proxy-injected", model=model, max_tokens=12_000, timeout=240,
                           cache=cache)  # fmt: skip
     methods: list[Method] = []
     for name in names:
-        if name == "event_memory":
-            methods.append(EventMemory(reader, ledger, cal))
+        if name in EVENT_MEMORY:
+            extracting, verifying = EVENT_MEMORY[name]
+            # Round 3 gave a reasoning extractor more time.
+            extractor = replace(reader, reasoning=extracting,
+                                timeout=120 if extracting == "low" else reader.timeout)
+            # The verifier is called as ``cli.extractor`` calls it: the same
+            # client, with the verifier's reasoning.
+            verifier = replace(reader, reasoning=verifying) if verifying else None
+            methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
+                                       recorded=recorded if name == "event_memory" else None))
         elif name == "event_memory_bounded":
             methods.append(EventMemory(reader, ledger, cal, bound=Bound(), name=name))
         elif name == "full_context":
@@ -190,13 +239,18 @@ class _Split:
 
 def run_all(
     methods: Sequence[Method], tickets: Sequence[SimTicket], workers: int,
-    subsets: dict[str, int] | None = None,
+    subsets: dict[str, int] | None = None, journal: Path | None = None,
 ) -> list:  # fmt: skip
+    """Every (method, ticket) pair; one already in the journal without a failure is not run."""
     subsets = subsets or {}
     jobs = [(m, t) for m in methods for t in tickets[: subsets.get(m.name, len(tickets))]]
+    done = {(r.method, r.ticket_id): r for r in load_runs(journal) if not r.failure}
+    lock = threading.Lock()
 
     def one(job) -> MethodRun:
         method, ticket = job
+        if (method.name, ticket.ticket_id) in done:
+            return done[method.name, ticket.ticket_id]
         started = time.perf_counter()
         try:
             run = method.run(ticket)
@@ -208,6 +262,9 @@ def run_all(
         print(f"  {method.name:<22} {ticket.ticket_id}  {time.perf_counter() - started:6.1f}s"
               f"  ${run.usage.usd() or 0:.4f}" + (f"  FAILED {run.failure}" if run.failure
               else ""), file=sys.stderr, flush=True)  # fmt: skip
+        if journal is not None:
+            with lock, journal.open("a") as f:
+                f.write(json.dumps(saved(run), ensure_ascii=False) + "\n")
         return run
 
     with ThreadPoolExecutor(workers) as pool:
@@ -255,10 +312,12 @@ def project(
     out = {}
     sample = sample_of(tickets[0], events)
     for method in methods:
-        before, reused = ledger.usd(), ledger.reused.usd(PRICES.get(_model(method))) or 0.0
-        run = method.run(sample)
+        before, reused = ledger.usd(), ledger.reused.usd() or 0.0
+        method.run(sample)
         charged = ledger.usd() - before
-        made = run.usage.usd(PRICES.get(_model(method))) or 0.0
+        # Every call made now, from the cache or not; proposals replayed from a
+        # record are no call.
+        made = charged + (ledger.reused.usd() or 0.0) - reused
         chosen = tickets[: subsets.get(method.name, len(tickets))]
         if method.name.startswith("full_context"):
             per = len(_transcript(sample, sample.events[-1].seq, cal))
@@ -268,7 +327,7 @@ def project(
         scale = GROWTH.get(method.name.removesuffix("_bounded"), 2.0) * units / per
         out[method.name] = {"sample_usd": made, "sample_charged": charged,
                             "upper": made * scale, "expected": charged * scale,
-                            "reused": (ledger.reused.usd() or 0.0) - reused}  # fmt: skip
+                            "reused": made - charged}  # fmt: skip
     return out
 
 
@@ -276,23 +335,43 @@ def _transcript(ticket: SimTicket, seq: int, cal: WorkCalendar) -> str:
     return "\n".join(render_event(e, cal) for e in ticket.events[:seq])
 
 
-def _model(method: Method) -> str:
-    return getattr(getattr(method, "model", None), "model", DEFAULT_MODEL)
+# ------------------------------------------------- the proposals replayed ----
 
 
-# ------------------------------------------------------- guards replayed ----
+def refolded(run: MethodRun, ticket: SimTicket, cal: WorkCalendar, name: str) -> MethodRun:
+    """The event memory's own proposals, folded again under the rules ``REFOLDS[name]``.
 
-
-def unguarded(run: MethodRun, ticket: SimTicket, cal: WorkCalendar) -> MethodRun:
-    """The event memory's own proposals, folded again without the closing guards.
-
-    No model is asked: the proposals are the ones the guarded run recorded.
-    The card differs only where a guard refused a close.
+    No model is asked: the proposals, and their verdicts, are the ones the run
+    recorded. Without the verifier the run costs what its extraction cost.
     """
     proposals = [decode_proposals(p) for p in run.detail.get("proposals", [])]
-    folded = refold(ticket, proposals, UNGUARDED, cal)
-    return replace(run, method=UNGUARDED_RUN, snapshots=snapshots(ticket, folded),
-                   detail={"replayed_from": run.method})  # fmt: skip
+    folded = refold(ticket, proposals, REFOLDS[name], cal)
+    usage, seconds = run.usage, run.ingest_seconds
+    if name == "event_memory_no_verifier" and "verifier" in run.detail:
+        usage = Usage(**run.detail["extraction_usage"])
+        seconds -= run.detail["verifier"]["seconds"]
+    detail = {"replayed_from": run.method,
+              "refused": [[r.seq, r.reason, r.kind, r.target_seq] for r in folded.refused]}
+    return replace(run, method=name, snapshots=snapshots(ticket, folded), usage=usage,
+                   ingest_usage=usage, ingest_seconds=seconds, detail=detail)  # fmt: skip
+
+
+def recorded_proposals(path: Path) -> dict[str, Recorded]:
+    """Per ticket: what a recorded ``event_memory`` run proposed, and what that cost."""
+    out = {}
+    for run in load_runs(path):
+        if run.method != "event_memory":
+            continue
+        verifier = run.detail.get("verifier") or {}
+        extraction = run.detail.get("extraction_usage")
+        out[run.ticket_id] = Recorded(
+            tuple(decode_proposals(p) for p in run.detail["proposals"]),
+            Usage(**extraction) if extraction else run.usage,
+            Usage(**verifier["usage"]) if verifier else Usage(),
+            run.ingest_seconds - verifier.get("seconds", 0.0), verifier.get("seconds", 0.0),
+            run.detail.get("providers", {}),
+        )  # fmt: skip
+    return out
 
 
 def guard_effects(
@@ -332,6 +411,83 @@ def guard_effects(
                                  "kind": kind, "target_seq": target, "verdict": verdict,
                                  "text": getattr(said, "text", "")})  # fmt: skip
     return {"verdicts": kinds, "by_reason": reasons, "examples": examples}
+
+
+def audit(ticket: SimTicket, proposals: Sequence[Sequence[Proposal]],
+          cal: WorkCalendar) -> list[dict[str, Any]]:  # fmt: skip
+    """Every verified proposal, with its verdict, what was admitted, and the truth.
+
+    ``admitted`` is what happened in the run; ``without_verdict`` what the
+    same proposal on the same card would have done with verdicts ignored.
+    ``truth`` is the label: "true" when this message is the one that closed
+    the target, "false" when the target was still owed, "wrong_target" when
+    it was closed by another message, "unplanted" for a promise no label has.
+    """
+    gold = {c.seq: c for c in ticket.gold.commitments}
+    card, out = Card(ticket.ticket_id), []
+    for event, ps in zip(ticket.events, proposals, strict=False):
+        after = apply(card, event, ps, cal).card
+        for p in ps:
+            v = getattr(p, "verification", None)
+            target = card.commitment(target_of(p) or "")
+            if v is None or target is None:
+                continue
+            alone = apply(card, event, [p], cal, guards=Guards(verifier=False)).card
+            g = gold.get(target.source.seq)
+            if g is None:
+                truth = "unplanted"
+            elif not g.closed(event.seq):
+                truth = "false"
+            elif g.resolved_seq == event.seq:
+                truth = "true"
+            else:
+                truth = "wrong_target"
+            out.append({
+                "ticket": ticket.ticket_id, "seq": event.seq, "kind": type(p).__name__,
+                "target_seq": target.source.seq, "verdict": v.verdict.value,
+                "evidence": v.evidence_quote, "error": v.error,
+                "admitted": _closed(target, after), "without_verdict": _closed(target, alone),
+                "truth": truth, "text": getattr(event, "text", ""),
+            })  # fmt: skip
+        card = after
+    return out
+
+
+def _closed(target, card: Card) -> bool:
+    now = card.commitment(target.id)
+    return now is not None and now.state is not target.state
+
+
+def verdict_table(rows: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """Verdicts against the labels, and what they changed."""
+    by: dict[str, dict[str, int]] = {}
+    for r in rows:
+        by.setdefault(r["verdict"], {}).setdefault(r["truth"], 0)
+        by[r["verdict"]][r["truth"]] += 1
+    rescued = [r for r in rows if r["admitted"] and not r["without_verdict"]]
+    # What a "no" that vetoed would have done to closes the words admitted.
+    veto = [r for r in rows if r["without_verdict"] and r["verdict"] == "no"]
+    return {
+        "calls": len(rows),
+        "by_verdict": by,
+        "rescued": _truths(rescued),
+        "veto_would_block": _truths(veto),
+        "quote_not_in_message": sum(1 for r in rows if r["verdict"] == "yes"
+                                    and r["evidence"] and not _in(r["evidence"], r["text"])),
+        "errors": sum(1 for r in rows if r["error"]),
+    }  # fmt: skip
+
+
+def _truths(rows) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for r in rows:
+        out[r["truth"]] = out.get(r["truth"], 0) + 1
+    return out
+
+
+def _in(evidence: str, text: str) -> bool:
+    fold = lambda x: " ".join(x.casefold().replace("ё", "е").split())  # noqa: E731
+    return fold(evidence) in fold(text)
 
 
 # ------------------------------------------------------------- summarising ----
@@ -516,7 +672,8 @@ def to_json(value: Any) -> Any:
     return value
 
 
-def record(run: MethodRun, scored: TicketScore) -> dict[str, Any]:
+def saved(run: MethodRun) -> dict[str, Any]:
+    """A run as plain JSON: every answer, what it cost, how long it took."""
     return {
         "method": run.method,
         "ticket": run.ticket_id,
@@ -527,11 +684,42 @@ def record(run: MethodRun, scored: TicketScore) -> dict[str, Any]:
         "answer_usage": asdict(run.answer_usage),
         "ingest_seconds": run.ingest_seconds,
         "answer_seconds": run.answer_seconds,
-        "score_end": scored.end.as_dict(),
-        "score_handoffs": scored.handoffs.as_dict(),
         "snapshots": to_json(run.snapshots),
         "detail": to_json(run.detail),
     }
+
+
+def record(run: MethodRun, scored: TicketScore) -> dict[str, Any]:
+    """A run for the committed record, with its score.
+
+    Raw model answers are left out (a snapshot is their parsed form), and so
+    is what a baseline showed the model at each checkpoint, except at the end
+    of the ticket: what the memory held when it was last asked.
+    """
+    out = saved(run)
+    detail = {k: v for k, v in out["detail"].items() if k not in ("answers", "checkpoints")}
+    if shown := out["detail"].get("checkpoints"):
+        detail["end"] = {k: v for k, v in shown[-1].items() if k != "answer"}
+    return out | {"detail": detail, "score_end": scored.end.as_dict(),
+                  "score_handoffs": scored.handoffs.as_dict()}  # fmt: skip
+
+
+def load_runs(path: Path | None) -> list[MethodRun]:
+    """The runs of a record (``runs`` of a result, or a journal of saved runs)."""
+    if path is None or not path.exists():
+        return []
+    text = path.read_text()
+    raws = (json.loads(text)["runs"] if path.suffix == ".json"
+            else [json.loads(line) for line in text.splitlines() if line])  # fmt: skip
+    return [run_of(r) for r in raws]
+
+
+def run_of(raw: dict[str, Any]) -> MethodRun:
+    """A saved run read back: its snapshots can be scored again without a model."""
+    return MethodRun(raw["method"], raw["ticket"],
+                     tuple(snapshot_of(s) for s in raw["snapshots"]), Usage(**raw["usage"]),
+                     raw["ingest_seconds"], raw["answer_seconds"], Usage(**raw["ingest_usage"]),
+                     Usage(**raw["answer_usage"]), raw["failure"], raw["detail"])  # fmt: skip
 
 
 def table(summary: dict[str, Any], keys: Sequence[str]) -> str:
@@ -564,7 +752,8 @@ def _fmt(x: float) -> str:
 def main(argv: Sequence[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="python -m duebook.bench.experiment")
     parser.add_argument("--split", choices=sorted(SPLITS), default="dev2")
-    parser.add_argument("--methods", default=",".join(METHODS))
+    parser.add_argument("--methods", default=",".join(METHODS),
+                        help=f"of {', '.join([*METHODS, *EVENT_MEMORY])}; empty to run none")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="the extracting model")
     parser.add_argument("--writer", default=WRITER, help="rewrites the tickets; not --model")
     parser.add_argument(
@@ -578,6 +767,10 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--subset", default="",
                         help="run a method on the first N tickets only: mem0=3,rolling_summary=5")
     parser.add_argument("--tickets", type=int, help="only the first N tickets of the split")
+    parser.add_argument("--replay", type=Path,
+                        help="a result whose event_memory proposals event_memory folds again")
+    parser.add_argument("--frozen", type=Path,
+                        help="a result whose runs of the methods not run now are scored again")
     parser.add_argument("--sample-events", type=int, default=30,
                         help="events of the first ticket read to project the cost")
     parser.add_argument("--expected", action="store_true",
@@ -610,6 +803,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     started = datetime.now().astimezone()
     subsets = {k: int(v) for k, v in (x.split("=") for x in args.subset.split(",") if x)}
     cache = None if args.no_cache else ResponseCache(CACHE)
+    names = [m for m in args.methods.split(",") if m]
 
     def spend(what: str) -> None:
         results.mkdir(parents=True, exist_ok=True)
@@ -620,10 +814,10 @@ def main(argv: Sequence[str] | None = None) -> None:
                                 "reused_usd": ledger.reused.usd() or 0.0}) + "\n")  # fmt: skip
 
     try:
-        tickets, written = rewritten(split, args.writer, ledger, results / "tickets",
-                                     args.workers)  # fmt: skip
-    except OverBudget:
-        spend("rewriting, stopped at the cap")
+        where = results_directory(split) / "tickets"
+        tickets, written = rewritten(split, args.writer, ledger, where, args.workers)
+    except BaseException as error:
+        spend(f"rewriting, stopped: {type(error).__name__}")
         raise
     if args.rewrite_only:
         spend("rewriting the tickets")
@@ -638,7 +832,8 @@ def main(argv: Sequence[str] | None = None) -> None:
           f"(${writing:.4f} this run); session has ${left:.4f} left of "
           f"${args.session_cap:.2f}", file=sys.stderr)  # fmt: skip
 
-    methods = make_methods(args.methods.split(","), args.model, ledger, cal, cache)
+    recorded = recorded_proposals(args.replay) if args.replay else None
+    methods = make_methods(names, args.model, ledger, cal, cache, recorded)
     projected = project(methods, tickets, subsets, ledger, cal, args.sample_events)
     judged = "expected" if args.expected else "upper"
     total = sum(p[judged] for p in projected.values())
@@ -655,21 +850,39 @@ def main(argv: Sequence[str] | None = None) -> None:
         spend("cost projection only: the run would not fit")
         raise SystemExit(f"projected ${total:.4f} exceeds the ${room:.4f} left: not run")
 
-    runs = run_all(methods, tickets, args.workers, subsets)
+    journal = JOURNAL / f"{str(out).replace('/', '_')}.jsonl"
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        runs = run_all(methods, tickets, args.workers, subsets, journal)
+    finally:
+        spend("run")
     by_id = {t.ticket_id: t for t in tickets}
-    guarded = [r for r in runs if r.method == "event_memory"]
-    replayed = [unguarded(r, by_id[r.ticket_id], cal) for r in guarded]
-    summary = summarise(tickets, runs + replayed)
-    effects = guard_effects(tickets, guarded)
+    frozen = [r for r in load_runs(args.frozen) if r.method not in names and r.ticket_id in by_id]
+    runs += frozen
+    reference = [r for r in runs if r.method == "event_memory"]
+    replays = [refolded(r, by_id[r.ticket_id], cal, name) for name in REFOLDS for r in reference]
+    summary = summarise(tickets, runs + replays)
+    effects = guard_effects(tickets, reference)
+    verified = [
+        row
+        for r in reference
+        for row in audit(by_id[r.ticket_id], [decode_proposals(p) for p in r.detail["proposals"]],
+                         cal)  # fmt: skip
+    ]
     result = {
         "split": split.name,
         "seed": split.seed,
         "profile": split.profile.name,
         "model": args.model,
         "writer": args.writer,
+        "methods": {m: EVENT_MEMORY.get(m) for m in names},
+        "replayed_from": str(args.replay) if args.replay else None,
+        "frozen_from": str(args.frozen) if args.frozen else None,
         "started": started.isoformat(),
         "finished": datetime.now().astimezone().isoformat(),
-        "subsets": subsets,
+        "subsets": {m: n for m, n in subsets.items() if m in names}
+                   | {r.method: summary["methods"][r.method]["tickets"] for r in frozen
+                      if summary["methods"][r.method]["tickets"] < len(tickets)},
         "tickets": [
             {
                 "id": t.ticket_id,
@@ -680,17 +893,18 @@ def main(argv: Sequence[str] | None = None) -> None:
                 "discarded_rewrites": written["tickets"][t.ticket_id]["discarded"],
             }
             for t in tickets
-        ],  # fmt: skip
+        ],
         "spent_usd": {"writing": writing, "total": ledger.usd(),
-                      "reused_from_cache": ledger.reused.usd() or 0.0},  # fmt: skip
+                      "reused_from_cache": ledger.reused.usd() or 0.0},
         "projection": projected,
         "guard_effects": effects,
+        "verifier": verdict_table(verified) | {"rows": verified},
         "summary": summary,
         "runs": [record(r, score_ticket(by_id[r.ticket_id], r.snapshots)) for r in runs],
-    }
+    }  # fmt: skip
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(to_json(result), ensure_ascii=False, indent=1))
-    spend("run")
+    journal.unlink(missing_ok=True)
     keys = ["commitment_f1", "deadline_accuracy", "status_accuracy", "breach_alert_recall",
             "false_alerts_per_ticket", "false_closes_per_ticket",
             "wrong_target_closes_per_ticket", "missed_close_rate", "suggestions_per_ticket",
@@ -699,6 +913,8 @@ def main(argv: Sequence[str] | None = None) -> None:
                 if case.value in summary["methods"][summary["reference"]])  # fmt: skip
     print(table(summary, keys))
     print(f"guards: {effects['verdicts']}", file=sys.stderr)
+    print(json.dumps({k: v for k, v in result["verifier"].items() if k != "rows"},
+                     ensure_ascii=False), file=sys.stderr)  # fmt: skip
     print(f"\ncharged this run: ${ledger.usd():.4f} (+${ledger.reused.usd() or 0:.4f} reused "
           f"from the cache); written to {out}", file=sys.stderr)  # fmt: skip
 

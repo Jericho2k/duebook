@@ -11,17 +11,13 @@ from __future__ import annotations
 
 import argparse
 import json
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..events import Side
 from .deadlines import classify
-from .experiment import table
+from .experiment import run_of, table
 from .figures import line_chart
 from .generate import SPLITS, CloseCase
-from .methods import MethodRun
-from .result import Checkpoint, Moment, Promise, PromiseStatus, Snapshot
 
 ACCURACY = [
     "commitment_precision", "commitment_recall", "commitment_f1", "deadline_accuracy",
@@ -98,14 +94,15 @@ def replayed(result: dict[str, Any]) -> dict[str, Any]:
     the guards and without: end-of-ticket close counts and breach alerts, summed."""
     from ..reducer import UNGUARDED, Guards
     from ..store.codec import decode_proposals
-    from .experiment import ROUND2, rewritten
+    from .experiment import results_directory, rewritten
     from .meter import Ledger
     from .result import checkpoints
     from .run import refold, snapshots
     from .score import Score, score_ticket
 
     split = SPLITS[result["split"]]
-    tickets, _ = rewritten(split, result["writer"], Ledger(cap_usd=0), ROUND2 / "tickets")
+    where = results_directory(split) / "tickets"
+    tickets, _ = rewritten(split, result["writer"], Ledger(cap_usd=0), where)
     by_id = {t.ticket_id: t for t in tickets}
     out = {}
     for name, guards in (("guards on", Guards()), ("guards off", UNGUARDED)):
@@ -155,7 +152,7 @@ def conventions(result: dict[str, Any]) -> str:
     lines = ["| method | " + " | ".join(kinds) + " | strict | either convention |",
              "|---|" + "---|" * (len(kinds) + 2)]  # fmt: skip
     for m in result["summary"]["methods"]:
-        runs = [_run(r) for r in result["runs"] if r["method"] == m]
+        runs = [run_of(r) for r in result["runs"] if r["method"] == m]
         if not runs:  # a replay, not a run: its deadlines are the run's
             continue
         k = classify(tickets[: len(runs)], runs)
@@ -164,24 +161,6 @@ def conventions(result: dict[str, Any]) -> str:
         counts = " | ".join(str(k[x]) for x in kinds)
         lines.append(f"| {m} | {counts} | {strict:.3f} | {either:.3f} |")
     return "\n".join(lines)
-
-
-def _run(raw: dict[str, Any]) -> MethodRun:
-    """The promises of a saved run, enough to re-judge its deadlines."""
-
-    def snap(s: dict[str, Any]) -> Snapshot:
-        cp = s["checkpoint"]
-        checkpoint = Checkpoint(cp["seq"], datetime.fromisoformat(cp["at"]), Moment(cp["kind"]))
-        promises = tuple(
-            Promise(Side(p["side"]), p["seq"], p["action"],
-                    datetime.fromisoformat(p["due_at"]) if p["due_at"] else None,
-                    PromiseStatus(p["status"]), p["alertable"])
-            for p in s["promises"]
-        )  # fmt: skip
-        return Snapshot(checkpoint, promises)
-
-    return MethodRun(raw["method"], raw["ticket"], tuple(snap(s) for s in raw["snapshots"]),
-                     None)  # fmt: skip
 
 
 def prompt_growth(result: dict[str, Any]) -> tuple[str, str]:
@@ -220,6 +199,32 @@ def prompt_growth(result: dict[str, Any]) -> tuple[str, str]:
     return svg, "\n".join(rows)
 
 
+def graphiti_disputes(result: dict[str, Any]) -> dict[str, dict[str, int]]:
+    """What Graphiti's graph did with each planted dispute, read from the graph at the end.
+
+    For each side's value: "current" when a fact holding it is still valid,
+    "closed" when every such fact was invalidated, "absent" when none holds it.
+    Disputes still open at the end are counted apart from settled ones.
+    """
+    gold = {t.ticket_id: t.gold for t in SPLITS[result["split"]].tickets()}
+    out: dict[str, dict[str, int]] = {"open": {}, "settled": {}}
+    for run in result["runs"]:
+        listing = run["method"] == "graphiti" and run["detail"].get("end", {}).get("listing")
+        if not listing:
+            continue
+        facts = listing.split("\nENTITIES", 1)[0].splitlines()[1:]
+        for dispute in gold[run["ticket"]].contradictions:
+            states = []
+            for value in dispute.values:
+                held = [line for line in facts if value.casefold() in line.casefold()]
+                states.append("absent" if not held else "current"
+                              if any("no longer true" not in line for line in held) else "closed")
+            outcome = " / ".join(states)  # customer's value / company's value
+            counts = out["settled" if dispute.settled_seq else "open"]
+            counts[outcome] = counts.get(outcome, 0) + 1
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="python -m duebook.bench.report")
     parser.add_argument("result", type=Path)
@@ -254,6 +259,8 @@ def main() -> None:
             print(f"- {m}: a replay of recorded proposals, no model call")
             continue
         print(f"- {m}: ${rows['usd_total']:.4f} charged, {rows['failures']} tickets with a failure")
+    if any((disputes := graphiti_disputes(result)).values()):
+        print(f"### Graphiti and the planted disputes (customer / company)\n\n{disputes}\n")
     if args.long:
         long = json.loads(args.long.read_text())
         print(f"\n## long: {long['summary']['tickets']} tickets\n")

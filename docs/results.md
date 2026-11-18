@@ -1,7 +1,398 @@
 # Results: event memory against the baselines
 
-Three rounds, all run on 2026-11-17. Round 3b and round 3 (dev only) come
-first, then round 2; round 1 follows as it was written.
+Four rounds, run on 2026-11-17 and 18. Round 4, the final comparison on a
+fresh test split, comes first; then rounds 3b and 3 (dev only) and round 2;
+round 1 follows as it was written.
+
+## Round 4: final comparison on `test3`
+
+Run once, on 2026-11-18, on a fresh seed that nobody had read before. The
+test tickets and the baselines' answers are now frozen; later work re-runs only
+the event memory (see [the end of this section](#what-is-frozen-and-how-to-re-run-only-our-method)).
+Record: `results/round4/test3.json`; every charge: `results/round4/spend.jsonl`.
+
+### Short version
+
+- **Where the event memory wins, clearly.** Deadline accuracy 1.000 (365/365)
+  against 0.909–0.935 for every baseline; freshness error 0.000 against
+  0.28–0.33; dispute recall 1.000 against 0.19–0.67; failed-step precision
+  1.000 against 0.77–0.79 for full context, Mem0 and Graphiti. Against those
+  three every one of these paired intervals excludes zero (against the
+  rolling summary's 4 tickets, freshness and disputes do). Its answer at a
+  handoff costs no model call.
+- **Where it loses, plainly.**
+  - **The rescue case: 0 of 20.** "Ага, вижу." after "Проверьте, поступило ли
+    возмещение стоимости монтажа", with two near-identical promises open.
+    Full context gets 0.85, Mem0 0.90, Graphiti 0.60. On all 20 the extractor
+    proposed nothing: it reads the card and the one new message, and that
+    message names nothing. The kept promise stays open, so the event memory
+    raises 20 false alerts (1.10 a ticket against 0.40–0.45) and misses 20
+    closes (missed-close rate 0.139 against 0.076).
+  - **The wrong-thing trap: 0.80** (16 of 20); every baseline 1.00. In 4
+    tickets "Кстати, деньги за прошлый заказ пришли." closed the callback
+    "Я свяжусь с вами по телефону", which was still owed. These are all 4 of
+    its false closes at the end of a ticket (0.20 a ticket). Full context is
+    lower (0.10) and Mem0 about level (0.15); neither difference excludes
+    zero.
+  - **Status accuracy** 0.926 against 0.948 for full context (paired
+    difference +0.022 [0.000, 0.047]). Commitment F1 0.989 against 0.997 for
+    full context (+0.008 [0.000, 0.017]).
+- **The verifier added nothing useful on test3.** It changed one outcome,
+  and that one was wrong. It said "no" to all 4 false closes above, but a "no"
+  is not a veto, and the deterministic rule that let them through does not
+  consult it. Details [below](#what-the-verifier-changed).
+- **The guards earned their place.** On the same proposals with the guards
+  off: 1.20 false closes a ticket instead of 0.20 and 0.50 wrong-target
+  closes instead of 0.05.
+- **Graphiti, 10 tickets.** The dispute finding holds on the larger sample:
+  dispute recall 0.19; of the 11 planted disputes still open when its graph
+  last held them, 8 had one side's value closed by the other's (7 the
+  customer's by the company's). It also makes the most false closes (0.80 a
+  ticket) and costs 12 times as much as the event memory.
+- **Cost.** Event memory $0.0134 a ticket, verifier included ($0.00095);
+  full context $0.0043; Mem0 $0.053; rolling summary $0.096; Graphiti $0.160.
+  The session charged **$3.47 of the $4.50 approved**.
+
+### What was run
+
+| | |
+|---|---|
+| Split | `test3`: seed 4343, 20 `main2` tickets, 150–200 messages, 3–4 handoffs, 3 hard close cases each (60 in all) |
+| Text | rewritten once by `~z-ai/glm-flash-latest` (GLM 5.3 Flash), never by the reader: 3,481 messages, 748 rewrites discarded for their template words; `results/round4/tickets/test3.json` |
+| Reader | `deepseek/deepseek-v4.1-flash`, reasoning off, locked to DeepInfra (`PRESETS`), for every method: all 3,653 event-memory calls were served by DeepInfra |
+| **event memory** | as the product ships it: extractor reasoning off, guards, verifier (same model, reasoning low) on every proposal that would close, cancel or replace an open promise. **All 20 tickets** |
+| event memory without the verifier | the same recorded proposals folded again with the verdicts ignored (`event_memory_no_verifier`); no extra call |
+| event memory without guards | the same proposals, guards off (`event_memory_unguarded`); no extra call |
+| full context | **all 20** |
+| Mem0 | **all 20** (`mem0ai` 2.2.1) |
+| Graphiti | **the first 10** (`graphiti-core` 0.31.2), the owner's choice for cost |
+| rolling summary | **the first 4** (see the cut and restore below) |
+
+Paired differences are over the tickets both methods ran on. Every interval
+is a 95% bootstrap over tickets (2,000 resamples).
+
+**Cost control.** The first projection from a 20-event sample gave $4.50
+(upper) for the run, $4.66 with what had been spent, over the cap; by the
+brief, the rolling summary was cut from 4 tickets to 2. The run's own
+projection, a minute later, gave $3.97: Mem0's sample cost less the second
+time. Once the first pass's real cost was known ($3.15 logged for the session
+by then, $1.35 left), the rolling summary went back to the brief's 4
+tickets.
+
+**Interruptions, and the rule applied to them.** Every finished (method,
+ticket) was journalled, so nothing paid was paid twice: a resume reads every
+answer it already has from the response cache.
+
+- The first pass ran every method at once. Three event-memory tickets and one
+  rolling-summary ticket stopped on a connection reset, which is not retried
+  (the answer may have been billed). Graphiti stopped on M0005 at event 6: one
+  of its own calls came back as 25,000 characters of unreadable JSON, three
+  times. The container then restarted at the very end of the pass, before the
+  run had logged its charge; the rolling summary's M0000 was cut by it.
+- The rule: **every ticket that stopped was resumed in the next pass, from
+  the journal and the cache; the third pass was the last, and what it gave is
+  final.** In the second pass the event memory's three finished, and so did
+  the rolling summary's M0000; its M0001 stopped again (below), and M0002 and
+  M0003, added back, stopped on 429s. In the third pass Graphiti's M0005
+  failed again, identically, at no cost: the bad answer was cached. The
+  rolling summary stopped again on all three: two on an answer cut off
+  mid-JSON (M0001 at event 123, twice; M0003 at 141): the summary had
+  outgrown one answer. The third, M0002, stopped on a proxy timeout at
+  event 58.
+- A ticket that stopped is scored on what the method held, as the pipeline
+  would hold a ticket. Graphiti's 10-ticket numbers therefore carry one ticket
+  read to event 6; its 9 complete tickets are given below. The rolling summary
+  completed one ticket of four; its numbers are reported but say little.
+- The record is the third pass's output. Its `frozen_from` names the second
+  pass's record, a working file not kept; every run of it is in this record.
+- The first pass's charge was taken from the OpenRouter key's usage counter
+  once it settled ($2.9923). The counter and the log agree to $0.003 for
+  everything since the rewrite.
+
+### Step 1: the sanity check before spending
+
+Three tickets (M0003, M0007, M0009) were read end to end against their gold
+labels, and then every rewritten planted message of all 20 (400 of 880).
+
+- **One labelling bug, fixed.** The company's "По накладной вам отправлен
+  BL-967" protected only the code. In 3 of 20 tickets the writer kept the code
+  and changed what it is ("Номер вашей накладной — BL-967"). The gold "device
+  model disputed, still open" then contradicted the text. Every other planted
+  fact already keeps the word that says what its value is ("списано 4100
+  рублей", "на тариф Премиум"). The model dispute now does too, on both sides.
+  The 15 stored rewrites that dropped the word, these 3 and 12 harmless ones,
+  went back to their template words. Re-check: the planted proposals, folded
+  through the reducer on the final test3 text, score 1.000 on every measure
+  and on all 60 hard cases. The self-check is 1.000 on `dev3`, `test3` and 200
+  seeded tickets. Round 2's splits changed in those spans only, and its
+  test record re-scores identically. **Round 2's test2 text has the same
+  fault in 2 tickets** (M0005, M0015): its dispute numbers carry it.
+- **Not a bug, but a convention the labels follow.** `temporal` reads "до
+  пятницы" said on a Friday as that same Friday. 5 of 367 promises (1.4%) have
+  such a deadline. A reader may well mean the next Friday. The event memory
+  resolves it exactly as the labels do, so this favours it slightly on
+  deadline accuracy.
+- **Style, noted.** The writer turned "Проверил" into "Перепроверила" for male
+  agents in the settling message. It added detail now and then ("замена уже
+  подготовлена"). One first statement of an address reads as a change
+  ("Мне нужно поменять адрес доставки"). The hard-case messages are verbatim
+  by design.
+
+### Results (end of each ticket unless marked)
+
+Value [95% interval]. Graphiti: 10 tickets; rolling summary: 4 (1 complete).
+
+**Promises and alerts**
+
+| metric | event_memory | event_memory_no_verifier | event_memory_unguarded | full_context | mem0 | graphiti | rolling_summary |
+|---|---|---|---|---|---|---|---|
+| commitment_f1 | 0.989 [0.982, 0.995] | 0.988 [0.980, 0.995] | 0.989 [0.982, 0.995] | 0.997 [0.993, 1.000] | 0.990 [0.982, 0.997] | 0.942 [0.826, 0.994] | 0.797 [0.524, 0.955] |
+| commitment_precision | 0.984 [0.973, 0.995] | 0.984 [0.973, 0.994] | 0.984 [0.973, 0.995] | 0.995 [0.987, 1.000] | 0.997 [0.992, 1.000] | 0.994 [0.980, 1.000] | 1.000 [1.000, 1.000] |
+| commitment_recall | 0.995 [0.986, 1.000] | 0.992 [0.981, 1.000] | 0.995 [0.986, 1.000] | 1.000 [1.000, 1.000] | 0.984 [0.967, 0.997] | 0.894 [0.706, 0.994] | 0.662 [0.355, 0.914] |
+| deadline_accuracy | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.935 [0.907, 0.958] | 0.909 [0.878, 0.938] | 0.932 [0.880, 0.969] | 0.915 [0.792, 1.000] |
+| status_accuracy | 0.926 [0.908, 0.940] | 0.926 [0.907, 0.940] | 0.890 [0.869, 0.910] | 0.948 [0.927, 0.969] | 0.945 [0.919, 0.967] | 0.913 [0.874, 0.955] | 0.915 [0.852, 0.938] |
+| breach_alert_recall | 0.969 [0.938, 0.992] | 0.961 [0.921, 0.992] | 0.853 [0.824, 0.882] | 0.992 [0.976, 1.000] | 0.984 [0.961, 1.000] | 0.862 [0.667, 0.985] | 0.760 [0.348, 1.000] |
+| breach_alert_precision | 0.850 [0.830, 0.867] | 0.844 [0.818, 0.863] | 0.902 [0.871, 0.935] | 0.934 [0.889, 0.977] | 0.941 [0.906, 0.975] | 0.933 [0.867, 1.000] | 0.864 [0.727, 0.952] |
+| false_alerts_per_ticket | 1.100 [1.000, 1.250] | 1.150 [1.000, 1.300] | 0.600 [0.400, 0.800] | 0.450 [0.150, 0.800] | 0.400 [0.150, 0.650] | 0.400 [0.000, 0.800] | 0.750 [0.250, 1.000] |
+
+**Closes**
+
+| metric | event_memory | event_memory_no_verifier | event_memory_unguarded | full_context | mem0 | graphiti | rolling_summary |
+|---|---|---|---|---|---|---|---|
+| false_closes_per_ticket | 0.200 [0.050, 0.400] | 0.200 [0.050, 0.400] | 1.200 [0.950, 1.500] | 0.100 [0.000, 0.250] | 0.150 [0.000, 0.350] | 0.800 [0.300, 1.300] | 0.250 [0.000, 0.750] |
+| false_closes_any_checkpoint | 0.900 [0.200, 1.800] | 0.900 [0.200, 1.800] | 3.200 [2.350, 4.100] | 0.300 [0.050, 0.650] | 0.650 [0.100, 1.350] | 1.900 [0.800, 3.000] | 0.500 [0.000, 1.500] |
+| wrong_target_closes_per_ticket | 0.050 [0.000, 0.150] | 0.000 [0.000, 0.000] | 0.500 [0.250, 0.700] | 0.300 [0.100, 0.500] | 0.200 [0.050, 0.400] | 0.100 [0.000, 0.300] | 0.000 [0.000, 0.000] |
+| missed_close_rate | 0.139 [0.123, 0.161] | 0.146 [0.126, 0.172] | 0.076 [0.047, 0.103] | 0.076 [0.037, 0.122] | 0.076 [0.039, 0.120] | 0.075 [0.016, 0.140] | 0.150 [0.048, 0.308] |
+| close_precision | 0.964 [0.927, 0.993] | 0.971 [0.941, 0.993] | 0.800 [0.769, 0.829] | 0.946 [0.914, 0.979] | 0.953 [0.917, 0.986] | 0.871 [0.812, 0.934] | 0.944 [0.857, 1.000] |
+| suggestions_per_ticket | 1.600 [1.200, 2.050] | 1.650 [1.250, 2.050] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] |
+
+`false_closes_any_checkpoint` counts over every handoff and the end, per
+ticket. Counted at the end of the tickets: the event memory closed 135 of 158
+rightly, 4 falsely, 1 on the wrong message, missed 22, and held 32 back as
+suggestions (1 right). Full context: 140, 2, 6, 12. Mem0: 142, 3, 4, 12.
+
+**The hard cases (PR #9)**
+
+| metric | event_memory | event_memory_no_verifier | event_memory_unguarded | full_context | mem0 | graphiti | rolling_summary |
+|---|---|---|---|---|---|---|---|
+| rescue_close_correct | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.850 [0.700, 1.000] | 0.900 [0.750, 1.000] | 0.600 [0.300, 0.900] | 0.500 [0.000, 1.000] |
+| ambiguous_close_refrained | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.850 [0.650, 1.000] | 0.950 [0.850, 1.000] | 0.850 [0.650, 1.000] | 0.600 [0.300, 0.900] | 0.500 [0.000, 1.000] |
+| wrong_thing_not_closed | 0.800 [0.600, 0.950] | 0.800 [0.600, 0.950] | 0.400 [0.200, 0.600] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] |
+
+**Facts, disputes, failed steps (every handoff and the end)**
+
+| metric | event_memory | event_memory_no_verifier | event_memory_unguarded | full_context | mem0 | graphiti | rolling_summary |
+|---|---|---|---|---|---|---|---|
+| freshness_error | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.291 [0.239, 0.334] | 0.310 [0.236, 0.382] | 0.278 [0.225, 0.324] | 0.333 [0.160, 0.444] |
+| freshness_error_at_handoffs | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.266 [0.210, 0.314] | 0.301 [0.223, 0.381] | 0.272 [0.216, 0.321] | 0.320 [0.111, 0.446] |
+| fact_recall | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.956 [0.867, 1.000] | 0.815 [0.656, 1.000] |
+| fact_change_accuracy | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.963 [0.860, 1.000] | 0.833 [0.667, 1.000] |
+| dispute_recall | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.560 [0.470, 0.651] | 0.604 [0.449, 0.738] | 0.192 [0.040, 0.388] | 0.667 [0.538, 0.857] |
+| dispute_precision | 0.938 [0.836, 1.000] | 0.938 [0.836, 1.000] | 0.938 [0.836, 1.000] | 1.000 [1.000, 1.000] | 0.965 [0.881, 1.000] | 0.909 [0.625, 1.000] | 0.636 [0.429, 1.000] |
+| failed_step_recall | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.881 [0.625, 1.000] | 0.839 [0.595, 1.000] |
+| failed_step_precision | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 1.000 [1.000, 1.000] | 0.792 [0.734, 0.856] | 0.771 [0.712, 0.831] | 0.771 [0.675, 0.887] | 0.963 [0.880, 1.000] |
+| unanswered_checkpoints | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.104 [0.000, 0.319] | 0.368 [0.100, 0.684] |
+
+**Cost and latency**
+
+| metric | event_memory | event_memory_no_verifier | event_memory_unguarded | full_context | mem0 | graphiti | rolling_summary |
+|---|---|---|---|---|---|---|---|
+| usd_per_ticket | 0.013 [0.013, 0.014] | 0.012 [0.012, 0.013] | 0.013 [0.013, 0.014] | 0.00434 [0.00410, 0.00457] | 0.053 [0.050, 0.056] | 0.160 [0.141, 0.173] | 0.096 [0.051, 0.122] |
+| calls_per_ticket | 182.7 [176.4, 188.7] | 174.1 [167.8, 180.2] | 182.7 [176.4, 188.7] | 4.400 [4.200, 4.600] | 497.1 [476.4, 516.5] | 1,250 [955.8, 1,426] | 131.2 [83.0, 173.2] |
+| prompt_tokens_per_ticket | 345,851 [331,218, 360,663] | 341,849 [327,028, 356,762] | 345,851 [331,218, 360,663] | 20,817 [19,492, 22,112] | 1,662,565 [1,599,033, 1,723,329] | 1,135,235 [868,914, 1,293,798] | 251,994 [138,159, 321,354] |
+| prompt_cache_share | 0.887 [0.883, 0.890] | 0.888 [0.884, 0.891] | 0.887 [0.883, 0.890] | 0.136 [0.132, 0.141] | 0.827 [0.824, 0.831] | 0.143 [0.133, 0.162] | 0.752 [0.665, 0.814] |
+| ingest_seconds_per_message | 1.462 [1.336, 1.540] | 1.335 [1.220, 1.404] | 1.462 [1.336, 1.540] | 0.000 [0.000, 0.000] | 2.073 [2.012, 2.140] | 4.038 [3.231, 4.494] | 3.810 [0.895, 7.389] |
+| answer_seconds_per_checkpoint | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 0.000 [0.000, 0.000] | 5.925 [5.710, 6.188] | 6.622 [6.362, 6.926] | 4.997 [3.733, 5.812] | 3.590 [1.025, 6.464] |
+| model_seconds_per_ticket | 253.5 [232.3, 269.2] | 231.4 [211.8, 245.9] | 253.5 [232.3, 269.2] | 26.0 [24.7, 27.3] | 391.0 [369.3, 413.3] | 735.8 [580.6, 834.0] | 676.0 [165.9, 1,292] |
+
+`prompt_cache_share` is the share of prompt tokens the provider served from
+its prompt cache. The event memory's verifier made 172 calls, 8.6 a ticket,
+for $0.019 in all: 1,741 reasoning tokens a ticket and 77% of its prompt
+cached. Full context and Graphiti send prompts that change every time, so
+little is cached. Model seconds include queueing: up to 12 tickets ran at
+once against one host. Graphiti's are wall time; its calls run concurrently.
+
+**Paired differences** (method − event memory; * where the interval
+excludes zero)
+
+| metric (method − event_memory) | event_memory_no_verifier | event_memory_unguarded | full_context | mem0 | graphiti | rolling_summary |
+|---|---|---|---|---|---|---|
+| commitment_f1 | -0.001 [-0.004, +0.000] | +0.000 [+0.000, +0.000] | +0.008 [+0.000, +0.017] * | +0.001 [-0.010, +0.011] | -0.050 [-0.168, +0.005] | -0.189 [-0.476, -0.030] * |
+| deadline_accuracy | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | -0.065 [-0.093, -0.042] * | -0.091 [-0.122, -0.062] * | -0.068 [-0.120, -0.031] * | -0.085 [-0.208, +0.000] |
+| status_accuracy | -0.000 [-0.001, +0.000] | -0.036 [-0.056, -0.019] * | +0.022 [+0.000, +0.047] * | +0.019 [-0.012, +0.048] | -0.009 [-0.046, +0.033] | +0.015 [-0.087, +0.087] |
+| breach_alert_recall | -0.008 [-0.024, +0.000] | -0.116 [-0.145, -0.085] * | +0.023 [-0.008, +0.057] | +0.016 [-0.015, +0.047] | -0.108 [-0.313, +0.033] | -0.160 [-0.609, +0.130] |
+| false_alerts_per_ticket | +0.050 [+0.000, +0.150] | -0.500 [-0.700, -0.300] * | -0.650 [-0.950, -0.300] * | -0.700 [-0.950, -0.400] * | -0.800 [-1.200, -0.300] * | -0.500 [-1.500, +0.000] |
+| false_closes_per_ticket | +0.000 [+0.000, +0.000] | +1.000 [+0.750, +1.300] * | -0.100 [-0.350, +0.150] | -0.050 [-0.250, +0.200] | +0.600 [+0.100, +1.100] * | -0.250 [-0.750, +0.000] |
+| false_closes_any_checkpoint | +0.000 [+0.000, +0.000] | +2.300 [+1.650, +3.050] * | -0.600 [-1.600, +0.250] | -0.250 [-1.150, +0.650] | +0.900 [-0.900, +2.500] | -2.000 [-4.000, +0.000] |
+| wrong_target_closes_per_ticket | -0.050 [-0.150, +0.000] | +0.450 [+0.250, +0.700] * | +0.250 [+0.000, +0.450] | +0.150 [-0.050, +0.350] | +0.100 [+0.000, +0.300] | +0.000 [+0.000, +0.000] |
+| missed_close_rate | +0.006 [+0.000, +0.020] | -0.063 [-0.093, -0.036] * | -0.063 [-0.103, -0.019] * | -0.063 [-0.108, -0.018] * | -0.085 [-0.152, -0.017] * | -0.017 [-0.232, +0.200] |
+| rescue_close_correct | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | +0.850 [+0.700, +1.000] * | +0.900 [+0.750, +1.000] * | +0.600 [+0.300, +0.900] * | +0.500 [+0.000, +1.000] |
+| ambiguous_close_refrained | +0.000 [+0.000, +0.000] | -0.150 [-0.350, +0.000] | -0.050 [-0.150, +0.000] | -0.150 [-0.350, +0.000] | -0.400 [-0.700, -0.100] * | -0.500 [-1.000, +0.000] |
+| wrong_thing_not_closed | +0.000 [+0.000, +0.000] | -0.400 [-0.600, -0.200] * | +0.200 [+0.050, +0.400] * | +0.200 [+0.050, +0.400] * | +0.200 [+0.000, +0.500] | +0.500 [+0.000, +1.000] |
+| freshness_error | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | +0.291 [+0.239, +0.334] * | +0.310 [+0.236, +0.382] * | +0.278 [+0.225, +0.324] * | +0.333 [+0.160, +0.444] * |
+| dispute_recall | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | -0.440 [-0.530, -0.349] * | -0.396 [-0.551, -0.262] * | -0.808 [-0.960, -0.612] * | -0.333 [-0.462, -0.143] * |
+| failed_step_precision | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | -0.208 [-0.266, -0.144] * | -0.229 [-0.288, -0.169] * | -0.229 [-0.325, -0.113] * | -0.037 [-0.120, +0.000] |
+| usd_per_ticket | -0.001 [-0.001, -0.001] * | +0.000 [+0.000, +0.000] | -0.009 [-0.010, -0.009] * | +0.040 [+0.037, +0.042] * | +0.147 [+0.128, +0.159] * | +0.082 [+0.037, +0.108] * |
+
+### Why the event memory loses the rescue and the wrong-thing cases
+
+**Rescue.** On all 20 replies ("Ага, вижу.", "Получила, спасибо.", "Да, на
+месте.") the extractor proposed nothing. What says which twin is meant is the
+agent's previous message, and the extractor is shown the card and the new
+message only, so it cannot know. Nothing was proposed, so neither the guards
+nor the verifier were involved. Every method that sees the transcript, or a
+memory written from it, gets most of these right. The failure is cheap in
+one sense: both twins stay open, and the card is wrong in the safe direction,
+an unneeded alert rather than a silent close. 20 of the event memory's 22
+false alerts are these twins. It is still a loss, and it is the method's
+design, not a bad model call.
+
+**Wrong thing.** The extractor pinned "деньги за прошлый заказ пришли" on the
+only open promise of the company, the callback, in 4 of 20 tickets. The close
+guard has a rule for exactly that situation. A plain confirmation of a deed
+may close a side's only open promise even when it shares no word with it. That
+rule admitted all 4. The verifier said **no** to all 4, but the reducer weighs
+a "no" as no evidence rather than as evidence against.
+
+### What the verifier changed
+
+| verdict | the message closed the target | the target was still owed | it was closed by another message |
+|---|---|---|---|
+| yes (147) | 136 | 8 | 3 |
+| no (9) | 0 | 8 | 1 |
+| unsure (16) | 0 | 10 | 6 |
+
+- **It rescued one close, and the close was wrong.** In M0017 the ambiguous
+  reply "Одно уже получила, спасибо." was pinned by the extractor on an
+  unrelated open promise, "Отправим вам замену". The verifier said yes, with
+  "Одно уже получила" as evidence, which is more than thanks. The yes stood in
+  for the lexical check and closed a promise that was still owed. That is the
+  event memory's one wrong-target close (0.05 against 0.00 without the
+  verifier). It also let a later renegotiation of that promise onto the card,
+  so the same ticket gained one promise and one breach alert. Nothing else
+  differs between `event_memory` and `event_memory_no_verifier` at any
+  checkpoint.
+- **A "no" that vetoed** would have blocked 4 admitted closes, all 4 false:
+  exactly the wrong-thing closes above. It would have blocked no true close.
+  Round 3 found nothing for a veto to block on dev; test3 does.
+- Its yes is not trustworthy alone: 11 of 147 fell on a promise that was not
+  closed. The hard checks held 10 of those; the eleventh is the rescue above.
+  No "no" and no "unsure" fell on a true close. No evidence quote was missing
+  from its message, and no call failed.
+
+So on these tickets the verifier as wired adds about 8% to the event
+memory's cost and makes the result slightly worse. Wired as a veto, it would have removed every end-of-ticket
+false close. That is a change to the reducer's rules (`closing`), not made
+here. It can be measured on the frozen proposals and verdicts without a model
+call; see below.
+
+### The guards, on the same proposals
+
+| | false closes | wrong target | missed closes | suggestions | breach alerts (right, false, missed) | status accuracy |
+|---|---|---|---|---|---|---|
+| guards on (`event_memory`) | 4 | 1 | 22 of 158 | 32 | 125, 22, 4 | 0.926 |
+| guards off | 24 | 10 | 12 of 158 | 0 | 110, 12, 19 | 0.890 |
+
+The guards refused 32 closes: 21 false closes, 10 closes by the wrong
+message, and 1 true close (a dropped word in the copied wording, as in
+round 2). Unlike round 2's test split, the extractor did propose wrong closes
+here, about 1.5 a ticket, and the guards are what stopped them.
+
+### Graphiti on 10 tickets
+
+What its graph held at the end of each ticket, per planted dispute: whether
+each side's value was still a valid fact (`report.graphiti_disputes`).
+
+| dispute | customer's value closed, company's current | company's closed, customer's current | both current | both absent (M0005, stopped at event 6) |
+|---|---|---|---|---|
+| still open at the end (13) | 7 | 1 | 3 | 2 |
+| settled during the ticket (4) | 1 | 1 | 2 | — |
+
+On round 3b's two dev tickets every open dispute became a supersession. On
+ten test tickets, 8 of the 11 its graph held did; the other 3 kept both
+values, and its reader still reported few of them as disputes (dispute recall
+0.19). The mechanism is the one round 3b described: a contradiction has one
+resolution in Graphiti, the newer fact wins, and its facts do not say who
+asserted them.
+
+On its 9 complete tickets (M0005 left out; paired with the event memory on
+the same 9): commitment F1 0.988 (−0.003 [−0.013, 0.006]), deadline accuracy
+0.931 (−0.069 [−0.122, −0.032]), false closes 0.89 a ticket (+0.67 [0.11,
+1.22]), dispute recall 0.24 (−0.76 [−0.94, −0.55]), freshness error 0.286
+(+0.286), rescue 0.67, ambiguous refrained 0.67, wrong thing 1.00. Its
+commitment account is as good as ours when it completes. It loses on
+disputes, deadlines and false closes.
+
+### Spent
+
+| what | USD |
+|---|---|
+| Step 0 check (round 3's B and C through the single runner) | 0.0033 |
+| rewriting test3 | 0.0644 |
+| the first rewrite, cut by a connection reset (logged nothing; entered at the full rewrite's cost, an upper bound) | 0.0644 |
+| projection sample | 0.0251 |
+| first pass (from the key's usage counter) | 2.9923 |
+| second and third passes (resumes) | 0.3188 |
+| **session** | **3.4684** |
+
+By method, as the record counts it (cached calls at what they cost when
+made): Graphiti $1.602, Mem0 $1.060, rolling summary $0.383, event memory
+$0.267 (verifier $0.019), full context $0.087.
+
+### Threats to validity (round 4)
+
+- **Simulated data.** Tickets are generated from templates and reworded by a
+  model. Real tickets are messier, and real disputes, rescues and wrong-thing
+  confirmations occur at unknown rates. Here each is planted once per ticket.
+- **The same team wrote the generator and the method.** The planted cases
+  were designed with the method's guards in mind, and the deadline phrases are
+  the ones `temporal` parses. The 1.000 deadline accuracy partly reflects
+  that, including 5 same-weekday deadlines that follow `temporal`'s convention.
+- **One reading model.** Every method read with DeepSeek V4.1 Flash on one
+  host. A stronger model might help the baselines more than the event memory
+  (whose reading is narrow), or less.
+- **The sanity check was done by a model, not a person.** Three tickets were
+  read in full, and every rewritten planted message of the 20 was checked. It
+  found one bug and fixed it; a person may find others. Round 2's test2 has
+  the same model-dispute fault in 2 tickets, uncorrected.
+- **Subsets and failures.** Graphiti ran on 10 tickets, one of which stopped
+  at event 6; the rolling summary ran on 4, of which it completed 1. Their
+  intervals are wide, and their numbers carry those failures. A failure that
+  stops a ticket is the method's, as it would be in production. Network
+  failures were resumed once for every method alike.
+- **The verifier's 172 verdicts** come from one model judging closes the same
+  model proposed.
+- **The rewrite fix was made after reading test3**, before any method read
+  it. It moved 15 messages back to their template words.
+
+### What is frozen and how to re-run only our method
+
+Frozen for the rest of the coursework: the `test3` tickets (seed 4343 and
+`results/round4/tickets/test3.json`), the gold labels as generated now, and
+every baseline's answers at every checkpoint in `results/round4/test3.json`
+(full context, Mem0, Graphiti on 10 tickets, rolling summary on 4). Also
+frozen: the event memory's proposals for every message, with every verifier
+verdict, in the same record.
+
+```bash
+# Score everything again (a corrected or added measure): no model call.
+python -m duebook.bench.experiment --split test3 --methods "" --max-usd 0 \
+    --frozen results/round4/test3.json --results /tmp/r --out /tmp/r/test3.json
+
+# A new reducer, guards or verifier rule, on the frozen proposals and verdicts:
+# no model call; the baselines come from the record and are scored again.
+python -m duebook.bench.experiment --split test3 --methods event_memory --max-usd 0.01 \
+    --replay results/round4/test3.json --frozen results/round4/test3.json \
+    --results results/round5 --out results/round5/test3.json
+
+# A new extractor or prompt: only the event memory reads again (~$0.27 uncached).
+python -m duebook.bench.experiment --split test3 --methods event_memory --max-usd 0.4 \
+    --frozen results/round4/test3.json --results results/round5 --out results/round5/test3.json
+```
+
+Each command was checked on the final record. The first two reproduce every
+value of round 4's summary exactly, at $0.00.
+
 
 ## Round 3b (dev only): further memory baselines
 
@@ -17,7 +408,7 @@ candidate; see the survey). **Only dev2 was run.** Raw record:
 
 | | |
 |---|---|
-| Split | `dev2`, the text round 2 rewrote (`results/round3b/tickets/dev2.json` links to it) |
+| Split | `dev2`, the text round 2 rewrote (`results/round2/tickets/dev2.json`) |
 | Graphiti | the **first 2 tickets** (M0000, M0001; 175 and 183 events), as the budget allowed: projected at $0.59 upper for 2 tickets, $1.07 for 4 |
 | Event memory | all 4 tickets, round 2's configuration (C), as the reference; the differences below are on Graphiti's 2 tickets |
 | Reader | `deepseek/deepseek-v4.1-flash`, reasoning off, locked to DeepInfra (`PRESETS`), for every call Graphiti makes and for the checkpoint answer |
@@ -27,10 +418,12 @@ candidate; see the survey). **Only dev2 was run.** Raw record:
 | Checkpoint | the ticket's whole graph — every fact with its source messages and validity window, every entity summary — and the shared question; no search |
 | Charged | $0.375: $0.0224 for the projection sample, $0.3500 for the run, $0.0027 for a 4-event smoke test before it; a replay from the response cache cost $0 and reproduced every answer |
 
-`results/round3b/dev2.json` is the run. `dev2-replay.json` is the same run
-replayed from the cache, identical in every answer and score, which also
-keeps the text Graphiti's graph showed the model at each checkpoint; its
-timings are the cache's, not the model's.
+`results/round3b/dev2.json` is the run. The run as made did not keep the
+text Graphiti's graph showed the model; a replay from the response cache,
+identical in every answer and score, did. Of that replay only Graphiti's
+graph at the end of each ticket is kept, in the last checkpoint of its runs
+(`listing`): it holds every fact with its validity window, closed ones
+included, which is what the dispute finding below rests on.
 
 ### Dev comparison (Graphiti's 2 tickets)
 
@@ -131,7 +524,10 @@ python -m duebook.bench.experiment --split dev2 --methods event_memory,graphiti 
 `falkordblite` ships its own `redis-server` and FalkorDB module and starts
 one per ticket in a temporary directory; nothing else needs installing.
 Answers and embeddings are cached under `.cache/responses/`, so the run
-replays without a model call on the machine that made it.
+replays without a model call on the machine that made it. Round 3b's event
+memory had no verifier; `event_memory` now has it, and round 3b's reference is
+reported beside it as `event_memory_no_verifier`. The tickets are read from
+`results/round2/tickets/`, where the split's round keeps them.
 
 ## Round 3 (dev only): verifier and reasoning
 
@@ -344,11 +740,29 @@ approves this budget before anyone runs it.**
 | **every method on all 20 tickets** | | **≈ $4.4** | **≈ $5.6** |
 | round 2's shape: rolling summary and Mem0 on the first 4 | | ≈ $1.2 | ≈ $1.6 |
 
+### Reproducing round 3
+
+Round 3 was run by its own module, since folded into the experiment runner:
+`event_memory` is now B's configuration (reasoning off, guards, verifier),
+`event_memory_no_verifier` is C (the same proposals, verdicts ignored), and
+`event_memory_reasoning` is A.
+
 ```bash
-python -m duebook.bench.experiment --split test3 --results results/round3 \
-    --session-cap <approved> --max-usd <approved> --sample-events 20 \
-    [--subset rolling_summary=4,mem0=4]       # once, after approval
+# Every number above, scored again from the saved record: no model call.
+python -m duebook.bench.experiment --split dev2 --methods "" --max-usd 0 \
+    --frozen results/round3/dev2.json --results /tmp/r3 --out /tmp/r3/dev2.json
+# B and C from round 2's frozen proposals: 31 verifier calls ($0.003).
+python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.02 \
+    --replay results/round2/dev2-4.json --results /tmp/r3 --out /tmp/r3/bc.json
+# The stress runs: the same with --replay results/round2/dev2-{1,2,3}.json.
+# A, read again ($0.10 uncached).
+python -m duebook.bench.experiment --split dev2 --methods event_memory_reasoning \
+    --max-usd 0.15 --results /tmp/r3 --out /tmp/r3/a.json
 ```
+
+The first command reproduces every value of round 3's summary exactly; the
+second gave B $0.0117 and C $0.0109 a ticket and 31 "yes" verdicts, all true,
+when it was checked on 2026-11-17.
 
 ### Threats to validity (round 3)
 
@@ -823,6 +1237,10 @@ python -m duebook.bench.experiment --split test2 --max-usd 1.07 --sample-events 
     --subset rolling_summary=4,mem0=4 --workers 12                              # refuses to run twice
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
 ```
+
+Round 2's event memory had no verifier. Since round 4, `event_memory` runs
+with it, and round 2's configuration is reported beside it as
+`event_memory_no_verifier`.
 
 The rewritten text is in `results/round2/tickets/`; `results/round2/
 writer-trial.json` holds the writer trial; `results/round2/spend.jsonl` every

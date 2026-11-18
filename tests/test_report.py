@@ -44,3 +44,22 @@ def test_what_the_guards_refused_is_tabled_by_reason_with_a_total():
     rows = guard_effects({"guard_effects": effects}).splitlines()
     assert rows[2] == "| ambiguous_target | 2 | 0 | 0 | 0 |"
     assert rows[-1] == "| **all** | 2 | 0 | 1 | 0 |"
+
+
+def test_graphiti_closing_the_customers_value_of_an_open_dispute_is_counted_as_closed_current():
+    from duebook.bench.generate import SPLITS
+    from duebook.bench.report import graphiti_disputes
+
+    ticket = SPLITS["dev3"].tickets()[0]
+    disputes = ticket.gold.contradictions
+    lines = []
+    for d in disputes:
+        said, recorded = d.values
+        lines += [f"- (from #{d.seqs[0]}) Клиент говорит {said}. [no longer true from Mon]",
+                  f"- (from #{d.seqs[1]}) Компания говорит {recorded}."]  # fmt: skip
+    listing = "\n".join(["FACTS", *lines, "ENTITIES"])
+    end = {"listing": listing}
+    run = {"method": "graphiti", "ticket": ticket.ticket_id, "detail": {"end": end}}
+    counts = graphiti_disputes({"split": "dev3", "runs": [run]})
+    assert sum(counts["open"].values()) + sum(counts["settled"].values()) == len(disputes)
+    assert set(counts["open"]) | set(counts["settled"]) == {"closed / current"}

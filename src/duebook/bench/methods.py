@@ -13,7 +13,7 @@ difference in the memory, not in the reader.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol
 
 from ..card import Card
@@ -21,13 +21,15 @@ from ..events import Event, MessagePosted
 from ..extract.cost import Usage
 from ..extract.extractor import Extraction, Extractor, JsonModel
 from ..extract.prompt import Bound, build_messages
+from ..extract.verifier import verifying_reader
 from ..lifecycle import AlertPolicy
+from ..proposals import Proposal
 from ..store.codec import encode
 from ..temporal import WorkCalendar
 from .generate import SimTicket
 from .meter import Ledger, Meter, Tally
 from .result import Snapshot, checkpoints
-from .run import fold, snapshots
+from .run import Replayed, fold, snapshots
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +71,20 @@ class Method(Protocol):
     def run(self, ticket: SimTicket) -> MethodRun: ...
 
 
+@dataclass(frozen=True, slots=True)
+class Recorded:
+    """What an earlier run of the event memory proposed for one ticket, and what it cost."""
+
+    #: Per event, in order; a proposal keeps the verifier's verdict if it had one.
+    proposals: tuple[tuple[Proposal, ...], ...]
+    extraction: Usage
+    verifier: Usage
+    #: Model seconds spent extracting, and verifying.
+    seconds: float
+    verifier_seconds: float
+    providers: dict[str, int]
+
+
 @dataclass(slots=True)
 class EventMemory:
     """The proposed method: the extractor proposes per message, the reducer admits.
@@ -84,29 +100,60 @@ class EventMemory:
     #: What the model is shown of a long card; None shows all of it.
     bound: Bound | None = None
     name: str = "event_memory"
+    #: Asked about every proposal that would close a promise, as the product
+    #: does (``extract.verifier``); None reads without a second opinion.
+    verifier: JsonModel | None = None
+    #: Per ticket id, proposals an earlier run made: folded again instead of
+    #: asking ``model``. Only proposals without a verdict go to the verifier.
+    recorded: dict[str, Recorded] | None = None
 
     def run(self, ticket: SimTicket) -> MethodRun:
         meter = Meter(self.model, self.ledger)
-        extractor = _Sizing(Extractor(meter, self.cal, bound=self.bound))
-        folded = fold(ticket, extractor, [cp.seq for cp in checkpoints(ticket)], self.cal)
+        sizes: list[list[int]] = []
+        if self.recorded is None:
+            reader = _Sizing(Extractor(meter, self.cal, bound=self.bound), sizes)
+            before = Recorded((), Usage(), Usage(), 0.0, 0.0, {})
+        else:
+            before = self.recorded[ticket.ticket_id]
+            answers = {e.id: p for e, p in zip(ticket.events, before.proposals, strict=False)}
+            reader = Replayed(answers)
+        checker = Meter(self.verifier, self.ledger) if self.verifier is not None else None
+        if checker is not None:
+            reader = verifying_reader(reader, checker, self.cal)
+        folded = fold(ticket, reader, [cp.seq for cp in checkpoints(ticket)], self.cal)
         snaps = snapshots(ticket, folded, self.policy)
         failure = folded.failure[2] if folded.failure else None
+        extraction = before.extraction + meter.tally.usage
+        verifier = before.verifier + (checker.tally.usage if checker else Usage())
+        verifying = before.verifier_seconds + (checker.tally.ingest_seconds if checker else 0.0)
+        tally = Tally(extraction + verifier,
+                      before.seconds + meter.tally.ingest_seconds + verifying)  # fmt: skip
+        tally.cache_hits = meter.tally.cache_hits + (checker.tally.cache_hits if checker else 0)
+        for source in (before.providers, meter.tally.providers):
+            for host, n in source.items():
+                tally.providers[host] = tally.providers.get(host, 0) + n
         detail = {
             # (seq, prompt tokens the provider counted) for every model call.
             "prompt_tokens": [list(p) for p in folded.prompts],
             # (seq, characters of the prompt shown in full, and bounded) for
             # every message: the same card rendered both ways, so the effect
             # of the bound is measured on identical input.
-            "prompt_chars": extractor.sizes,
-            # Every proposal, stored, so the run can be folded again under
-            # other rules (the reducer without its guards) without a model.
+            "prompt_chars": sizes,
+            # Every proposal, with its verdict, so the run can be folded again
+            # under other rules or a later reducer without a model.
             "proposals": [encode(list(p)) for p in folded.proposals],
             # Closes the guards refused: (seq, reason, kind, target's seq).
             "refused": [[r.seq, r.reason, r.kind, r.target_seq] for r in folded.refused],
-            "cache_hits": meter.tally.cache_hits,
-            "providers": meter.tally.providers,
+            "cache_hits": tally.cache_hits,
+            "providers": tally.providers,
+            "extraction_usage": asdict(extraction),
         }
-        return MethodRun.of(self.name, ticket, snaps, meter.tally, failure, detail)
+        if checker is not None:
+            detail["verifier"] = {"usage": asdict(verifier), "usd": verifier.usd(),
+                                  "seconds": verifying,
+                                  "providers": checker.tally.providers,
+                                  "cache_hits": checker.tally.cache_hits}  # fmt: skip
+        return MethodRun.of(self.name, ticket, snaps, tally, failure, detail)
 
 
 @dataclass(slots=True)
@@ -114,7 +161,7 @@ class _Sizing:
     """Notes how long the prompt would be with and without a bound, then extracts."""
 
     extractor: Extractor
-    sizes: list[list[int]] = field(default_factory=list)
+    sizes: list[list[int]]
 
     def extract(self, card: Card, event: Event) -> Extraction:
         if isinstance(event, MessagePosted) and event.text.strip():
