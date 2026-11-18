@@ -55,6 +55,7 @@ from .card import (
     Step,
     StepOutcome,
     Suggestion,
+    Unread,
 )
 from .closing import (
     NAMING,
@@ -87,6 +88,7 @@ from .proposals import (
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    Unreadable,
     Verdict,
     Verification,
 )
@@ -309,6 +311,9 @@ def _admit(
             return _ask(card, event, proposal, source, new_id)
         case AnswerQuestion():
             return _answer(card, event, proposal, source)
+        case Unreadable():
+            unread = Unread(new_id, source, event.at, proposal.error)
+            return replace(card, unread=(*card.unread, unread)), []
     raise TypeError(f"not a proposal: {proposal!r}")
 
 

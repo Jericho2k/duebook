@@ -18,10 +18,12 @@ pytestmark = pytest.mark.usefixtures("conn")
 class Scripted:
     """An extractor that answers from a ticket's log and can be made to fail."""
 
-    def __init__(self, *tickets: Ticket, fail_at: int | None = None, failures: int = 0):
+    def __init__(self, *tickets: Ticket, fail_at: int | None = None, failures: int = 0,
+                 unreadable: bool = False):  # fmt: skip
         self.answers = {(e.ticket_id, e.id): p for t in tickets for e, p in t.log}
         # Only the first ticket given is ever made to fail.
         self.fail_at, self.failures = (tickets[0].card.ticket_id, fail_at), failures
+        self.unreadable = unreadable
         self.calls: list[tuple[int, int]] = []
         self.lock = threading.Lock()
 
@@ -30,6 +32,9 @@ class Scripted:
             self.calls.append((event.seq, card.last_seq))
             if (event.ticket_id, event.seq) == self.fail_at and self.failures:
                 self.failures -= 1
+                if self.unreadable:
+                    raise ModelError("gave up after 1 attempts: answer cut off at 800 tokens",
+                                     Usage(2, 1800, 4800, 0, 0.002), unreadable=True)
                 raise ModelError("gave up after 3 attempts: http 503", Usage(3, 2700, 0, 0, 0.0003))
         return Extraction(
             self.answers[event.ticket_id, event.id], usage=Usage(1, 900, 80, reported_usd=0.0001)
@@ -200,6 +205,33 @@ def test_repeated_failures_back_off_and_their_cost_stays_on_the_event(store, con
     usage = conn.execute("select usage from event_proposals").fetchone()["usage"]
     # Three failed attempts of three calls each, and the one that worked.
     assert usage["calls"] == 10 and usage["reported_usd"] == pytest.approx(0.001)
+
+
+def test_a_message_unreadable_on_every_attempt_is_recorded_and_the_ticket_goes_on(store, conn):
+    ticket = story()
+    p = pipeline(store, Scripted(ticket, fail_at=3, failures=3, unreadable=True))
+    for event, _ in ticket.log:
+        p.handle(event)
+    for attempt in (2, 3):
+        hold = store.held("T-1")
+        assert (hold.seq, hold.attempts) == (3, attempt - 1)
+        p.clock.now = hold.retry_at
+        p.retry_held()
+
+    card = store.card("T-1")
+    assert card.last_seq == 7 and store.held("T-1") is None
+    (item,) = card.unread
+    assert item.source.seq == 3 and item.source.quote == ticket.log[2][0].text
+    assert "cut off at 800 tokens" in item.error
+    # The promises made after it were read.
+    assert [c.id for c in card.commitments] == [c.id for c in ticket.card.commitments] != []
+    usage = conn.execute("select usage from event_proposals where seq = 3").fetchone()["usage"]
+    assert usage["calls"] == 6 and usage["reported_usd"] == pytest.approx(0.006)
+
+    store.wake(p.clock.now + timedelta(days=30))
+    (row,) = conn.execute("select * from outbox where kind = 'unreadable'").fetchall()
+    assert (row["seq"], row["recipient"], row["commitment_id"]) == (3, IVAN.id, None)
+    assert store.replay("T-1") == card
 
 
 def test_a_held_ticket_does_not_stop_other_tickets(store):

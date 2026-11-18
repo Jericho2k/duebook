@@ -203,6 +203,16 @@ class Question:
         return self.answer is None
 
 
+@dataclass(frozen=True, slots=True)
+class Unread:
+    """A message nobody could read automatically: a person must check it (decision 0002)."""
+
+    id: str
+    source: Source
+    at: datetime
+    error: str
+
+
 # ----------------------------------------------------------------- card ----
 
 
@@ -221,6 +231,7 @@ class Card:
     commitments: tuple[Commitment, ...] = ()
     steps: tuple[Step, ...] = ()
     questions: tuple[Question, ...] = ()
+    unread: tuple[Unread, ...] = ()
 
     def current_facts(self) -> tuple[Fact, ...]:
         return tuple(f for f in self.facts if f.current)

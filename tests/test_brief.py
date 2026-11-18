@@ -6,7 +6,7 @@ from helpers import ANNA, BOT, CAL, IVAN, OLGA, START, Ticket, story
 
 from duebook import Card, Party
 from duebook.brief import Brief, compose, estimate_tokens
-from duebook.proposals import MakeCommitment, ResolveCommitment
+from duebook.proposals import MakeCommitment, ResolveCommitment, Unreadable
 from duebook.reducer import _norm
 from duebook.temporal import WeekdayRef
 
@@ -35,6 +35,16 @@ def test_sections_come_in_order_of_what_hurts_most_if_missed():
     assert titles(brief(story().card)) == [
         "urgent", "moved", "contradictions", "facts", "changes", "failed", "questions",
     ]  # fmt: skip
+
+
+def test_a_message_nobody_could_read_leads_the_brief_with_its_source():
+    t = story()
+    text = "Письма придут по отдельности."
+    t.say(ANNA, text, Unreadable(text, "ModelError: answer cut off at 800 tokens"))
+    b = brief(t.card)
+    assert titles(b)[0] == "unread"
+    assert items(b.text)[0] == (f"- Сообщение №{t.card.last_seq} не удалось прочитать — "
+                                f"проверьте его вручную [№{t.card.last_seq} Анна: «{text}»]")
 
 
 def test_broken_promises_lead_and_the_company_s_come_before_the_customer_s():

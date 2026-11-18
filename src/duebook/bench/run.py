@@ -14,28 +14,33 @@ proposals can be folded again under other rules — the reducer without its
 closing guards, say — at no cost and on exactly the same model output. It also
 keeps every close the guards refused.
 
-A ticket whose extraction fails is stopped at that event, as in production,
-and scored on the card it reached: the promises it never got to count as
-missed. Failures are reported alongside the score, not folded into it
-silently.
+A message whose answers stay unreadable is recorded as unread after the
+pipeline's attempts and the ticket goes on, as in production (decision 0002).
+A ticket whose extraction fails otherwise is stopped at that event and scored
+on the card it reached: the promises it never got to count as missed.
+Failures are reported alongside the score, not folded into it silently.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ..card import Card
 from ..events import Event, MessagePosted, other_side, remember_turn
+from ..extract.client import ModelError
 from ..extract.cost import Usage
 from ..extract.extractor import (
+    ATTEMPTS,
     BATCH_TIMEOUT,
     MAX_BATCH_SIZE,
     Extraction,
     Reader,
+    gives_up,
     read_batch,
     read_event,
+    unread,
 )
 from ..lifecycle import AlertPolicy, next_wakeup
 from ..proposals import CancelCommitment, MakeCommitment, Proposal, ResolveCommitment
@@ -195,8 +200,8 @@ def fold(
                         e.seq not in prepared or prepared[e.seq].reread for e, _ in joined
                     )
                     batches.append((len(joined), time.perf_counter() - started, retries))
-            extraction = read_event(extractor, card, event, previous,
-                                    prepared.pop(event.seq, None))  # fmt: skip
+            extraction = read_as_the_pipeline(extractor, card, event, previous,
+                                              prepared.pop(event.seq, None))  # fmt: skip
         except Exception as error:  # held at this event, as the pipeline would
             seconds += time.perf_counter() - started
             spent += getattr(error, "usage", None) or Usage()
@@ -220,6 +225,27 @@ def fold(
         cards[seq] = card
     return Folded(card, cards, spent, failure, seconds, tuple(prompts), tuple(read),
                   tuple(refused), tuple(batches))  # fmt: skip
+
+
+def read_as_the_pipeline(reader: Reader, card: Card, event: Event,
+                         previous: MessagePosted | None,
+                         prepared: Extraction | None = None) -> Extraction:  # fmt: skip
+    """Read one message with the pipeline's attempts; raise where the pipeline would hold."""
+    spent = Usage()
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            outcome = read_event(reader, card, event, previous, prepared)
+        except ModelError as error:
+            spent += error.usage
+            if gives_up(error, attempt):
+                return replace(unread(event, error), usage=spent)
+            if not error.unreadable:
+                error.usage = spent
+                raise
+            prepared = None
+            continue
+        return replace(outcome, usage=spent + outcome.usage)
+    raise AssertionError("unreachable: the last attempt gives up or returns")
 
 
 def _refused(card: Card, seq: int, proposal: Proposal, reason) -> Refused:

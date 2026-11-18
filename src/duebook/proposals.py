@@ -131,6 +131,19 @@ class AnswerQuestion:
     quote: str
 
 
+@dataclass(frozen=True, slots=True)
+class Unreadable:
+    """No attempt to read the message succeeded (decision 0002).
+
+    Written by the pipeline, never by the model, and stored like any proposal,
+    so the card still rebuilds from the log alone.
+    """
+
+    #: The whole message: what a person must now read.
+    quote: str
+    error: str
+
+
 Proposal = (
     AssertFact
     | MakeCommitment
@@ -140,4 +153,5 @@ Proposal = (
     | SetStepOutcome
     | AskQuestion
     | AnswerQuestion
+    | Unreadable
 )

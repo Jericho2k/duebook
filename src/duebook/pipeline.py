@@ -20,7 +20,10 @@ If extraction fails the ticket is **held** at that event. Nothing is recorded
 for it — not an empty list, which would mean "a person read this and found
 nothing" — and nothing after it is applied, because every later reading would
 rest on a card that skipped a message. The hold is stored with the error and a
-retry time, and ``retry_held`` picks it up.
+retry time, and ``retry_held`` picks it up. When the third attempt also gets
+an unreadable answer, the message is recorded as **unreadable** instead: the
+card shows it for a person to read, the assignee is alerted, and the ticket
+moves on (decision 0002).
 
 ``handle`` reports a hold in its return value instead of raising. The event is
 already safe, so the caller should acknowledge it; a raise would make a queue
@@ -52,7 +55,15 @@ import psycopg
 from .card import Card
 from .events import Event, MessagePosted
 from .extract.cost import Usage
-from .extract.extractor import BATCH_TIMEOUT, MAX_BATCH_SIZE, Reader, read_batch, read_event
+from .extract.extractor import (
+    BATCH_TIMEOUT,
+    MAX_BATCH_SIZE,
+    Reader,
+    gives_up,
+    read_batch,
+    read_event,
+    unread,
+)
 from .lifecycle import next_wakeup
 from .store.store import Hold, Store
 
@@ -201,19 +212,22 @@ class Pipeline:
                         prepared = read_batch(self.extractor, card, turns)
                     extraction = read_event(self.extractor, card, event, previous,
                                             prepared.pop(event.seq, None))  # fmt: skip
-                except Exception as error:  # any failure to read holds the ticket
-                    failed = getattr(error, "usage", None) or Usage()
-                    spent += failed
+                except Exception as error:  # any failure to read holds the ticket...
                     attempts = hold.attempts if hold is not None and hold.seq == event.seq else 0
-                    hold = self.store.hold(
-                        ticket_id,
-                        event.seq,
-                        f"{type(error).__name__}: {error}",
-                        now=now,
-                        retry_at=now + min(self.retry_base * 2**attempts, self.retry_cap),
-                        usage=asdict(earlier + failed),
-                    )
-                    return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
+                    if not gives_up(error, attempts + 1):
+                        failed = getattr(error, "usage", None) or Usage()
+                        spent += failed
+                        hold = self.store.hold(
+                            ticket_id,
+                            event.seq,
+                            f"{type(error).__name__}: {error}",
+                            now=now,
+                            retry_at=now + min(self.retry_base * 2**attempts, self.retry_cap),
+                            usage=asdict(earlier + failed),
+                        )
+                        return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
+                    # ...until the message itself is shown to be unreadable.
+                    extraction = unread(event, error)
 
                 spent += extraction.total_usage
                 self.store.record(

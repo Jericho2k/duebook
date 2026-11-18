@@ -21,6 +21,7 @@ from ..proposals import (
     MakeCommitment,
     Proposal,
     ResolveCommitment,
+    Unreadable,
     Verdict,
     Verification,
 )
@@ -230,7 +231,9 @@ class VerifyingReader:
     def verify_extraction(
         self, card: Card, event: Event, previous: MessagePosted | None, extraction: Extraction,
     ) -> Extraction:
-        if not isinstance(event, MessagePosted):
+        if not isinstance(event, MessagePosted) or any(
+            isinstance(p, Unreadable) for p in extraction.proposals
+        ):
             return extraction
         pending = extraction.proposals
         if previous is not None and not any(isinstance(p, ResolveCommitment) for p in pending):

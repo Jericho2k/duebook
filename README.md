@@ -158,7 +158,8 @@ message: incremental cost grows linearly with ticket length, re-reading grows
 quadratically.
 
 A failed extraction raises. It never returns "nothing found", so a message the
-model could not read is retried rather than silently skipped.
+model could not read is retried rather than silently skipped, and after its
+last attempt is recorded as unread (see the pipeline below).
 Verifier timeouts, HTTP errors and unreadable answers are logged and stored as
 `unsure` verdicts. The event is applied using the deterministic checks.
 Each applied event records verifier usage separately from extraction, including
@@ -244,6 +245,14 @@ is recorded for it and nothing after it is applied; the hold is stored with
 the error, the cost of the failed calls and a retry time that backs off. Other
 tickets are not affected.
 
+A message whose answer is still unreadable on the third attempt does not stop
+the ticket ([decision 0002](docs/decisions/0002-unreadable-message.md)). It is
+applied with an explicit `Unreadable` record, so it is visibly unread rather
+than "nothing found". The card lists it, the brief leads with "Сообщение №N не
+удалось прочитать — проверьте его вручную", the assignee gets an `unreadable`
+alert through the outbox, and the next message is read. Timeouts and outages
+say nothing about the message and keep the ticket held.
+
 `handle` does both halves in the caller's time. The service splits them: the
 webhook only stores (`Store.ingest`), and processors apply what was stored:
 
@@ -271,7 +280,7 @@ brief.dropped  # what did not fit, by section, with counts
 
 A deterministic rendering of the card, in Russian, for the operator taking a
 ticket over. No model writes it. It is ordered by what hurts most if missed:
-promises broken or about to be, promises that changed hands or have nobody
+messages nobody could read automatically, promises broken or about to be, promises that changed hands or have nobody
 answerable, the other unresolved promises, open contradictions, current
 facts, what changed, steps that failed, open questions.
 

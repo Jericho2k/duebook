@@ -17,7 +17,7 @@ from typing import Protocol
 
 from ..card import Card
 from ..events import Event, MessagePosted
-from ..proposals import Proposal
+from ..proposals import Proposal, Unreadable
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
@@ -32,6 +32,10 @@ ANSWER_TOKENS = 800
 #: The escalated read thinks first: reasoning "low" spends 1,000-2,800 hidden
 #: tokens before an answer of the same size.
 ESCALATED_TOKENS = 4_000
+#: Failed attempts at one message before it is recorded as unreadable
+#: (decision 0002): each attempt is a read and, if its answer was unreadable,
+#: the escalated read; the hold's backoff separates them.
+ATTEMPTS = 3
 MAX_BATCH_SIZE = 4
 BATCH_TIMEOUT = timedelta(seconds=10)
 ReadTurn = tuple[MessagePosted, MessagePosted | None]
@@ -88,6 +92,22 @@ def reading_clients(client: ChatClient) -> tuple[ChatClient, ChatClient]:
     """
     first = replace(client, max_tokens=ANSWER_TOKENS, content_retries=0)
     return first, replace(first, reasoning="low", max_tokens=ESCALATED_TOKENS)
+
+
+def gives_up(error: Exception, attempts: int) -> bool:
+    """Whether this failure, the ``attempts``-th at one message, ends the reading of it.
+
+    Only an answer that could not be read counts against the message: a
+    timeout or an outage says nothing about it, and the ticket waits.
+    """
+    return getattr(error, "unreadable", False) and attempts >= ATTEMPTS
+
+
+def unread(event: Event, error: Exception) -> Extraction:
+    """What is recorded for a message no attempt could read (decision 0002)."""
+    text = event.text if isinstance(event, MessagePosted) else ""
+    return Extraction((Unreadable(text, f"{type(error).__name__}: {error}"[:500]),),
+                      usage=getattr(error, "usage", None) or Usage())  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
