@@ -572,7 +572,7 @@ def test_a_beat_that_is_not_a_promise_plants_no_commitment():
 def test_two_promises_with_one_action_survive_only_under_promise_identity():
     for ticket in SPLITS["dev5"].tickets():
         pair = [b.seq for b in ticket.gold.beats if b.kind is Beat.SAME_ACTION]
-        for guards, kept in ((Guards(), 2), (Guards(identity=False), 1)):
+        for guards, kept in ((Guards(), 2), (Guards(rules=3), 1)):
             card = fold(ticket, Oracle.of([ticket]), guards=guards).card
             assert sum(c.source.seq in pair for c in card.commitments) == kept
 

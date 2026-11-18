@@ -16,7 +16,7 @@ from duebook.proposals import (
     ResolveCommitment,
     SetStepOutcome,
 )
-from duebook.reducer import CLOSE_RULES, OutOfOrder
+from duebook.reducer import Guards, OutOfOrder
 from duebook.temporal import DayRef, WeekdayRef
 
 
@@ -218,7 +218,7 @@ def test_before_decision_0005_an_identifier_held_one_value():
     text = "Оформим возврат по заказу 538916"
     event = MessagePosted(id="e2", ticket_id="T-1", seq=2, at=t.now, author=IVAN, text=text)
     out = apply(t.card, event, [AssertFact("order.number", "538916", "538916")], CAL,
-                guards=CLOSE_RULES[4])  # fmt: skip
+                guards=Guards(rules=4))  # fmt: skip
     assert len(out.card.open_contradictions()) == 1
 
 
