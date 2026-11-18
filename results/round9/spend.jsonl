@@ -1,0 +1,10 @@
+{"at": "2026-11-18T20:51:59.329990+00:00", "split": "dev5", "what": "run", "methods": "event_memory", "label": "smoke: 2 messages", "usd": 0.0004860688, "reused_usd": 0.0}
+{"at": "2026-11-18T20:52:15.317058+00:00", "split": "dev5", "what": "cost projection only: the run would not fit", "methods": "event_memory", "label": "targeted re-extraction", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-18T20:52:21.258964+00:00", "split": "dev5", "what": "run", "methods": "event_memory", "label": "targeted re-extraction", "usd": 0.014420095200000002, "reused_usd": 0.000417508}
+{"at": "2026-11-18T20:54:03.811333+00:00", "split": "dev5", "what": "run", "methods": "event_memory", "label": "targeted re-extraction, again from the response cache", "usd": 0.0013461111999999997, "reused_usd": 0.013185093599999998}
+{"at": "2026-11-18T20:54:25.382704+00:00", "split": "test4", "what": "run", "methods": "event_memory", "label": "targeted re-extraction", "usd": 0.03464140400000001, "reused_usd": 0.0}
+{"at": "2026-11-18T20:56:13.354618+00:00", "split": "dev6", "what": "run", "methods": "event_memory", "label": "dev6 offers and outcomes", "usd": 0.008990783200000003, "reused_usd": 0.00017264800000000002}
+{"at": "2026-11-18T20:57:18.928199+00:00", "split": "dev6", "what": "cost projection only: the run would not fit", "methods": "event_memory", "label": "dev6 again, from the response cache", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-18T20:57:25.109937+00:00", "split": "dev6", "what": "run", "methods": "event_memory", "label": "dev6 again, from the response cache", "usd": 0.0, "reused_usd": 0.0021886144}
+{"at": "2026-11-18T20:57:37.513455+00:00", "split": "dev5", "what": "run", "methods": "event_memory", "label": "again from the response cache, final runner", "usd": 0.0, "reused_usd": 0.014531204800000003}
+{"at": "2026-11-18T20:57:49.627974+00:00", "split": "test4", "what": "run", "methods": "event_memory", "label": "again from the response cache, final runner", "usd": 0.0, "reused_usd": 0.03464140399999998}

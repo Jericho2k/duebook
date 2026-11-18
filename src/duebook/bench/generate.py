@@ -66,10 +66,12 @@ from ..proposals import (
     AssertFact,
     CancelCommitment,
     MakeCommitment,
+    MakeConditional,
     Proposal,
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    SettleConditional,
     Verdict,
     Verification,
 )
@@ -196,7 +198,7 @@ class Beat(StrEnum):
     #: Not commitments.
     PREDICTION = "prediction"
     STATUS_REPORT = "status_report"
-    #: Not a commitment; recorded as an ``offer.conditional`` fact (decision 0004).
+    #: Not a commitment: a conditional offer (decision 0004).
     CONDITIONAL = "conditional"
 
 
@@ -211,6 +213,23 @@ class GoldBeat:
 
 
 @dataclass(frozen=True, slots=True)
+class GoldConditional:
+    """A conditional offer (decision 0004) and what became of its condition."""
+
+    seq: int
+    #: When the condition is due: the end of the day the offer names.
+    due_at: datetime
+    #: True when the condition came true, False when it failed, None if never said.
+    holds: bool | None = None
+    settled_seq: int | None = None
+
+    def state_at(self, seq: int) -> str:
+        if self.settled_seq is None or self.settled_seq > seq:
+            return "pending"
+        return "activated" if self.holds else "lapsed"
+
+
+@dataclass(frozen=True, slots=True)
 class Gold:
     commitments: tuple[GoldCommitment, ...] = ()
     changes: tuple[GoldChange, ...] = ()
@@ -222,6 +241,7 @@ class Gold:
     handoffs: tuple[int, ...] = ()
     close_cases: tuple[GoldCloseCase, ...] = ()
     beats: tuple[GoldBeat, ...] = ()
+    conditionals: tuple[GoldConditional, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,6 +298,8 @@ class Profile:
     #: Plant Round 8's beats: delegated undertakings, a prediction, a status
     #: report, two promises with one action, a conditional offer.
     accountability: bool = False
+    #: Plant whether the conditional offer's condition held, failed, or went unsaid.
+    condition_outcomes: bool = False
 
 
 STANDARD = Profile(
@@ -296,7 +318,8 @@ MAIN = Profile(
 )  # fmt: skip
 MAIN2 = replace(MAIN, name="main2", close_cases=True)
 MAIN3 = replace(MAIN2, name="main3", accountability=True)
-PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2, MAIN3)}
+MAIN4 = replace(MAIN3, name="main4", condition_outcomes=True)
+PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2, MAIN3, MAIN4)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -330,6 +353,9 @@ SPLITS = {
         # Round 8: who is accountable. test4 is never used for tuning.
         Split("dev5", seed=5151, count=8, profile=MAIN3),
         Split("test4", seed=5353, count=20, profile=MAIN3),
+        # Round 9: what became of each conditional offer, in template words. The
+        # first seed from 6161 whose 8 tickets hold each outcome at least twice.
+        Split("dev6", seed=6174, count=8, profile=MAIN4),
     )
 }
 
@@ -442,13 +468,19 @@ STATUS_REPORTS = [
     "Инженеры сейчас разбираются с вашей проблемой.",
     "Ваш вопрос передан в отдел логистики, там его изучают.",
 ]
-#: Offers that owe nothing until a condition holds (decision 0004), with the
-#: stem that recognises the offer among facts.
+#: Offers that owe nothing until a condition holds (decision 0004): the offer,
+#: its condition, the action, and the customer saying it held, or failed.
 CONDITIONALS = [
-    ("Если ремонт не закончат {day}, выдадим вам подменный аппарат", ("подменн",)),
-    ("Если промокод не сработает {day}, начислим вам бонусы взамен", ("промокод",)),
-    ("Если посылка не придёт {day}, оформим повторную отправку бесплатно", ("повторн",)),
-]
+    ("Если ремонт не закончат {day}, выдадим вам подменный аппарат",
+     "Если ремонт не закончат {day}", "выдать подменный аппарат",
+     "Ремонт так и не закончили, аппарат всё ещё в сервисе", "Ремонт закончили, аппарат забрала"),
+    ("Если промокод не сработает {day}, начислим вам бонусы взамен",
+     "Если промокод не сработает {day}", "начислить бонусы взамен промокода",
+     "Промокод так и не сработал", "Промокод сработал, спасибо"),
+    ("Если посылка не придёт {day}, оформим повторную отправку бесплатно",
+     "Если посылка не придёт {day}", "оформить повторную отправку",
+     "Посылка так и не пришла", "Посылка пришла, всё в порядке"),
+]  # fmt: skip
 #: The customer's own promises, confirmed by the company.
 CUSTOMER_PROMISES = [
     (Party.CUSTOMER, "Пришлю скриншот ошибки {due}", "прислать скриншот ошибки",
@@ -544,6 +576,7 @@ class _Builder:
     handoffs: list[int] = field(default_factory=list)
     close_cases: list[GoldCloseCase] = field(default_factory=list)
     beats: list[GoldBeat] = field(default_factory=list)
+    conditionals: list[GoldConditional] = field(default_factory=list)
 
     @property
     def seq(self) -> int:
@@ -717,7 +750,7 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
     if profile.close_cases:
         _close_cases(plan)
     if profile.accountability:
-        _accountability(plan)
+        _accountability(plan, profile.condition_outcomes)
 
     # Planned last: by now it is known when the ticket ends, and this promise's
     # deadline must still be ahead then.
@@ -744,7 +777,7 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
         proposals=tuple(b.proposals),
         gold=Gold(tuple(b.commitments), tuple(b.changes), tuple(b.contradictions),
                   tuple(b.repeated), tuple(b.facts), tuple(b.handoffs), tuple(b.close_cases),
-                  tuple(b.beats)),
+                  tuple(b.beats), tuple(b.conditionals)),
         end=b.now + timedelta(hours=1),
         anchors=b.anchors,
     )  # fmt: skip
@@ -896,7 +929,7 @@ def _twin_promises(plan: _Plan, kind, at: datetime) -> None:
         _settle_later(plan, promise, fate, when, due_at, made, second_at + timedelta(minutes=30))
 
 
-def _accountability(plan: _Plan) -> None:
+def _accountability(plan: _Plan, outcomes: bool = False) -> None:
     """Round 8's beats: who is accountable, and what is not a promise at all."""
     for promise in plan.rng.sample(DELEGATED, 2):
         _delegated_promise(plan, promise, plan.moment(0.05, 0.75), plan.rng.random() < 0.5)
@@ -906,15 +939,40 @@ def _accountability(plan: _Plan) -> None:
         plan.add(plan.moment(0.05, 0.9), lambda b, k=kind, t=text: b.beats.append(
             GoldBeat(k, b.say(Role.AGENT, t, verbatim=True))
         ))  # fmt: skip
-    offer, key = plan.rng.choice(CONDITIONALS)
+    offer, condition, action, held, failed = plan.rng.choice(CONDITIONALS)
     at = plan.moment(0.1, 0.8)
-    offer = offer.format(day=_date_deadline(at, plan.rng.randint(3, 6), plan.cal)[0])
+    day, expr = _date_deadline(at, plan.rng.randint(3, 6), plan.cal)
+    offer, condition = offer.format(day=day), condition.format(day=day)
+    due_at = resolve(expr, at, plan.cal).due_at
+    made: list[int] = []
 
     def conditional(b: _Builder) -> None:
-        seq = b.fact(Role.AGENT, f"{offer}.", "offer.conditional", offer, offer, key)
-        b.beats.append(GoldBeat(Beat.CONDITIONAL, seq))
+        made.append(b.say(Role.AGENT, f"{offer}.", MakeConditional(
+            Party.COMPANY, action, offer, condition, expr, day)))  # fmt: skip
+        b.beats.append(GoldBeat(Beat.CONDITIONAL, made[0]))
+        b.conditionals.append(GoldConditional(made[0], due_at))
 
     plan.add(at, conditional)
+    holds = plan.rng.choice([True, False, None]) if outcomes else None
+    if holds is not None:
+        _condition_outcome(plan, holds, held if holds else failed, offer, made, at, due_at)
+
+
+def _condition_outcome(plan: _Plan, holds: bool, text: str, offer: str, made: list[int],
+                       at: datetime, due_at: datetime) -> None:  # fmt: skip
+    """The customer says the condition held, after its day, or failed, before it."""
+    if holds:
+        when = plan.after(due_at + timedelta(minutes=plan.rng.randint(30, 600)), Role.CUSTOMER)
+    else:
+        when = plan.within(at + timedelta(hours=1), due_at - timedelta(hours=6), Role.CUSTOMER)
+    quote = text.split(",")[0]
+
+    def settle(b: _Builder) -> None:
+        proposal = SettleConditional(f"e{made[0]}#0", holds, quote, offer.split(", ")[1])
+        seq = b.say(Role.CUSTOMER, f"{text}.", proposal)
+        b.conditionals[-1] = replace(b.conditionals[-1], holds=holds, settled_seq=seq)
+
+    plan.add(when, settle)
 
 
 def _delegated_promise(plan: _Plan, promise, at: datetime, dated: bool) -> None:

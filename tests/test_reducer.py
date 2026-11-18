@@ -16,7 +16,7 @@ from duebook.proposals import (
     ResolveCommitment,
     SetStepOutcome,
 )
-from duebook.reducer import OutOfOrder
+from duebook.reducer import CLOSE_RULES, OutOfOrder
 from duebook.temporal import DayRef, WeekdayRef
 
 
@@ -180,6 +180,46 @@ def test_a_system_of_record_overrides_both_sides_and_settles_the_dispute():
     t.say(BILLING, "refund status: settled", AssertFact("refund", "settled", "settled"))
     assert [f.value for f in t.card.current_facts()] == ["settled"]
     assert t.card.open_contradictions() == ()
+
+
+def test_a_second_order_number_is_another_order_not_a_dispute():
+    t = Ticket()
+    t.say(ANNA, "Проблема с заказом 512407", AssertFact("order.number", "512407", "512407"))
+    t.say(IVAN, "Оформим возврат по заказу 538916",
+          AssertFact("order.id", "538916", "538916"))  # fmt: skip
+    assert sorted(f.value for f in t.card.current_facts()) == ["512407", "538916"]
+    assert t.card.contradictions == ()
+
+
+def test_an_identifier_is_disputed_only_when_one_side_corrects_the_other():
+    t = Ticket()
+    t.say(ANNA, "Проблема с заказом 538916", AssertFact("order.number", "538916", "538916"))
+    t.say(IVAN, "Заказ не 538916, а 538961", AssertFact("order.number", "538961", "538961"))
+    (conflict,) = t.card.open_contradictions()
+    assert {f.value for f in t.card.facts if f.id in conflict.fact_ids} == {"538916", "538961"}
+    t.say(ANNA, "Да, верно, 538961", AssertFact("order.number", "538961", "538961"))
+    assert t.card.open_contradictions() == ()
+    assert [f.value for f in t.card.current_facts()] == ["538961"]
+
+
+def test_a_side_correcting_its_own_identifier_supersedes_it():
+    t = Ticket()
+    t.say(ANNA, "Заказ 538916", AssertFact("order.number", "538916", "538916"))
+    t.say(ANNA, "Ой, не 538916, а 538961", AssertFact("order.number", "538961", "538961"))
+    assert [f.value for f in t.card.current_facts()] == ["538961"]
+    assert t.card.contradictions == ()
+
+
+def test_before_decision_0005_an_identifier_held_one_value():
+    t = Ticket()
+    t.say(ANNA, "Проблема с заказом 512407", AssertFact("order.number", "512407", "512407"))
+    from duebook import MessagePosted
+
+    text = "Оформим возврат по заказу 538916"
+    event = MessagePosted(id="e2", ticket_id="T-1", seq=2, at=t.now, author=IVAN, text=text)
+    out = apply(t.card, event, [AssertFact("order.number", "538916", "538916")], CAL,
+                guards=CLOSE_RULES[4])  # fmt: skip
+    assert len(out.card.open_contradictions()) == 1
 
 
 # ---------------------------------------------------------- commitments ----

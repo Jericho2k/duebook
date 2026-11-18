@@ -36,7 +36,8 @@ cannot quote it, do not report it.
 - When the message adds nothing, return empty lists. Most messages add little.
 
 facts — stable details of the case (order number, product, plan, device, what \
-is broken, current state of the problem).
+is broken, current state of the problem). Never restate a promise, an offer or \
+a status report as a fact.
 - "slot" names what the fact is about. If the record already has a slot for \
 the same thing, use exactly that slot. Otherwise use one from this list when \
 it fits: {slots}. Only when none fits, make a short lowercase English key in \
@@ -72,9 +73,7 @@ refund" is NOT a company commitment — report nothing for it.
 - NOT commitments: a status report ("your request is being processed", "we \
 are working on it"); a prediction about what someone outside the speaker's \
 side will do ("банк обычно зачисляет деньги за 3 дня") — at most a fact; a \
-conditional offer ("если посылка не придёт до пятницы, вернём деньги") — \
-nothing is owed until the condition holds: report it as a fact in slot \
-"offer.conditional" with the whole offer as the value.
+conditional offer — report it under conditionals.
 - "due_quote": the deadline phrase copied from the message, or null.
 - "due": the deadline in structured form. NEVER compute a calendar date \
 yourself; describe what was said:
@@ -93,6 +92,12 @@ another item, another topic — is a new commitment even when it is worded \
 alike: "supersedes" null. "target_quote": when "supersedes" is \
 set, words copied from THAT commitment's "said" text in the record that show \
 which one it is; else null.
+
+conditionals — an offer owed only if a condition comes true: "если посылка не \
+придёт до пятницы, вернём деньги". A promise with no "if" is a commitment. \
+"quote": the whole offer; "condition": the condition copied from it ("если \
+посылка не придёт до пятницы"); "owner" and "action" as for a commitment; \
+"due_quote" and "due": the condition's deadline, in the same form, else null.
 
 resolved — the message says a listed commitment's action WAS DONE, in words \
 that name the deed: "the money arrived", "got the screenshot", "thanks for \
@@ -115,6 +120,11 @@ when the current message identifies the target itself. If a reply confirms \
 one of several things without saying which, propose a possible target for \
 review. Never extract facts, promises or other changes from context alone.
 
+condition_outcomes — the message says whether a listed conditional offer's \
+condition came true: "holds" ("посылка так и не пришла") or "failed" \
+("посылка пришла"). "id" is the offer; "target_quote" is copied from ITS \
+"said" text; "quote" is the words of the new message that say it.
+
 steps — a fix or diagnostic action that was suggested or tried. "outcome" is \
 "pending" unless this same message says whether it worked.
 step_outcomes — the message reports that a listed step "worked" or "failed".
@@ -122,7 +132,7 @@ step_outcomes — the message reports that a listed step "worked" or "failed".
 questions — the message asks something the other side must answer.
 answers — the message answers a listed open question. Use its id.
 
-Use only ids that appear in the record (C1, S1, Q1, ...).\
+Use only ids that appear in the record (C1, O1, S1, Q1, ...).\
 """
 
 
@@ -203,6 +213,17 @@ def render_card(
         lines.append(
             f"- {alias} [{c.owner.value}, {status_at(c, now).value}] {c.action}{due}{said}"
         )
+
+    offers = [k for k in card.conditionals if k.pending]
+    lines.append("Conditional offers:" if offers else "Conditional offers: none")
+    for number, k in enumerate(offers, 1):
+        alias = f"O{number}"
+        aliases[alias] = k.id
+        due = ""
+        if k.due is not None:
+            due = f" | condition due {k.due.deadline.due_at.astimezone(cal.tz):%Y-%m-%d %H:%M}"
+        lines.append(f'- {alias} [{k.owner.value}] {k.action} | condition: "{k.condition}"'
+                     f'{due} | said: "{k.source.quote}"')  # fmt: skip
 
     steps = list(enumerate(card.steps, 1))
     hidden_steps = 0

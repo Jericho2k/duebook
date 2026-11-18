@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import timedelta
 
 from duebook import Side, notices
-from duebook.bench import MAIN, Fate, Oracle, generate
+from duebook.bench import MAIN, SPLITS, Fate, Oracle, generate
 from duebook.bench.match import mentions, tokens
 from duebook.bench.result import (
     Dispute,
@@ -19,6 +19,7 @@ from duebook.bench.result import (
 )
 from duebook.bench.run import fold, refold, snapshots
 from duebook.bench.score import (
+    Counts,
     Score,
     Stage,
     alerted_at,
@@ -324,6 +325,36 @@ def test_promises_of_any_status_are_reported_with_their_source_message():
     snap = end_of(t)
     assert {p.seq for p in snap.promises} == {c.seq for c in t.gold.commitments}
     assert all(isinstance(p, Promise) for p in snap.promises)
+
+
+# ---------------------------------------------------- conditional offers ----
+
+OFFERS = SPLITS["dev6"].tickets()
+
+
+def test_an_offer_held_pending_after_its_condition_failed_is_in_the_wrong_state():
+    t = next(t for t in OFFERS if t.gold.conditionals[0].holds is False)
+    end = end_of(t)
+    assert score_snapshot(t, end).offer_states_right == 1
+    pending = tuple(replace(o, state="pending") for o in end.offers)
+    assert score_snapshot(t, replace(end, offers=pending)).offer_states_right == 0
+
+
+def test_an_offer_past_its_condition_with_nothing_said_must_raise_one_alert():
+    t = next(t for t in OFFERS if t.gold.conditionals[0].holds is None
+             and t.gold.conditionals[0].due_at <= t.end)  # fmt: skip
+    end = end_of(t)
+    assert score_snapshot(t, end).condition_alerts == Counts(1, 0, 0)
+    quiet = tuple(replace(o, alertable=False) for o in end.offers)
+    assert score_snapshot(t, replace(end, offers=quiet)).condition_alerts == Counts(0, 0, 1)
+
+
+def test_an_activated_offer_is_judged_as_an_offer_not_as_a_promise():
+    t = next(t for t in OFFERS if t.gold.conditionals[0].holds)
+    end = end_of(t)
+    assert any(p.activated_seq == t.gold.conditionals[0].settled_seq for p in end.promises)
+    s = score_snapshot(t, end)
+    assert s.commitments.fp == 0 and s.offer_states_right == s.offers.tp == 1
 
 
 # ------------------------------------------------ where a promise is lost ----

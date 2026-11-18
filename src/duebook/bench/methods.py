@@ -13,23 +13,23 @@ difference in the memory, not in the reader.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Protocol
 
 from ..card import Card
 from ..events import Event, MessagePosted
 from ..extract.cost import Usage
-from ..extract.extractor import Extraction, Extractor, JsonModel
+from ..extract.extractor import Extraction, Extractor, JsonModel, Reader, read_event
 from ..extract.prompt import Bound, build_messages
 from ..extract.verifier import verifying_reader
 from ..lifecycle import AlertPolicy
-from ..proposals import Proposal
+from ..proposals import AskQuestion, MakeCommitment, Proposal, RecordStep
 from ..store.codec import encode
 from ..temporal import WorkCalendar
 from .generate import SimTicket
 from .meter import Ledger, Meter, Tally
 from .result import Snapshot, checkpoints
-from .run import Replayed, fold, snapshots
+from .run import fold, snapshots
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,23 +108,29 @@ class EventMemory:
     recorded: dict[str, Recorded] | None = None
     #: Reads a message again, with reasoning, when ``model``'s answer is unreadable.
     escalation: JsonModel | None = None
+    #: Per ticket id, the messages read again live while the rest is replayed
+    #: from ``recorded``: a targeted re-extraction. Only these are verified.
+    reread: dict[str, frozenset[int]] | None = None
 
     def run(self, ticket: SimTicket) -> MethodRun:
         meter = Meter(self.model, self.ledger)
         sizes: list[list[int]] = []
+        escalation = Meter(self.escalation, self.ledger, meter.tally) if self.escalation else None
+        extractor = Extractor(meter, self.cal, bound=self.bound, escalation=escalation)
+        reread: list[list] = []
         if self.recorded is None:
-            escalation = (
-                Meter(self.escalation, self.ledger, meter.tally) if self.escalation else None
-            )
-            reader = _Sizing(Extractor(meter, self.cal, bound=self.bound, escalation=escalation),
-                             sizes)  # fmt: skip
+            reader = _Sizing(extractor, sizes)
             before = Recorded((), Usage(), Usage(), 0.0, 0.0, {})
         else:
             before = self.recorded[ticket.ticket_id]
             answers = {e.id: p for e, p in zip(ticket.events, before.proposals, strict=False)}
-            reader = Replayed(answers)
+            seqs = (self.reread or {}).get(ticket.ticket_id, frozenset())
+            reader = _Spliced(answers, extractor, seqs, reread)
         checker = Meter(self.verifier, self.ledger) if self.verifier is not None else None
-        if checker is not None:
+        if checker is not None and self.reread is not None:
+            # Only what is read now: a record's unverified closes stay as recorded.
+            reader.live = verifying_reader(reader.live, checker, self.cal)
+        elif checker is not None:
             reader = verifying_reader(reader, checker, self.cal)
         folded = fold(ticket, reader, [cp.seq for cp in checkpoints(ticket)], self.cal)
         snaps = snapshots(ticket, folded, self.policy)
@@ -156,12 +162,55 @@ class EventMemory:
             "providers": tally.providers,
             "extraction_usage": asdict(extraction),
         }
+        if self.reread is not None:
+            # (seq, what the record proposed, what the live read proposes).
+            detail["reread"] = reread
         if checker is not None:
             detail["verifier"] = {"usage": asdict(verifier), "usd": verifier.usd(),
                                   "seconds": verifying,
                                   "providers": checker.tally.providers,
                                   "cache_hits": checker.tally.cache_hits}  # fmt: skip
         return MethodRun.of(self.name, ticket, snaps, tally, failure, detail)
+
+
+@dataclass(slots=True)
+class _Spliced:
+    """Recorded proposals, except for the messages read again live."""
+
+    answers: dict[str, tuple[Proposal, ...]]
+    live: Reader
+    seqs: frozenset[int]
+    log: list[list]
+    #: Ids of items a live read made, by the id the record gave the same item.
+    moved: dict[str, str] = field(default_factory=dict)
+
+    def extract(self, card: Card, event: Event) -> Extraction:
+        return self.extract_with_context(card, event, None)
+
+    def extract_with_context(
+        self, card: Card, event: Event, previous: MessagePosted | None,
+    ) -> Extraction:
+        old = tuple(_retarget(p, self.moved) for p in self.answers.get(event.id, ()))
+        if event.seq not in self.seqs:
+            return Extraction(old)
+        new = read_event(self.live, card, event, previous)
+        self.log.append([event.seq, encode(list(old)), encode(list(new.proposals))])
+        # A later recorded close names an item by its place among the
+        # message's proposals; the live read may have put it elsewhere.
+        for kind in (MakeCommitment, RecordStep, AskQuestion):
+            before = [i for i, p in enumerate(old) if isinstance(p, kind)]
+            after = [i for i, p in enumerate(new.proposals) if isinstance(p, kind)]
+            pairs = zip(before, after, strict=False)
+            self.moved |= {f"{event.id}#{a}": f"{event.id}#{b}" for a, b in pairs}
+        return new
+
+
+_REFERENCES = ("commitment_id", "supersedes", "step_id", "question_id")
+
+
+def _retarget(p: Proposal, moved: dict[str, str]) -> Proposal:
+    changed = {f: moved[getattr(p, f)] for f in _REFERENCES if getattr(p, f, None) in moved}
+    return replace(p, **changed) if changed else p
 
 
 @dataclass(slots=True)

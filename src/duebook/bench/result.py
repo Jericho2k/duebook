@@ -67,6 +67,21 @@ class Promise:
     #: Messages that may have closed it, held back for a person to confirm.
     #: Only the event memory raises these; the promise is still open.
     suggested: tuple[int, ...] = ()
+    #: For a conditional offer that came true, the message that said so.
+    activated_seq: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Offer:
+    """A conditional offer the method holds (decision 0004), by the message it was made in."""
+
+    seq: int
+    #: "pending", "activated" or "lapsed".
+    state: str
+    #: When the condition is due.
+    due_at: datetime | None = None
+    #: False when the method would not alert on that deadline.
+    alertable: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +139,7 @@ class Snapshot:
     #: Set when the method could not answer at this checkpoint, or answered
     #: from a ticket it stopped reading early. Scored as it stands, reported.
     error: str | None = None
+    offers: tuple[Offer, ...] = ()
 
 
 def checkpoints(ticket: SimTicket) -> tuple[Checkpoint, ...]:
@@ -150,7 +166,7 @@ def from_card(
 ) -> Snapshot:
     """What the event memory holds: the card, read the way the handoff brief reads it.
 
-    A disputed slot is shown once, as a dispute, and not among current facts —
+    A disputed value is shown once, as a dispute, and not among current facts —
     the brief does the same, because a value one side contests is not a fact
     yet.
     """
@@ -174,16 +190,22 @@ def from_card(
             alertable=c.due is not None and c.due.confidence >= policy.min_confidence,
             closed_seq=closed_seq(c),
             suggested=tuple(s.source.seq for s in c.suggestions),
+            activated_seq=c.activated_by.seq if c.activated_by else None,
         )
         for c in card.commitments
     )
+    offers = tuple(
+        Offer(k.source.seq, k.state.value, k.due.deadline.due_at if k.due else None,
+              k.due is not None and k.due.confidence >= policy.min_confidence)
+        for k in card.conditionals
+    )  # fmt: skip
     facts_by_id = {f.id: f for f in card.facts}
     open_disputes = card.open_contradictions()
-    disputed = {c.slot for c in open_disputes}
+    disputed = {i for c in open_disputes for i in c.fact_ids}
     facts = tuple(
         FactItem(f.slot, f.value, f.source.seq)
         for f in card.current_facts()
-        if f.slot not in disputed
+        if f.id not in disputed
     )
     failed = tuple(
         FailedStep(s.action, s.source.seq, s.outcome_source.seq if s.outcome_source else None)
@@ -196,7 +218,7 @@ def from_card(
         disputes.append(
             Dispute(c.slot, tuple(f.value for f in sides), tuple(f.source.seq for f in sides))
         )
-    return Snapshot(checkpoint, promises, facts, failed, tuple(disputes), error)
+    return Snapshot(checkpoint, promises, facts, failed, tuple(disputes), error, offers)
 
 
 def snapshot_of(raw: dict) -> Snapshot:
@@ -206,7 +228,7 @@ def snapshot_of(raw: dict) -> Snapshot:
     promises = tuple(
         Promise(Side(p["side"]), p["seq"], p["action"], when(p["due_at"]),
                 PromiseStatus(p["status"]), p["alertable"], p.get("closed_seq"),
-                tuple(p.get("suggested", ())))
+                tuple(p.get("suggested", ())), p.get("activated_seq"))
         for p in raw["promises"]
     )  # fmt: skip
     return Snapshot(
@@ -216,4 +238,6 @@ def snapshot_of(raw: dict) -> Snapshot:
         tuple(FailedStep(**f) for f in raw["failed_steps"]),
         tuple(Dispute(d["topic"], tuple(d["values"]), tuple(d["seqs"])) for d in raw["disputes"]),
         raw["error"],
-    )
+        tuple(Offer(o["seq"], o["state"], when(o["due_at"]), o["alertable"])
+              for o in raw.get("offers", ())),
+    )  # fmt: skip

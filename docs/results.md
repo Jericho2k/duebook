@@ -1,9 +1,166 @@
 # Results: event memory against the baselines
 
-Eight rounds, run on 2026-11-17 and 18. Rounds 5 to 7 reuse the frozen
+Nine rounds, run on 2026-11-17 and 18. Rounds 5 to 7 reuse the frozen
 Round 4 comparison. Round 4 contains the original run on a fresh test split.
-Round 8 runs our method on a new, unseen split (`test4`). The earlier rounds
-follow in reverse order.
+Round 8 runs our method on a new, unseen split (`test4`). Round 9 is not a
+run: it replays Round 8's record and reads 297 chosen messages again. The
+earlier rounds follow in reverse order.
+
+## Round 9 — conditional offers, several orders, issue-summary noise
+
+**Method: replay plus targeted calls, not a full run.** The live budget was
+$0.10, and a full run costs $0.12-0.30 a split. So (1) Round 8's recorded
+proposals were folded again under the new rules at $0; (2) 284 chosen
+messages of `dev5` and `test4` were read again with the new prompt, each
+against the card the reducer rebuilds from the recorded proposals before it,
+and spliced into the record; every other message keeps Round 8's model
+output (4,519 of their 4,803 messages had no new read); (3) on `dev6`, a new split
+in template words, the 13 offer and outcome messages were read against the
+card the planted proposals build. **`test4` was seen once before**, in
+Round 8, so it is no longer unseen.
+
+On the spliced `test4` our method kept all 464 gold promises, including the
+one Round 8 lost silently. It made no false close, false alert or false
+dispute, recorded every conditional offer, and raised each condition-due
+alert the labels expect and no other. The 200-message control sample shows
+no promise or fact lost. Spent: $0.0599.
+
+### What changed
+
+1. **Conditional offers** ([decision 0004](decisions/0004-conditional-commitments.md),
+   accepted, option 3). An offer owed only if a condition comes true is a
+   `Conditional` on the card: pending and silent; one `condition_due` notice
+   through the outbox when its condition's deadline passes with nothing
+   recorded; *activated* into an ordinary commitment sourced from the offer
+   and the message that said the condition held; or *lapsed* under a close's
+   evidence rules, and not by the side that owes it or in words that agree
+   with the condition ("так и не пришла"). The brief lists pending offers.
+   The answer format gains `conditionals` and `condition_outcomes`; the
+   `offer.conditional` stopgap is gone from the prompt and the vocabulary.
+2. **Identifier slots hold a set** ([decision 0005](decisions/0005-identifier-facts.md),
+   accepted). `order.number`, `account.number`, `contract.number`,
+   `invoice.number` and `tracking.number` keep every value named; only a
+   negated value ("не 538916, а 538961") is a correction, disputed when it was
+   the other side's. Rule version 5 (migration 0009); older events replay as
+   they were decided.
+3. **Issue-summary noise** (prompt, one sentence): "Never restate a promise,
+   an offer or a status report as a fact." Of Round 8's 26 `issue.summary`
+   false disputes on `test4`, 22 rested on a fact beside a promise and 4
+   beside a status report.
+4. **Benchmark.** `main3`'s offer is labelled as an offer, not a fact (its
+   messages are unchanged and pinned). The scorer judges offers found, their
+   state and the condition-due alert. `main3` plants no activation or lapse,
+   so a `main4` profile adds the customer saying the condition held, failed,
+   or nothing; `dev6` (8 tickets, seed 6174, the first from 6161 with each
+   outcome at least twice) uses it. The runner's `--reread` reads listed
+   messages live inside a replay. The oracle scores 1.000 on every split.
+
+### Free replay ($0)
+
+Round 8's proposals, scored by the Round 9 scorer under rule version 4 and
+version 5. No proposal can create a conditional item, so offers are not
+measured here. [Replay](../results/round9/replay.json)
+
+| `test4` (`dev5`) | Rules v4 | Rules v5 (0005) |
+|---|---:|---:|
+| False disputes per ticket | 2.30 (1.75) | **1.30 (1.00)** |
+| Freshness error | 0.029 (0.000) | 0.027 (0.000) |
+| Fact recall | 0.921 (0.914) | **1.000 (0.978)** |
+| Gold promises lost | 1 (0) | 1 (0) |
+
+0005 removes all 20 `order.number` disputes on `test4` (6 on `dev5`) and
+shows the customer's order again. Round 8's own record reads 0.024 freshness
+and 0.914 fact recall on `test4`: the offer then counted as a fact.
+
+### Targeted re-extraction (live, then replay)
+
+| Messages read again | `dev5` | `test4` |
+|---|---:|---:|
+| Conditional offers | 8 | 20 |
+| Plain promises Round 8 filed as `offer.conditional` (incl. the 4 silent-loss cases) | 2 | 6 |
+| Messages where Round 8 added an `issue.summary` fact | 11 | 37 |
+| Control sample (random, `random.Random(9)`) | 61 | 139 |
+
+The control sample is 160 messages where the label or Round 8 had a
+proposal and 40 where neither had, drawn from both splits together.
+[`dev5`](../results/round9/dev5.json) · [`test4`](../results/round9/test4.json) ·
+[selection](../results/round9/reread.json)
+
+| Measure | Round 8, `test4` | **Round 9, `test4`** | **Round 9, `dev5`** |
+|---|---:|---:|---:|
+| Gold promises lost | 1 | **0** of 464 | 0 of 179 |
+| False closes / false alerts per ticket | 0.00 / 0.00 | 0.00 / 0.00 | 0.00 / 0.00 |
+| False disputes per ticket | 2.30 | **0.00** | 0.00 |
+| Dispute recall | 1.000 | 1.000 | 1.000 |
+| Fact recall / freshness error | 0.914 / 0.024 | 1.000 / 0.027 | 0.978 / 0.000 |
+| Conditional offers recorded at the end | 17 of 20 as a fact | **20 of 20** | 8 of 8 |
+| Offer state right, all checkpoints | — | 59 / 59 | 22 / 22 |
+| Condition-due alerts (right, false, missed) | — | **28, 0, 0** | 11, 0, 0 |
+| Commitment precision / recall | 0.996 / 0.998 | 0.996 / 1.000 | 0.994 / 1.000 |
+| Context-dependent / ambiguous / unrelated close | 20/20 each | 20/20 each | 8/8 each |
+
+- **Offers.** All 28 offers on `dev5` and `test4` were read as offers, each
+  with its condition's date ("до 24 января") as the condition's deadline, none
+  as a commitment; no other message produced an offer.
+- **The four silent-loss cases.** M0002 seq 23 "Начислим вам компенсацию
+  бонусами." is now a commitment; it was a fact. In M0012 (172), M0015 (78)
+  and M0017 (73) the plain promise is a commitment and nothing else, so the
+  earlier offer stays a pending offer. So do M0001 (30) and M0019 (65).
+- **Issue-summary noise.** None of the 20 messages after the first where
+  Round 8 added an `issue.summary` fact has one now. The customer's opening
+  "проблема с заказом" is still a fact in all 28 tickets.
+- **Control sample: no regression.** No promise and no fact the label holds
+  was lost in 200 messages. Lost were 6 facts that restated a promise or a
+  prediction ("refund.status: Возместим стоимость монтажа…", "payment.status:
+  Платёжная система обычно обновляет…"). Added: an `AnswerQuestion` beside
+  four short confirmations, and once the agent's second order number, now a
+  second value rather than a dispute. With 0 of 160 content-bearing messages
+  regressing, the rate could still be up to about 2% (95%, rule of three).
+- **Activation and lapse** (`dev6`, template words, [record](../results/round9/dev6.json)):
+  8 of 8 offers recorded with the condition's deadline, 2 of 2 activations
+  and 3 of 3 lapses read right, every offer state right at all 29
+  checkpoint judgements, and 5 of 5 condition-due alerts with none false.
+
+### What is wrong, and what was not checked
+
+- **Not a full run.** 4,519 of 4,803 `dev5` and `test4` messages carry Round
+  8's model output. The prompt's effect on them is estimated from the
+  control sample only.
+- **Activation and lapse were read on 5 messages**, written by templates, in
+  `dev6`. `main3` plants none, so `test4` and `dev5` measure offers and
+  condition-due alerts only. A lapse worded with a negation ("пришла, но
+  повторная не нужна") would be refused as agreeing with the condition: the
+  offer stays pending with a suggestion, which is safe but untested on real
+  phrasing.
+- **Freshness error 0.027 on `test4` is unchanged:** the same 7 presentations
+  of a contested device-model code filed under `delivery.status`. Nothing in
+  this round addresses it.
+- 0005's correction rule ("не X, а Y") is not planted by the benchmark; only
+  unit tests exercise it.
+- **Cost per message is not measured.** The 282 paid reads averaged $0.00017
+  a call, about twice Round 8's average; the chosen messages are not typical,
+  so this says little about a full run.
+- The splice first dropped one promise and mishandled two on `dev5`: a
+  re-read message put its promise at another place among its proposals, and
+  a later recorded close named the old place. The runner now follows the
+  item; the numbers above are after the fix.
+
+**Spend: $0.0599 of the $0.10 cap.** $0.0005 for a 2-message smoke test,
+$0.0144 for `dev5`, $0.0013 to read again the `dev5` messages whose card
+changed with the splice fix, $0.0346 for `test4`, and $0.0090 for `dev6`, of
+which about $0.0068 went to the verifier on the planted closes (a runner
+bug, fixed). Every later run came from the response cache at $0.
+[Spend log](../results/round9/spend.jsonl)
+
+```bash
+python -m duebook.bench.experiment --split test4 --methods event_memory \
+    --replay results/round8/test4.json --reread results/round9/reread.json \
+    --max-usd 0.06 --session-cap 0.10 --results results/round9 --out /tmp/test4.json
+python -m duebook.bench.experiment --split dev6 --template --methods event_memory \
+    --replay oracle --projection-from results/round8/dev5.json \
+    --reread results/round9/reread-dev6.json --max-usd 0.01 --results results/round9 \
+    --out /tmp/dev6.json
+```
 
 ## Round 8 — promise identity, what counts as a promise, and an unseen test
 

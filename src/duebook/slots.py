@@ -1,6 +1,7 @@
 """Fact slots: one name for one thing.
 
-The card keeps one current value per slot, and every rule about facts —
+The card keeps one current value per slot (a set, for an identifier such as
+an order number: decision 0005), and every rule about facts —
 supersession, contradiction, settlement — is decided by comparing slots. That
 only works if the same thing always gets the same slot. In live runs it did
 not: the model filed a refund under ``order.refund`` in one message and under
@@ -41,6 +42,10 @@ FILLER = frozenset({"status", "state", "current", "info", "value", "details"})
 CANONICAL: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         "order.number": ("order.id", "order.no", "order.num"),
+        "account.number": ("account.id", "account.no", "account.login"),
+        "contract.number": ("contract", "contract.id", "contract.no"),
+        "invoice.number": ("invoice", "invoice.id", "invoice.no"),
+        "tracking.number": ("tracking", "tracking.id", "track.number", "delivery.tracking"),
         "order.status": (),
         "order.amount": ("order.total", "order.sum", "order.price", "order.cost"),
         "payment.status": ("order.payment", "order.payment_status"),
@@ -61,10 +66,13 @@ CANONICAL: Mapping[str, tuple[str, ...]] = MappingProxyType(
                          "goods.model"),
         "app.version": ("version", "app.build"),
         "issue.summary": ("issue", "problem", "issue.description", "problem.description"),
-        # A conditional offer is not yet owed (decision 0004); kept where people see it.
-        "offer.conditional": ("offer", "conditional_offer", "offer.condition"),
     }
 )  # fmt: skip
+
+#: Slots that name one object among several a ticket can concern: they hold a set
+#: of current values, so a second order is not a dispute (decision 0005).
+IDENTIFIERS = frozenset({"order.number", "account.number", "contract.number", "invoice.number",
+                         "tracking.number"})  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +81,7 @@ class Vocabulary:
 
     canonical: Mapping[str, tuple[str, ...]] = field(default_factory=lambda: CANONICAL)
     filler: frozenset[str] = FILLER
+    identifiers: frozenset[str] = IDENTIFIERS
     _alias: dict[str, str] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:

@@ -1,0 +1,6209 @@
+{
+ "what": "Round 9 on test4: a targeted re-extraction plus replay. The listed messages were read live with the Round 9 prompt against the card the replay rebuilds; every other message keeps Round 8's recorded proposals (results/round8/test4.json). Not a full run.",
+ "messages_read": 202,
+ "by_reason": {
+  "issue.summary fact": 37,
+  "control": 139,
+  "conditional offer": 20,
+  "filed as offer.conditional": 6,
+  "round 8 silent loss": 4
+ },
+ "charged_usd": "see spend.jsonl",
+ "event_memory": {
+  "metrics": {
+   "commitment_precision": 0.9957,
+   "commitment_recall": 1.0,
+   "commitment_f1": 0.9978,
+   "status_accuracy": 1.0,
+   "deadline_accuracy": 1.0,
+   "breach_alert_precision": 1.0,
+   "breach_alert_recall": 1.0,
+   "false_alerts_per_ticket": 0.0,
+   "false_closes_per_ticket": 0.0,
+   "false_closes_any_checkpoint": 0.0,
+   "false_disputes_per_ticket": 0.0,
+   "dispute_recall": 1.0,
+   "freshness_error": 0.0268,
+   "fact_recall": 1.0,
+   "failed_step_precision": 1.0,
+   "failed_step_recall": 1.0,
+   "offer_recall": 1.0,
+   "offer_state_accuracy": 1.0,
+   "condition_alert_recall": 1.0,
+   "false_condition_alerts_per_ticket": 0.0,
+   "rescue_close_correct": 1.0,
+   "ambiguous_close_refrained": 1.0,
+   "wrong_thing_not_closed": 1.0
+  },
+  "counts_all_checkpoints": {
+   "commitments": [
+    1470,
+    4,
+    0
+   ],
+   "alerts": [
+    378,
+    0,
+    0
+   ],
+   "disputes": [
+    110,
+    0,
+    0
+   ],
+   "facts_stale": 0,
+   "facts_contested": 7,
+   "facts_judged": 261,
+   "facts_current": 254,
+   "facts_recalled": 254,
+   "offers": [
+    59,
+    0,
+    0
+   ],
+   "offer_states_right": 59,
+   "offer_states_judged": 59,
+   "condition_alerts": [
+    28,
+    0,
+    0
+   ]
+  },
+  "promise_stages": {
+   "right": 464
+  },
+  "beats": {
+   "delegated_undated": {
+    "right": 24
+   },
+   "conditional": {
+    "no_promise": 20,
+    "offer_recorded": 20
+   },
+   "same_action": {
+    "right": 40
+   },
+   "prediction": {
+    "no_promise": 20
+   },
+   "status_report": {
+    "no_promise": 20
+   },
+   "delegated_dated": {
+    "right": 16
+   }
+  }
+ },
+ "messages": [
+  {
+   "ticket": "SIM-5353-M0000",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! У меня проблема с заказом 963515.",
+   "gold": [
+    "fact order.number: 963515"
+   ],
+   "round8": [
+    "fact order.number: 963515",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 963515",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "963515",
+     "quote": "заказом 963515",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "У меня проблема с заказом 963515",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0000",
+   "seq": 16,
+   "why": [
+    "control"
+   ],
+   "text": "Привет! Есть уже какие-то новости?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Есть уже какие-то новости?"
+   ],
+   "round9": [
+    "AskQuestion: Есть уже какие-то новости?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Есть уже какие-то новости?",
+     "quote": "Есть уже какие-то новости?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0000",
+   "seq": 61,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если посылка не придёт до 24 января, оформим повторную отправку бесплатно",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 24 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если посылка не придёт до 24 января, оформим повторную отправку бесплатно"
+   ],
+   "round9": [
+    "offer company: оформить повторную отправку бесплатно | Если посылка не придёт до 24 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если посылка не придёт до 24 января, оформим повторную отправку бесплатно"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку бесплатно",
+     "quote": "Если посылка не придёт до 24 января, оформим повторную отправку бесплатно",
+     "condition": "Если посылка не придёт до 24 января",
+     "due": {
+      "type": "DateRef",
+      "day": 24,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 24 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0000",
+   "seq": 68,
+   "why": [
+    "control"
+   ],
+   "text": "Проверьте, пожалуйста, поступило ли возмещение стоимости сборки. По другой позиции ещё уточняем.",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Проверьте, пожалуйста, поступило ли возмещение стоимости сборки."
+   ],
+   "round9": [
+    "AskQuestion: Проверьте, пожалуйста, поступило ли возмещение стоимости сборки."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Проверьте, пожалуйста, поступило ли возмещение стоимости сборки.",
+     "quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости сборки."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0000",
+   "seq": 119,
+   "why": [
+    "control"
+   ],
+   "text": "Хорошо, благодарю за ответ.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте, у меня возникла проблема с заказом 302065.",
+   "gold": [
+    "fact order.number: 302065"
+   ],
+   "round8": [
+    "fact order.number: 302065",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 302065",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "302065",
+     "quote": "заказом 302065",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня возникла проблема с заказом 302065",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 20,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Пока новой информации, к сожалению, нет.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 30,
+   "why": [
+    "filed as offer.conditional"
+   ],
+   "text": "Начислим вам компенсацию бонусами до 21 января.",
+   "gold": [
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "round8": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами до 21 января",
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "round9": [
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "lost": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами до 21 января"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "начислить компенсацию бонусами",
+     "quote": "Начислим вам компенсацию бонусами до 21 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 21,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 21 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 37,
+   "why": [
+    "control"
+   ],
+   "text": "Да, конечно, обращайтесь 🙂",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 69,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Восстановим доступ к рабочему пространству Дельта в течение 5 рабочих дней.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Дельта",
+    "promise company: восстановить доступ к рабочему пространству Дельта"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Дельта"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Дельта"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Дельта",
+     "quote": "Восстановим доступ к рабочему пространству Дельта в течение 5 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 5,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 5 рабочих дней",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 93,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если ремонт не закончат до 24 января, выдадим вам подменный аппарат.",
+   "gold": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 24 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если ремонт не закончат до 24 января, выдадим вам подменный аппарат."
+   ],
+   "round9": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 24 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если ремонт не закончат до 24 января, выдадим вам подменный аппарат."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "выдать подменный аппарат",
+     "quote": "Если ремонт не закончат до 24 января, выдадим вам подменный аппарат.",
+     "condition": "Если ремонт не закончат до 24 января",
+     "due": {
+      "type": "DateRef",
+      "day": 24,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 24 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 98,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: есть ли какое-то продвижение по моей заявке?"
+   ],
+   "round9": [
+    "AskQuestion: есть ли какое-то продвижение по моей заявке?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "есть ли какое-то продвижение по моей заявке?",
+     "quote": "есть ли какое-то продвижение по моей заявке?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 104,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Видим ваше сообщение.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 108,
+   "why": [
+    "control"
+   ],
+   "text": "Одно уже получила, спасибо.",
+   "gold": [],
+   "round8": [
+    "ResolveCommitment: Одно уже получила",
+    "ResolveCommitment: Одно уже получила"
+   ],
+   "round9": [
+    "AnswerQuestion: Одно уже получила",
+    "ResolveCommitment: Одно уже получила"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AnswerQuestion",
+     "question_id": "e107#0",
+     "quote": "Одно уже получила"
+    },
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e103#0",
+     "quote": "Одно уже получила",
+     "target_quote": "Вышлем вам паспорт изделия",
+     "verification": {
+      "type": "Verification",
+      "verdict": "unsure",
+      "evidence_quote": "",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Напишите, пожалуйста, какое получите первым."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 121,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Ну что там по моему вопросу?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Ну что там по моему вопросу?"
+   ],
+   "round9": [
+    "AskQuestion: Ну что там по моему вопросу?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Ну что там по моему вопросу?",
+     "quote": "Ну что там по моему вопросу?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0001",
+   "seq": 139,
+   "why": [
+    "control"
+   ],
+   "text": "Мне обещали прислать акт сверки, срок прошёл. Что происходит?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Что происходит?"
+   ],
+   "round9": [
+    "AskQuestion: Что происходит?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Что происходит?",
+     "quote": "Что происходит?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте, у меня тут проблема возникла с заказом 387375.",
+   "gold": [
+    "fact order.number: 387375"
+   ],
+   "round8": [
+    "fact order.number: 387375",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 387375",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "387375",
+     "quote": "заказом 387375",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня тут проблема возникла с заказом 387375",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 15,
+   "why": [
+    "control"
+   ],
+   "text": "Курьер заберёт товар через неделю.",
+   "gold": [
+    "promise company: забрать товар курьером"
+   ],
+   "round8": [
+    "promise company: забрать товар по заказу 387375 курьером"
+   ],
+   "round9": [
+    "promise company: забрать товар по заказу 387375 курьером"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "забрать товар по заказу 387375 курьером",
+     "quote": "Курьер заберёт товар через неделю.",
+     "due": {
+      "type": "Offset",
+      "amount": 1,
+      "unit": "week"
+     },
+     "due_quote": "через неделю",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 17,
+   "why": [
+    "control"
+   ],
+   "text": "Хорошо, спасибо, всё поняла.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 23,
+   "why": [
+    "round 8 silent loss",
+    "filed as offer.conditional"
+   ],
+   "text": "Начислим вам компенсацию бонусами.",
+   "gold": [
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "round8": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами."
+   ],
+   "round9": [
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "lost": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "начислить компенсацию бонусами",
+     "quote": "Начислим вам компенсацию бонусами.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 85,
+   "why": [
+    "control"
+   ],
+   "text": "Пришлём исправленный счёт до 29 января.",
+   "gold": [
+    "promise company: прислать исправленный счёт"
+   ],
+   "round8": [
+    "promise company: прислать клиенту исправленный счёт"
+   ],
+   "round9": [
+    "promise company: прислать исправленный счёт"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "прислать исправленный счёт",
+     "quote": "Пришлём исправленный счёт до 29 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 29,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 29 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 112,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, как там ситуация с моим вопросом?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, как там ситуация с моим вопросом?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, как там ситуация с моим вопросом?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, как там ситуация с моим вопросом?",
+     "quote": "Подскажите, пожалуйста, как там ситуация с моим вопросом?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 118,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если посылка не придёт до 25 января, оформим повторную отправку бесплатно.",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 25 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если посылка не придёт до 25 января, оформим повторную отправку бесплатно."
+   ],
+   "round9": [
+    "offer company: оформить повторную отправку бесплатно | Если посылка не придёт до 25 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если посылка не придёт до 25 января, оформим повторную отправку бесплатно."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку бесплатно",
+     "quote": "Если посылка не придёт до 25 января, оформим повторную отправку бесплатно.",
+     "condition": "Если посылка не придёт до 25 января",
+     "due": {
+      "type": "DateRef",
+      "day": 25,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 25 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 130,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какие-нибудь новости по моей заявке?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какие-нибудь новости по моей заявке?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какие-нибудь новости по моей заявке?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, есть ли какие-нибудь новости по моей заявке?",
+     "quote": "Подскажите, пожалуйста, есть ли какие-нибудь новости по моей заявке?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 131,
+   "why": [
+    "control"
+   ],
+   "text": "Мне обещали, что подключитесь удалённо к компьютеру, но срок уже давно прошёл. Когда это будет?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Когда это будет?"
+   ],
+   "round9": [
+    "AskQuestion: Когда это будет?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Когда это будет?",
+     "quote": "Когда это будет?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0002",
+   "seq": 155,
+   "why": [
+    "control"
+   ],
+   "text": "Подскажите, есть ли какие-то продвижения по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, есть ли какие-то продвижения по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, есть ли какие-то продвижения по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, есть ли какие-то продвижения по моему обращению?",
+     "quote": "Подскажите, есть ли какие-то продвижения по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Привет, у меня тут проблема с заказом 764843.",
+   "gold": [
+    "fact order.number: 764843"
+   ],
+   "round8": [
+    "fact order.number: 764843",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 764843",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "764843",
+     "quote": "заказом 764843",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня тут проблема с заказом 764843",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 9,
+   "why": [
+    "control"
+   ],
+   "text": "Ясно, спасибо, поняла.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 64,
+   "why": [
+    "control"
+   ],
+   "text": "Ответ про склад получила, спасибо!",
+   "gold": [
+    "ResolveCommitment: Ответ про склад получила, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Ответ про склад получила"
+   ],
+   "round9": [
+    "ResolveCommitment: Ответ про склад получила"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e40#0",
+     "quote": "Ответ про склад получила",
+     "target_quote": "Уточню на складе и напишу вам в течение 3 рабочих дней",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Ответ про склад получила",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 79,
+   "why": [
+    "control"
+   ],
+   "text": "Пришлю скриншот ошибки завтра до 15:00.",
+   "gold": [
+    "promise customer: прислать скриншот ошибки"
+   ],
+   "round8": [
+    "promise customer: прислать скриншот ошибки"
+   ],
+   "round9": [
+    "promise customer: прислать скриншот ошибки"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "customer",
+     "action": "прислать скриншот ошибки",
+     "quote": "Пришлю скриншот ошибки завтра до 15:00.",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 1,
+      "at": "15:00:00"
+     },
+     "due_quote": "завтра до 15:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 80,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если промокод не сработает до 22 января, начислим вам бонусы взамен.",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 22 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 22 января, начислим вам бонусы взамен."
+   ],
+   "round9": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 22 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 22 января, начислим вам бонусы взамен."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 22 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 22 января",
+     "due": {
+      "type": "DateRef",
+      "day": 22,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 22 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 102,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какие-то новости по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какие-то новости по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какие-то новости по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, есть ли какие-то новости по моему обращению?",
+     "quote": "Подскажите, пожалуйста, есть ли какие-то новости по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 111,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Добрый день! Восстановим доступ к рабочему пространству Альфа до пятницы.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Альфа до пятницы.",
+    "promise company: восстановить доступ к рабочему пространству Альфа"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Альфа"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Альфа до пятницы."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Альфа",
+     "quote": "Восстановим доступ к рабочему пространству Альфа до пятницы.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 4,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до пятницы",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 136,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Восстановим доступ к личному кабинету.",
+   "gold": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к личному кабинету.",
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к личному кабинету."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 141,
+   "why": [
+    "control"
+   ],
+   "text": "Срок давно прошёл, а мне обещали перезвонить насчёт гарантии. Когда?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Когда?"
+   ],
+   "round9": [
+    "AskQuestion: Когда?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Когда?",
+     "quote": "Когда?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 163,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Ваша заявка сейчас на рассмотрении.",
+   "gold": [],
+   "round8": [
+    "fact issue.summary: заявка сейчас на рассмотрении"
+   ],
+   "round9": [],
+   "lost": [
+    "fact issue.summary: заявка сейчас на рассмотрении"
+   ],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 165,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Ваш запрос принят в работу, мы над ним сейчас трудимся.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 186,
+   "why": [
+    "control"
+   ],
+   "text": "Привет! Подскажите, есть ли какие-то новости по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, есть ли какие-то новости по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, есть ли какие-то новости по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, есть ли какие-то новости по моему обращению?",
+     "quote": "Подскажите, есть ли какие-то новости по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 202,
+   "why": [
+    "control"
+   ],
+   "text": "Срок давно прошёл, а мне обещали забрать документы курьером. Когда?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Когда?"
+   ],
+   "round9": [
+    "AskQuestion: Когда?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Когда?",
+     "quote": "Когда?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0003",
+   "seq": 204,
+   "why": [
+    "control"
+   ],
+   "text": "Срок давно прошёл, а мне обещали прислать акт сверки. Когда?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Когда?"
+   ],
+   "round9": [
+    "AskQuestion: Когда?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Когда?",
+     "quote": "Когда?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0004",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Привет! У меня тут возникла проблема с заказом 589363.",
+   "gold": [
+    "fact order.number: 589363"
+   ],
+   "round8": [
+    "fact order.number: 589363",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 589363",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "589363",
+     "quote": "заказом 589363",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "возникла проблема с заказом 589363",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0004",
+   "seq": 17,
+   "why": [
+    "control"
+   ],
+   "text": "Я перезвоню вам сегодня до 18:00",
+   "gold": [
+    "promise company: перезвонить"
+   ],
+   "round8": [
+    "promise company: перезвонить клиенту по заказу 589363"
+   ],
+   "round9": [
+    "promise company: перезвонить клиенту по заказу 589363"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "перезвонить клиенту по заказу 589363",
+     "quote": "Я перезвоню вам сегодня до 18:00",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 0,
+      "at": "18:00:00"
+     },
+     "due_quote": "сегодня до 18:00",
+     "supersedes": "e3#0",
+     "target_quote": "Я свяжусь с вами по телефону до 12 января.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Я перезвоню вам сегодня до 18:00",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     }
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0004",
+   "seq": 70,
+   "why": [
+    "control"
+   ],
+   "text": "Спасибо, что написали нам.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0004",
+   "seq": 115,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если промокод не сработает до 25 января, начислим вам бонусы взамен.",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 25 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 25 января, начислим вам бонусы взамен."
+   ],
+   "round9": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 25 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 25 января, начислим вам бонусы взамен."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 25 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 25 января",
+     "due": {
+      "type": "DateRef",
+      "day": 25,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 25 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0004",
+   "seq": 135,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, есть ли какие-то новости по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, есть ли какие-то новости по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, есть ли какие-то новости по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, есть ли какие-то новости по моему обращению?",
+     "quote": "Подскажите, есть ли какие-то новости по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0005",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! У меня проблема с заказом 196303.",
+   "gold": [
+    "fact order.number: 196303"
+   ],
+   "round8": [
+    "fact order.number: 196303",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 196303",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "196303",
+     "quote": "заказом 196303",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "У меня проблема с заказом 196303",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0005",
+   "seq": 27,
+   "why": [
+    "control"
+   ],
+   "text": "Отправим вам замену до пятницы.",
+   "gold": [
+    "promise company: отправить замену"
+   ],
+   "round8": [
+    "promise company: отправить клиенту замену"
+   ],
+   "round9": [
+    "promise company: отправить клиенту замену"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "отправить клиенту замену",
+     "quote": "Отправим вам замену до пятницы.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 4,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до пятницы",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0005",
+   "seq": 28,
+   "why": [
+    "control"
+   ],
+   "text": "Начислим вам компенсацию бонусами.",
+   "gold": [
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "round8": [
+    "promise company: начислить клиенту компенсацию бонусами"
+   ],
+   "round9": [
+    "promise company: начислить клиенту компенсацию бонусами"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "начислить клиенту компенсацию бонусами",
+     "quote": "Начислим вам компенсацию бонусами.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0005",
+   "seq": 67,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если промокод не сработает до 22 января, начислим вам бонусы взамен.",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 22 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 22 января, начислим вам бонусы взамен."
+   ],
+   "round9": [
+    "offer company: начислить клиенту бонусы взамен промокода | Если промокод не сработает до 22 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 22 января, начислим вам бонусы взамен."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить клиенту бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 22 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 22 января",
+     "due": {
+      "type": "DateRef",
+      "day": 22,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 22 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0005",
+   "seq": 80,
+   "why": [
+    "control"
+   ],
+   "text": "Спасибо, что обратились к нам!",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0005",
+   "seq": 166,
+   "why": [
+    "control"
+   ],
+   "text": "Попробуйте очистить кэш браузера. Помогло?",
+   "gold": [
+    "RecordStep: Попробуйте очистить кэш браузера",
+    "AskQuestion: Помогло?"
+   ],
+   "round8": [
+    "RecordStep: Попробуйте очистить кэш браузера.",
+    "AskQuestion: Помогло?"
+   ],
+   "round9": [
+    "RecordStep: Попробуйте очистить кэш браузера.",
+    "AskQuestion: Помогло?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "RecordStep",
+     "action": "очистить кэш браузера",
+     "quote": "Попробуйте очистить кэш браузера.",
+     "outcome": "pending"
+    },
+    {
+     "type": "AskQuestion",
+     "text": "Помогло?",
+     "quote": "Помогло?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0005",
+   "seq": 196,
+   "why": [
+    "control"
+   ],
+   "text": "Ага, ясно, спасибо.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Добрый день! У меня возникла проблема с заказом 897561.",
+   "gold": [
+    "fact order.number: 897561"
+   ],
+   "round8": [
+    "fact order.number: 897561",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 897561",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "897561",
+     "quote": "заказом 897561",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "возникла проблема с заказом 897561",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 11,
+   "why": [
+    "control"
+   ],
+   "text": "Добрый день. Что там с моим вопросом?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Что там с моим вопросом?"
+   ],
+   "round9": [
+    "AskQuestion: Что там с моим вопросом?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Что там с моим вопросом?",
+     "quote": "Что там с моим вопросом?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 18,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Восстановим доступ к рабочему пространству Гамма в течение 5 рабочих дней.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Гамма",
+    "promise company: восстановить доступ к рабочему пространству Гамма"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Гамма"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Гамма"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Гамма",
+     "quote": "Восстановим доступ к рабочему пространству Гамма в течение 5 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 5,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 5 рабочих дней",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 20,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Восстановим доступ к рабочему пространству Бета в течение 3 рабочих дней.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Бета в течение 3 рабочих дней",
+    "promise company: восстановить доступ к рабочему пространству Бета"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Бета"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Бета в течение 3 рабочих дней"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Бета",
+     "quote": "Восстановим доступ к рабочему пространству Бета в течение 3 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 3,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 3 рабочих дней",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 25,
+   "why": [
+    "control"
+   ],
+   "text": "Ага, вижу.",
+   "gold": [
+    "ResolveCommitment: Ага, вижу."
+   ],
+   "round8": [
+    "ResolveCommitment: Ага, вижу."
+   ],
+   "round9": [
+    "AnswerQuestion: Ага, вижу.",
+    "ResolveCommitment: Ага, вижу."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AnswerQuestion",
+     "question_id": "e24#0",
+     "quote": "Ага, вижу."
+    },
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e23#1",
+     "quote": "Ага, вижу.",
+     "target_quote": "Возместим стоимость упаковки до 19 января",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Ага, вижу.",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости упаковки."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 31,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Я до сих пор жду ответа.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 32,
+   "why": [
+    "control"
+   ],
+   "text": "Ваш тариф изменён — теперь вы на тариф Премиум.",
+   "gold": [
+    "fact account.plan: Премиум"
+   ],
+   "round8": [
+    "fact account.plan: Премиум"
+   ],
+   "round9": [
+    "fact account.plan: Премиум"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "account.plan",
+     "value": "Премиум",
+     "quote": "теперь вы на тариф Премиум",
+     "change": true
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 48,
+   "why": [
+    "control"
+   ],
+   "text": "Доступ к пространству Бета появился, спасибо! Всё открывается.",
+   "gold": [
+    "ResolveCommitment: Доступ к пространству Бета появился, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Доступ к пространству Бета появился"
+   ],
+   "round9": [
+    "ResolveCommitment: Доступ к пространству Бета появился"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e20#0",
+     "quote": "Доступ к пространству Бета появился",
+     "target_quote": "Восстановим доступ к рабочему пространству Бета в течение 3 рабочих дней.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Доступ к пространству Бета появился, спасибо! Всё открывается.",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 52,
+   "why": [
+    "control"
+   ],
+   "text": "Вышлем вам трек-номер посылки до конца недели",
+   "gold": [
+    "promise company: выслать трек-номер"
+   ],
+   "round8": [
+    "promise company: выслать клиенту трек-номер посылки"
+   ],
+   "round9": [
+    "promise company: выслать трек-номер посылки"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выслать трек-номер посылки",
+     "quote": "Вышлем вам трек-номер посылки до конца недели",
+     "due": {
+      "type": "PeriodEnd",
+      "period": "week"
+     },
+     "due_quote": "до конца недели",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 127,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Я сменила место жительства, теперь доставка должна идти на новый адрес — ул. Лесная, 61.",
+   "gold": [
+    "fact delivery.address: ул. Лесная, 61"
+   ],
+   "round8": [
+    "fact delivery.address: ул. Лесная, 61"
+   ],
+   "round9": [
+    "fact delivery.address: ул. Лесная, 61"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.address",
+     "value": "ул. Лесная, 61",
+     "quote": "теперь доставка должна идти на новый адрес — ул. Лесная, 61",
+     "change": true
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 149,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Восстановим доступ к личному кабинету до конца дня. Спасибо за ожидание!",
+   "gold": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к личному кабинету до конца дня",
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к личному кабинету до конца дня"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету до конца дня.",
+     "due": {
+      "type": "PeriodEnd",
+      "period": "day"
+     },
+     "due_quote": "до конца дня",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 161,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если промокод не сработает до 30 января, начислим вам бонусы взамен.",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 30 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 30 января, начислим вам бонусы взамен."
+   ],
+   "round9": [
+    "offer company: начислить клиенту бонусы взамен промокода | Если промокод не сработает до 30 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 30 января, начислим вам бонусы взамен."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить клиенту бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 30 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 30 января",
+     "due": {
+      "type": "DateRef",
+      "day": 30,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 30 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0006",
+   "seq": 163,
+   "why": [
+    "control"
+   ],
+   "text": "Приносим извинения за ожидание.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Привет, у меня тут проблема возникла с заказом 465399.",
+   "gold": [
+    "fact order.number: 465399"
+   ],
+   "round8": [
+    "fact order.number: 465399",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 465399",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "465399",
+     "quote": "заказом 465399",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня тут проблема возникла с заказом 465399",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 18,
+   "why": [
+    "control"
+   ],
+   "text": "Дежурный инженер подключится к вашему компьютеру удалённо через 3 часа.",
+   "gold": [
+    "promise company: удалённо подключиться к компьютеру"
+   ],
+   "round8": [
+    "promise company: подключиться к компьютеру клиента удалённо"
+   ],
+   "round9": [
+    "promise company: подключиться к компьютеру клиента удалённо"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "подключиться к компьютеру клиента удалённо",
+     "quote": "Дежурный инженер подключится к вашему компьютеру удалённо через 3 часа.",
+     "due": {
+      "type": "Offset",
+      "amount": 3,
+      "unit": "hour"
+     },
+     "due_quote": "через 3 часа",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 29,
+   "why": [
+    "control"
+   ],
+   "text": "Добрый день! Возместим стоимость упаковки до 16 января.",
+   "gold": [
+    "promise company: возместить стоимость упаковки"
+   ],
+   "round8": [
+    "fact refund.status: Возместим стоимость упаковки до 16 января",
+    "promise company: возместить стоимость упаковки"
+   ],
+   "round9": [
+    "promise company: возместить стоимость упаковки"
+   ],
+   "lost": [
+    "fact refund.status: Возместим стоимость упаковки до 16 января"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "возместить стоимость упаковки",
+     "quote": "Возместим стоимость упаковки до 16 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 16,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 16 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 65,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Восстановим доступ к рабочему пространству Дельта завтра до 15:00.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Дельта завтра до 15:00",
+    "promise company: восстановить доступ к рабочему пространству Дельта"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Дельта"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Дельта завтра до 15:00"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Дельта",
+     "quote": "Восстановим доступ к рабочему пространству Дельта завтра до 15:00.",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 1,
+      "at": "15:00:00"
+     },
+     "due_quote": "завтра до 15:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 68,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если ремонт не закончат до 21 января, выдадим вам подменный аппарат.",
+   "gold": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 21 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если ремонт не закончат до 21 января, выдадим вам подменный аппарат."
+   ],
+   "round9": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 21 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если ремонт не закончат до 21 января, выдадим вам подменный аппарат."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "выдать подменный аппарат",
+     "quote": "Если ремонт не закончат до 21 января, выдадим вам подменный аппарат.",
+     "condition": "Если ремонт не закончат до 21 января",
+     "due": {
+      "type": "DateRef",
+      "day": 21,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 21 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 96,
+   "why": [
+    "control"
+   ],
+   "text": "Перезашла в приложение — не помогло.",
+   "gold": [
+    "SetStepOutcome: не помогло"
+   ],
+   "round8": [
+    "SetStepOutcome: Перезашла в приложение — не помогло.",
+    "AnswerQuestion: Перезашла в приложение — не помогло."
+   ],
+   "round9": [
+    "SetStepOutcome: Перезашла в приложение — не помогло.",
+    "AnswerQuestion: Перезашла в приложение — не помогло."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e95#0",
+     "outcome": "failed",
+     "quote": "Перезашла в приложение — не помогло."
+    },
+    {
+     "type": "AnswerQuestion",
+     "question_id": "e67#1",
+     "quote": "Перезашла в приложение — не помогло."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 97,
+   "why": [
+    "control"
+   ],
+   "text": "Фото чека получили, спасибо!",
+   "gold": [
+    "ResolveCommitment: Фото чека получили, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Фото чека получили"
+   ],
+   "round9": [
+    "ResolveCommitment: Фото чека получили"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e92#0",
+     "quote": "Фото чека получили",
+     "target_quote": "Пришлю фото чека сегодня до 18:00",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Фото чека получили, спасибо!",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 101,
+   "why": [
+    "control"
+   ],
+   "text": "Пожалуйста, обращайтесь.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0007",
+   "seq": 142,
+   "why": [
+    "control"
+   ],
+   "text": "К сожалению, в срок мы не укладываемся. Курьер заберёт товар через неделю.",
+   "gold": [
+    "promise company: забрать товар курьером"
+   ],
+   "round8": [
+    "promise company: забрать товар курьером"
+   ],
+   "round9": [
+    "promise company: забрать товар курьером"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "забрать товар курьером",
+     "quote": "Курьер заберёт товар через неделю.",
+     "due": {
+      "type": "Offset",
+      "amount": 1,
+      "unit": "week"
+     },
+     "due_quote": "через неделю",
+     "supersedes": "e71#0",
+     "target_quote": "Курьер заберёт товар до пятницы.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Курьер заберёт товар через неделю.",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     }
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Добрый день! Подскажите, пожалуйста, у меня возникла проблема с заказом 315449.",
+   "gold": [
+    "fact order.number: 315449"
+   ],
+   "round8": [
+    "fact order.number: 315449",
+    "fact issue.summary: проблема с заказом",
+    "AskQuestion: Подскажите, пожалуйста, у меня возникла проблема с заказом 315449."
+   ],
+   "round9": [
+    "fact order.number: 315449",
+    "fact issue.summary: проблема с заказом",
+    "AskQuestion: Подскажите, пожалуйста, у меня возникла проблема с заказом 315449."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "315449",
+     "quote": "заказом 315449",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "возникла проблема с заказом 315449",
+     "change": false
+    },
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, у меня возникла проблема с заказом 315449.",
+     "quote": "Подскажите, пожалуйста, у меня возникла проблема с заказом 315449."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 19,
+   "why": [
+    "control"
+   ],
+   "text": "Наши инженеры выпустят исправление для приложения.",
+   "gold": [
+    "promise company: выпустить исправление для приложения"
+   ],
+   "round8": [
+    "promise company: выпустить исправление для приложения"
+   ],
+   "round9": [
+    "promise company: выпустить исправление для приложения"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выпустить исправление для приложения",
+     "quote": "Наши инженеры выпустят исправление для приложения.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 30,
+   "why": [
+    "control"
+   ],
+   "text": "Оформим возврат по заказу 512407 до конца недели.",
+   "gold": [
+    "promise company: оформить возврат"
+   ],
+   "round8": [
+    "fact order.number: 512407",
+    "promise company: оформить возврат по заказу 512407"
+   ],
+   "round9": [
+    "fact order.number: 512407",
+    "promise company: оформить возврат по заказу 512407"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "512407",
+     "quote": "по заказу 512407",
+     "change": false
+    },
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "оформить возврат по заказу 512407",
+     "quote": "Оформим возврат по заказу 512407 до конца недели.",
+     "due": {
+      "type": "PeriodEnd",
+      "period": "week"
+     },
+     "due_quote": "до конца недели",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 43,
+   "why": [
+    "control"
+   ],
+   "text": "Восстановим доступ к личному кабинету сегодня до 18:00",
+   "gold": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round8": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету сегодня до 18:00",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 0,
+      "at": "18:00:00"
+     },
+     "due_quote": "сегодня до 18:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 46,
+   "why": [
+    "control"
+   ],
+   "text": "Попробуйте перезайти в приложение. Помогло?",
+   "gold": [
+    "RecordStep: Попробуйте перезайти в приложение",
+    "AskQuestion: Помогло?"
+   ],
+   "round8": [
+    "RecordStep: Попробуйте перезайти в приложение.",
+    "AskQuestion: Помогло?"
+   ],
+   "round9": [
+    "RecordStep: Попробуйте перезайти в приложение.",
+    "AskQuestion: Помогло?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "RecordStep",
+     "action": "перезайти в приложение",
+     "quote": "Попробуйте перезайти в приложение.",
+     "outcome": "pending"
+    },
+    {
+     "type": "AskQuestion",
+     "text": "Помогло?",
+     "quote": "Помогло?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 61,
+   "why": [
+    "control"
+   ],
+   "text": "Хорошо, ладно.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 78,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если посылка не придёт до 22 января, оформим повторную отправку бесплатно.",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 22 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если посылка не придёт до 22 января, оформим повторную отправку бесплатно."
+   ],
+   "round9": [
+    "offer company: оформить повторную отправку бесплатно | Если посылка не придёт до 22 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если посылка не придёт до 22 января, оформим повторную отправку бесплатно."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку бесплатно",
+     "quote": "Если посылка не придёт до 22 января, оформим повторную отправку бесплатно.",
+     "condition": "Если посылка не придёт до 22 января",
+     "due": {
+      "type": "DateRef",
+      "day": 22,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 22 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 83,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Попробуйте сбросить пароль. Помогло?",
+   "gold": [
+    "RecordStep: Попробуйте сбросить пароль",
+    "AskQuestion: Помогло?"
+   ],
+   "round8": [
+    "RecordStep: Попробуйте сбросить пароль.",
+    "AskQuestion: Помогло?"
+   ],
+   "round9": [
+    "RecordStep: Попробуйте сбросить пароль.",
+    "AskQuestion: Помогло?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "RecordStep",
+     "action": "сбросить пароль",
+     "quote": "Попробуйте сбросить пароль.",
+     "outcome": "pending"
+    },
+    {
+     "type": "AskQuestion",
+     "text": "Помогло?",
+     "quote": "Помогло?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 85,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, есть ли какое-то движение по моей заявке?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, есть ли какое-то движение по моей заявке?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, есть ли какое-то движение по моей заявке?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, есть ли какое-то движение по моей заявке?",
+     "quote": "Подскажите, есть ли какое-то движение по моей заявке?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 86,
+   "why": [
+    "control"
+   ],
+   "text": "Ясно, спасибо.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0008",
+   "seq": 128,
+   "why": [
+    "control"
+   ],
+   "text": "Кэш почистила, всё равно не помогло.",
+   "gold": [
+    "SetStepOutcome: не помогло"
+   ],
+   "round8": [
+    "SetStepOutcome: Кэш почистила, всё равно не помогло."
+   ],
+   "round9": [
+    "SetStepOutcome: Кэш почистила, всё равно не помогло."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e126#0",
+     "outcome": "failed",
+     "quote": "Кэш почистила, всё равно не помогло."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Привет, у меня тут проблема с заказом 541718.",
+   "gold": [
+    "fact order.number: 541718"
+   ],
+   "round8": [
+    "fact order.number: 541718",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 541718",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "541718",
+     "quote": "заказом 541718",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня тут проблема с заказом 541718",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 38,
+   "why": [
+    "control"
+   ],
+   "text": "Восстановим доступ к личному кабинету.",
+   "gold": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round8": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 42,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! К сожалению, новой информации пока нет. Как только что-то появится, мы сразу вас уведомим.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 53,
+   "why": [
+    "control"
+   ],
+   "text": "Перевёл вас на тариф Ультра.",
+   "gold": [
+    "fact account.plan: Ультра"
+   ],
+   "round8": [
+    "fact account.plan: Ультра"
+   ],
+   "round9": [
+    "fact account.plan: Ультра"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "account.plan",
+     "value": "Ультра",
+     "quote": "Перевёл вас на тариф Ультра.",
+     "change": true
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 63,
+   "why": [
+    "control"
+   ],
+   "text": "Ага, вижу.",
+   "gold": [
+    "ResolveCommitment: Ага, вижу."
+   ],
+   "round8": [
+    "ResolveCommitment: Ага, вижу."
+   ],
+   "round9": [
+    "AnswerQuestion: Ага, вижу.",
+    "ResolveCommitment: Ага, вижу."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AnswerQuestion",
+     "question_id": "e62#0",
+     "quote": "Ага, вижу."
+    },
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e60#0",
+     "quote": "Ага, вижу.",
+     "target_quote": "Возместим стоимость упаковки до 17 января.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Ага, вижу.",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости упаковки. По другой позиции ещё уточняем."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 71,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Восстановим доступ к рабочему пространству Бета до среды.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: восстановление доступа к рабочему пространству Бета",
+    "promise company: восстановить доступ к рабочему пространству Бета"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Бета"
+   ],
+   "lost": [
+    "fact issue.summary: восстановление доступа к рабочему пространству Бета"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Бета",
+     "quote": "Восстановим доступ к рабочему пространству Бета до среды.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 2,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до среды",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 73,
+   "why": [
+    "control"
+   ],
+   "text": "Акт сверки получила, спасибо!",
+   "gold": [
+    "ResolveCommitment: Акт сверки получила, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Акт сверки получила"
+   ],
+   "round9": [
+    "ResolveCommitment: Акт сверки получила"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e18#0",
+     "quote": "Акт сверки получила",
+     "target_quote": "Пришлём вам акт сверки до 18 января.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Акт сверки получила",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 90,
+   "why": [
+    "control"
+   ],
+   "text": "Доступ к пространству Бета появился, спасибо!",
+   "gold": [
+    "ResolveCommitment: Доступ к пространству Бета появился, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Доступ к пространству Бета появился"
+   ],
+   "round9": [
+    "ResolveCommitment: Доступ к пространству Бета появился"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e71#0",
+     "quote": "Доступ к пространству Бета появился",
+     "target_quote": "Восстановим доступ к рабочему пространству Бета до среды.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Доступ к пространству Бета появился, спасибо!",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 104,
+   "why": [
+    "control"
+   ],
+   "text": "Отправим вам замену до 25 января.",
+   "gold": [
+    "promise company: отправить замену"
+   ],
+   "round8": [
+    "promise company: отправить клиенту замену"
+   ],
+   "round9": [
+    "promise company: отправить клиенту замену"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "отправить клиенту замену",
+     "quote": "Отправим вам замену до 25 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 25,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 25 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 115,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Ваш вопрос передан в отдел логистики, там его изучают.",
+   "gold": [],
+   "round8": [
+    "fact issue.summary: вопрос передан в отдел логистики, там его изучают"
+   ],
+   "round9": [],
+   "lost": [
+    "fact issue.summary: вопрос передан в отдел логистики, там его изучают"
+   ],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 125,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если ремонт не закончат до 25 января, выдадим вам подменный аппарат.",
+   "gold": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 25 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если ремонт не закончат до 25 января, выдадим вам подменный аппарат."
+   ],
+   "round9": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 25 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если ремонт не закончат до 25 января, выдадим вам подменный аппарат."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "выдать подменный аппарат",
+     "quote": "Если ремонт не закончат до 25 января, выдадим вам подменный аппарат.",
+     "condition": "Если ремонт не закончат до 25 января",
+     "due": {
+      "type": "DateRef",
+      "day": 25,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 25 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 149,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Ваша заявка сейчас рассматривается.",
+   "gold": [],
+   "round8": [
+    "fact issue.summary: Ваша заявка сейчас рассматривается."
+   ],
+   "round9": [],
+   "lost": [
+    "fact issue.summary: Ваша заявка сейчас рассматривается."
+   ],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 160,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Ваша заявка сейчас на рассмотрении.",
+   "gold": [],
+   "round8": [
+    "fact issue.summary: Ваша заявка сейчас на рассмотрении."
+   ],
+   "round9": [],
+   "lost": [
+    "fact issue.summary: Ваша заявка сейчас на рассмотрении."
+   ],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0009",
+   "seq": 171,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Ваше обращение принято в работу, мы его уже рассматриваем.",
+   "gold": [],
+   "round8": [
+    "fact issue.summary: Ваше обращение принято в работу, мы его уже рассматриваем."
+   ],
+   "round9": [],
+   "lost": [
+    "fact issue.summary: Ваше обращение принято в работу, мы его уже рассматриваем."
+   ],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0010",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Добрый день! Возникла проблема с заказом 423975.",
+   "gold": [
+    "fact order.number: 423975"
+   ],
+   "round8": [
+    "fact order.number: 423975",
+    "fact issue.summary: Возникла проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 423975",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "423975",
+     "quote": "заказом 423975",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "Возникла проблема с заказом 423975",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0010",
+   "seq": 20,
+   "why": [
+    "control"
+   ],
+   "text": "Окей, буду ждать.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0010",
+   "seq": 46,
+   "why": [
+    "control"
+   ],
+   "text": "Это опять я, напоминаю о себе.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0010",
+   "seq": 63,
+   "why": [
+    "control"
+   ],
+   "text": "Возместим стоимость сборки до 19 января.",
+   "gold": [
+    "promise company: возместить стоимость сборки"
+   ],
+   "round8": [
+    "promise company: возместить стоимость сборки"
+   ],
+   "round9": [
+    "promise company: возместить стоимость сборки"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "возместить стоимость сборки",
+     "quote": "Возместим стоимость сборки до 19 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 19,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 19 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0010",
+   "seq": 68,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если посылка не придёт до 20 января, оформим повторную отправку бесплатно.",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 20 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если посылка не придёт до 20 января, оформим повторную отправку бесплатно."
+   ],
+   "round9": [
+    "offer company: оформить повторную отправку бесплатно | Если посылка не придёт до 20 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если посылка не придёт до 20 января, оформим повторную отправку бесплатно."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку бесплатно",
+     "quote": "Если посылка не придёт до 20 января, оформим повторную отправку бесплатно.",
+     "condition": "Если посылка не придёт до 20 января",
+     "due": {
+      "type": "DateRef",
+      "day": 20,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 20 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0010",
+   "seq": 79,
+   "why": [
+    "control"
+   ],
+   "text": "Хорошо, понял.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0010",
+   "seq": 165,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Пока новой информации, к сожалению, нет.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Добрый день, у меня тут проблема возникла с заказом 972934.",
+   "gold": [
+    "fact order.number: 972934"
+   ],
+   "round8": [
+    "fact order.number: 972934",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 972934",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "972934",
+     "quote": "заказом 972934",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня тут проблема возникла с заказом 972934",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 10,
+   "why": [
+    "control"
+   ],
+   "text": "Ага, всё ясно, спасибо.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 29,
+   "why": [
+    "control"
+   ],
+   "text": "Пришлём вам акт сверки через неделю.",
+   "gold": [
+    "promise company: прислать акт сверки"
+   ],
+   "round8": [
+    "promise company: прислать клиенту акт сверки"
+   ],
+   "round9": [
+    "promise company: прислать клиенту акт сверки"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "прислать клиенту акт сверки",
+     "quote": "Пришлём вам акт сверки через неделю.",
+     "due": {
+      "type": "Offset",
+      "amount": 1,
+      "unit": "week"
+     },
+     "due_quote": "через неделю",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 37,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если посылка не придёт до 22 января, оформим повторную отправку бесплатно.",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 22 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если посылка не придёт до 22 января, оформим повторную отправку бесплатно."
+   ],
+   "round9": [
+    "offer company: оформить повторную отправку посылки бесплатно | Если посылка не придёт до 22 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если посылка не придёт до 22 января, оформим повторную отправку бесплатно."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку посылки бесплатно",
+     "quote": "Если посылка не придёт до 22 января, оформим повторную отправку бесплатно.",
+     "condition": "Если посылка не придёт до 22 января",
+     "due": {
+      "type": "DateRef",
+      "day": 22,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 22 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 44,
+   "why": [
+    "control"
+   ],
+   "text": "Заполню заявление на возврат сегодня до 18:00.",
+   "gold": [
+    "promise customer: заполнить заявление на возврат"
+   ],
+   "round8": [
+    "promise customer: заполнить заявление на возврат"
+   ],
+   "round9": [
+    "promise customer: заполнить заявление на возврат"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "customer",
+     "action": "заполнить заявление на возврат",
+     "quote": "Заполню заявление на возврат сегодня до 18:00.",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 0,
+      "at": "18:00:00"
+     },
+     "due_quote": "сегодня до 18:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 66,
+   "why": [
+    "control"
+   ],
+   "text": "Исправление вышло, приложение работает!",
+   "gold": [
+    "ResolveCommitment: Исправление вышло, приложение работает"
+   ],
+   "round8": [
+    "ResolveCommitment: Исправление вышло, приложение работает!"
+   ],
+   "round9": [
+    "ResolveCommitment: Исправление вышло, приложение работает!"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e50#0",
+     "quote": "Исправление вышло, приложение работает!",
+     "target_quote": "Наши инженеры выпустят исправление для приложения.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Исправление вышло, приложение работает!",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 79,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?",
+     "quote": "Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 80,
+   "why": [
+    "control"
+   ],
+   "text": "Счёт получила, всё верно, спасибо!",
+   "gold": [
+    "ResolveCommitment: Счёт получила, всё верно"
+   ],
+   "round8": [
+    "ResolveCommitment: Счёт получила, всё верно"
+   ],
+   "round9": [
+    "ResolveCommitment: Счёт получила, всё верно"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e76#0",
+     "quote": "Счёт получила, всё верно",
+     "target_quote": "Пришлём исправленный счёт до среды",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Счёт получила, всё верно",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 135,
+   "why": [
+    "control"
+   ],
+   "text": "Вышлем вам смету",
+   "gold": [
+    "promise company: выслать смету"
+   ],
+   "round8": [
+    "promise company: выслать клиенту смету"
+   ],
+   "round9": [
+    "promise company: выслать клиенту смету"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выслать клиенту смету",
+     "quote": "Вышлем вам смету",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 137,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, как там дела с моим вопросом?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, как там дела с моим вопросом?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, как там дела с моим вопросом?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, как там дела с моим вопросом?",
+     "quote": "Подскажите, пожалуйста, как там дела с моим вопросом?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 150,
+   "why": [
+    "control"
+   ],
+   "text": "Я перезвоню вам до среды.",
+   "gold": [
+    "promise company: перезвонить"
+   ],
+   "round8": [
+    "promise company: перезвонить клиенту"
+   ],
+   "round9": [
+    "promise company: перезвонить клиенту"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "перезвонить клиенту",
+     "quote": "Я перезвоню вам до среды.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 2,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до среды",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0011",
+   "seq": 165,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, есть ли какие-то новости по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, есть ли какие-то новости по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, есть ли какие-то новости по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, есть ли какие-то новости по моему обращению?",
+     "quote": "Подскажите, есть ли какие-то новости по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Добрый день, подскажите пожалуйста, у меня возникла проблема с заказом 244327.",
+   "gold": [
+    "fact order.number: 244327"
+   ],
+   "round8": [
+    "fact order.number: 244327",
+    "fact issue.summary: проблема с заказом",
+    "AskQuestion: подскажите пожалуйста, у меня возникла проблема с заказом 244327"
+   ],
+   "round9": [
+    "fact order.number: 244327",
+    "fact issue.summary: проблема с заказом",
+    "AskQuestion: подскажите пожалуйста, у меня возникла проблема с заказом 244327"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "244327",
+     "quote": "заказом 244327",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "возникла проблема с заказом 244327",
+     "change": false
+    },
+    {
+     "type": "AskQuestion",
+     "text": "подскажите пожалуйста, у меня возникла проблема с заказом 244327",
+     "quote": "подскажите пожалуйста, у меня возникла проблема с заказом 244327"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 16,
+   "why": [
+    "control"
+   ],
+   "text": "Замену получила, спасибо",
+   "gold": [
+    "ResolveCommitment: Замену получила, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Замену получила"
+   ],
+   "round9": [
+    "ResolveCommitment: Замену получила"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e13#0",
+     "quote": "Замену получила",
+     "target_quote": "Отправим вам замену до пятницы.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Замену получила",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 56,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если промокод не сработает до 24 января, начислим вам бонусы взамен",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 24 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 24 января, начислим вам бонусы взамен"
+   ],
+   "round9": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 24 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 24 января, начислим вам бонусы взамен"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 24 января, начислим вам бонусы взамен",
+     "condition": "Если промокод не сработает до 24 января",
+     "due": {
+      "type": "DateRef",
+      "day": 24,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 24 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 61,
+   "why": [
+    "control"
+   ],
+   "text": "Судя по накладной, вам отправлен KT-192.",
+   "gold": [
+    "fact device.model: KT-192"
+   ],
+   "round8": [
+    "fact device.model: KT-192"
+   ],
+   "round9": [
+    "fact device.model: KT-192"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "device.model",
+     "value": "KT-192",
+     "quote": "вам отправлен KT-192",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 77,
+   "why": [
+    "control"
+   ],
+   "text": "Проверьте, пожалуйста, поступило ли возмещение стоимости подъёма на этаж. По другой позиции ещё уточняем.",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Проверьте, пожалуйста, поступило ли возмещение стоимости подъёма на этаж."
+   ],
+   "round9": [
+    "AskQuestion: Проверьте, пожалуйста, поступило ли возмещение стоимости подъёма на этаж."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Проверьте, пожалуйста, поступило ли возмещение стоимости подъёма на этаж.",
+     "quote": "Проверьте, пожалуйста, поступило ли возмещение стоимости подъёма на этаж."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 79,
+   "why": [
+    "control"
+   ],
+   "text": "Курьер документы забрал, спасибо",
+   "gold": [
+    "ResolveCommitment: Курьер документы забрал, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Курьер документы забрал"
+   ],
+   "round9": [
+    "ResolveCommitment: Курьер документы забрал"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e53#0",
+     "quote": "Курьер документы забрал",
+     "target_quote": "Курьер заберёт у вас документы на подпись.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Курьер документы забрал",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 95,
+   "why": [
+    "control"
+   ],
+   "text": "К сожалению, к сроку не успеваем. Я проверю статус возврата и отпишусь в течение 3 рабочих дней.",
+   "gold": [
+    "promise company: проверить статус возврата и отписаться"
+   ],
+   "round8": [
+    "promise company: проверить статус возврата и отписаться клиенту"
+   ],
+   "round9": [
+    "promise company: проверить статус возврата и отписаться клиенту"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "проверить статус возврата и отписаться клиенту",
+     "quote": "Я проверю статус возврата и отпишусь в течение 3 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 3,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 3 рабочих дней",
+     "supersedes": "e25#0",
+     "target_quote": "Я проверю статус возврата и отпишусь до пятницы.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Я проверю статус возврата и отпишусь в течение 3 рабочих дней.",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     }
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 140,
+   "why": [
+    "control"
+   ],
+   "text": "Я сменила место жительства, теперь доставка должна идти на новый адрес — ул. Садовая, 61.",
+   "gold": [
+    "fact delivery.address: ул. Садовая, 61"
+   ],
+   "round8": [
+    "fact delivery.address: ул. Садовая, 61"
+   ],
+   "round9": [
+    "fact delivery.address: ул. Садовая, 61"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.address",
+     "value": "ул. Садовая, 61",
+     "quote": "ул. Садовая, 61",
+     "change": true
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 142,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, как продвигается мой вопрос?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, как продвигается мой вопрос?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, как продвигается мой вопрос?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, как продвигается мой вопрос?",
+     "quote": "Подскажите, пожалуйста, как продвигается мой вопрос?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0012",
+   "seq": 172,
+   "why": [
+    "round 8 silent loss",
+    "filed as offer.conditional"
+   ],
+   "text": "Начислим вам компенсацию бонусами.",
+   "gold": [
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "round8": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами.",
+    "promise company: начислить клиенту компенсацию бонусами"
+   ],
+   "round9": [
+    "promise company: начислить клиенту компенсацию бонусами"
+   ],
+   "lost": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "начислить клиенту компенсацию бонусами",
+     "quote": "Начислим вам компенсацию бонусами.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Привет! У меня тут проблема возникла с заказом 188187.",
+   "gold": [
+    "fact order.number: 188187"
+   ],
+   "round8": [
+    "fact order.number: 188187",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 188187",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "188187",
+     "quote": "заказом 188187",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "проблема возникла с заказом 188187",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 6,
+   "why": [
+    "control"
+   ],
+   "text": "Благодарю вас за ожидание!",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 33,
+   "why": [
+    "control"
+   ],
+   "text": "Попробуйте переустановить приложение.",
+   "gold": [
+    "RecordStep: Попробуйте переустановить приложение"
+   ],
+   "round8": [
+    "RecordStep: Попробуйте переустановить приложение."
+   ],
+   "round9": [
+    "RecordStep: Попробуйте переустановить приложение."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "RecordStep",
+     "action": "переустановить приложение",
+     "quote": "Попробуйте переустановить приложение.",
+     "outcome": "pending"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 35,
+   "why": [
+    "control"
+   ],
+   "text": "переустановила приложение, не помогло",
+   "gold": [
+    "SetStepOutcome: не помогло"
+   ],
+   "round8": [
+    "SetStepOutcome: переустановила приложение, не помогло"
+   ],
+   "round9": [
+    "SetStepOutcome: переустановила приложение, не помогло"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e33#0",
+     "outcome": "failed",
+     "quote": "переустановила приложение, не помогло"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 101,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Я сменила место жительства, теперь доставка должна идти на новый адрес — ул. Берёзовая, 11.",
+   "gold": [
+    "fact delivery.address: ул. Берёзовая, 11"
+   ],
+   "round8": [
+    "fact delivery.address: ул. Берёзовая, 11"
+   ],
+   "round9": [
+    "fact delivery.address: ул. Берёзовая, 11"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.address",
+     "value": "ул. Берёзовая, 11",
+     "quote": "теперь доставка должна идти на новый адрес — ул. Берёзовая, 11",
+     "change": true
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 102,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Я до сих пор жду ответа.",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Я до сих пор жду ответа."
+   ],
+   "round9": [
+    "AskQuestion: Я до сих пор жду ответа."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Здравствуйте! Я до сих пор жду ответа.",
+     "quote": "Я до сих пор жду ответа."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 125,
+   "why": [
+    "control"
+   ],
+   "text": "Пришлём вам акт сверки до конца недели",
+   "gold": [
+    "promise company: прислать акт сверки"
+   ],
+   "round8": [
+    "promise company: прислать клиенту акт сверки"
+   ],
+   "round9": [
+    "promise company: прислать клиенту акт сверки"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "прислать клиенту акт сверки",
+     "quote": "Пришлём вам акт сверки до конца недели",
+     "due": {
+      "type": "PeriodEnd",
+      "period": "week"
+     },
+     "due_quote": "до конца недели",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 128,
+   "why": [
+    "control"
+   ],
+   "text": "Фото чека получили, спасибо!",
+   "gold": [
+    "ResolveCommitment: Фото чека получили, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Фото чека получили"
+   ],
+   "round9": [
+    "ResolveCommitment: Фото чека получили"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e127#0",
+     "quote": "Фото чека получили",
+     "target_quote": "Пришлю фото чека до конца недели",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Фото чека получили",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 130,
+   "why": [
+    "control"
+   ],
+   "text": "Мне обещали прислать акт сверки, срок прошёл. Что происходит?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Что происходит?"
+   ],
+   "round9": [
+    "AskQuestion: Что происходит?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Что происходит?",
+     "quote": "Что происходит?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 149,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Добрый день! Если промокод не сработает до 28 января, начислим вам бонусы взамен.",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 28 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 28 января, начислим вам бонусы взамен."
+   ],
+   "round9": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 28 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 28 января, начислим вам бонусы взамен."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 28 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 28 января",
+     "due": {
+      "type": "DateRef",
+      "day": 28,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 28 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0013",
+   "seq": 175,
+   "why": [
+    "control"
+   ],
+   "text": "Ладно, буду ждать.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0014",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! У меня возникла проблема с заказом 266176.",
+   "gold": [
+    "fact order.number: 266176"
+   ],
+   "round8": [
+    "fact order.number: 266176",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 266176",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "266176",
+     "quote": "заказом 266176",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "возникла проблема с заказом 266176",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0014",
+   "seq": 41,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Восстановим доступ к рабочему пространству Бета до пятницы.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Бета до пятницы.",
+    "promise company: восстановить доступ к рабочему пространству Бета"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Бета"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Бета до пятницы."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Бета",
+     "quote": "Восстановим доступ к рабочему пространству Бета до пятницы.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 4,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до пятницы",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0014",
+   "seq": 42,
+   "why": [
+    "control"
+   ],
+   "text": "С карты списали 9000 рублей.",
+   "gold": [
+    "fact payment.amount: 9000"
+   ],
+   "round8": [
+    "fact payment.amount: 9000 рублей"
+   ],
+   "round9": [
+    "fact payment.amount: 9000 рублей"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "payment.amount",
+     "value": "9000 рублей",
+     "quote": "С карты списали 9000 рублей.",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0014",
+   "seq": 56,
+   "why": [
+    "control"
+   ],
+   "text": "Трек-номер получила, спасибо!",
+   "gold": [
+    "ResolveCommitment: Трек-номер получила, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Трек-номер получила"
+   ],
+   "round9": [
+    "ResolveCommitment: Трек-номер получила, спасибо!"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e53#0",
+     "quote": "Трек-номер получила, спасибо!",
+     "target_quote": "Вышлем вам трек-номер посылки в течение 2 часов.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Трек-номер получила, спасибо!",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0014",
+   "seq": 114,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если посылка не придёт до 27 января, оформим повторную отправку бесплатно.",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 27 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если посылка не придёт до 27 января, оформим повторную отправку бесплатно."
+   ],
+   "round9": [
+    "offer company: оформить повторную отправку посылки бесплатно | Если посылка не придёт до 27 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если посылка не придёт до 27 января, оформим повторную отправку бесплатно."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку посылки бесплатно",
+     "quote": "Если посылка не придёт до 27 января, оформим повторную отправку бесплатно.",
+     "condition": "Если посылка не придёт до 27 января",
+     "due": {
+      "type": "DateRef",
+      "day": 27,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 27 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0014",
+   "seq": 124,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте, я всё ещё жду ответа.",
+   "gold": [],
+   "round8": [
+    "AskQuestion: я всё ещё жду ответа"
+   ],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0014",
+   "seq": 148,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Восстановим доступ к личному кабинету до 7 февраля",
+   "gold": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к личному кабинету до 7 февраля",
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к личному кабинету до 7 февраля"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету до 7 февраля",
+     "due": {
+      "type": "DateRef",
+      "day": 7,
+      "month": 2,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 7 февраля",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0015",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Привет! У меня тут проблема с заказом 132663.",
+   "gold": [
+    "fact order.number: 132663"
+   ],
+   "round8": [
+    "fact order.number: 132663",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 132663",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "132663",
+     "quote": "заказом 132663",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "проблема с заказом 132663",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0015",
+   "seq": 29,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если промокод не сработает до 16 января, начислим вам бонусы взамен.",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 16 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 16 января, начислим вам бонусы взамен."
+   ],
+   "round9": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 16 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 16 января, начислим вам бонусы взамен."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 16 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 16 января",
+     "due": {
+      "type": "DateRef",
+      "day": 16,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 16 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0015",
+   "seq": 78,
+   "why": [
+    "round 8 silent loss",
+    "filed as offer.conditional"
+   ],
+   "text": "Начислим вам компенсацию бонусами до конца недели.",
+   "gold": [
+    "promise company: начислить компенсацию бонусами"
+   ],
+   "round8": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами до конца недели.",
+    "promise company: начислить клиенту компенсацию бонусами"
+   ],
+   "round9": [
+    "promise company: начислить клиенту компенсацию бонусами"
+   ],
+   "lost": [
+    "fact offer.conditional: Начислим вам компенсацию бонусами до конца недели."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "начислить клиенту компенсацию бонусами",
+     "quote": "Начислим вам компенсацию бонусами до конца недели.",
+     "due": {
+      "type": "PeriodEnd",
+      "period": "week"
+     },
+     "due_quote": "до конца недели",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0015",
+   "seq": 125,
+   "why": [
+    "control"
+   ],
+   "text": "Попробуйте сбросить пароль. Помогло?",
+   "gold": [
+    "RecordStep: Попробуйте сбросить пароль",
+    "AskQuestion: Помогло?"
+   ],
+   "round8": [
+    "RecordStep: Попробуйте сбросить пароль.",
+    "AskQuestion: Помогло?"
+   ],
+   "round9": [
+    "RecordStep: Попробуйте сбросить пароль.",
+    "AskQuestion: Помогло?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "RecordStep",
+     "action": "сбросить пароль",
+     "quote": "Попробуйте сбросить пароль.",
+     "outcome": "pending"
+    },
+    {
+     "type": "AskQuestion",
+     "text": "Помогло?",
+     "quote": "Помогло?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0015",
+   "seq": 136,
+   "why": [
+    "control"
+   ],
+   "text": "Мне обещали перезвонить, но время уже прошло. В чём дело?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: В чём дело?"
+   ],
+   "round9": [
+    "AskQuestion: В чём дело?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "В чём дело?",
+     "quote": "В чём дело?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте, у меня тут проблема с заказом 869716.",
+   "gold": [
+    "fact order.number: 869716"
+   ],
+   "round8": [
+    "fact order.number: 869716",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 869716",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "869716",
+     "quote": "заказом 869716",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня тут проблема с заказом 869716",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 3,
+   "why": [
+    "control"
+   ],
+   "text": "Хорошего дня! Я свяжусь с вами по телефону до 13 января.",
+   "gold": [
+    "promise company: связаться по телефону"
+   ],
+   "round8": [
+    "promise company: связаться с клиентом по телефону по заказу 869716"
+   ],
+   "round9": [
+    "promise company: связаться с клиентом по телефону по заказу 869716"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "связаться с клиентом по телефону по заказу 869716",
+     "quote": "Я свяжусь с вами по телефону до 13 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 13,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 13 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 13,
+   "why": [
+    "control"
+   ],
+   "text": "Хорошего дня! Отправим вам замену через 3 часа 🙂",
+   "gold": [
+    "promise company: отправить замену"
+   ],
+   "round8": [
+    "promise company: отправить клиенту замену"
+   ],
+   "round9": [
+    "promise company: отправить клиенту замену"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "отправить клиенту замену",
+     "quote": "Отправим вам замену через 3 часа",
+     "due": {
+      "type": "Offset",
+      "amount": 3,
+      "unit": "hour"
+     },
+     "due_quote": "через 3 часа",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 14,
+   "why": [
+    "control"
+   ],
+   "text": "у меня тариф Лайт",
+   "gold": [
+    "fact account.plan: Лайт"
+   ],
+   "round8": [
+    "fact account.plan: Лайт"
+   ],
+   "round9": [
+    "fact account.plan: Лайт"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "account.plan",
+     "value": "Лайт",
+     "quote": "у меня тариф Лайт",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 23,
+   "why": [
+    "control"
+   ],
+   "text": "Ваш вопрос передан в отдел логистики, там его изучают.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 67,
+   "why": [
+    "control"
+   ],
+   "text": "Я сбросила пароль, но это не помогло.",
+   "gold": [
+    "SetStepOutcome: не помогло"
+   ],
+   "round8": [
+    "SetStepOutcome: Я сбросила пароль, но это не помогло."
+   ],
+   "round9": [
+    "SetStepOutcome: Я сбросила пароль, но это не помогло."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e65#0",
+     "outcome": "failed",
+     "quote": "Я сбросила пароль, но это не помогло."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 69,
+   "why": [
+    "control"
+   ],
+   "text": "Хотим вас успокоить: Возместим стоимость монтажа до 20 января.",
+   "gold": [
+    "promise company: возместить стоимость монтажа"
+   ],
+   "round8": [
+    "fact refund.status: Возместим стоимость монтажа до 20 января",
+    "promise company: возместить стоимость монтажа"
+   ],
+   "round9": [
+    "promise company: возместить стоимость монтажа"
+   ],
+   "lost": [
+    "fact refund.status: Возместим стоимость монтажа до 20 января"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "возместить стоимость монтажа",
+     "quote": "Возместим стоимость монтажа до 20 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 20,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 20 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 72,
+   "why": [
+    "control"
+   ],
+   "text": "Мы вернём вам деньги за сборку завтра до 15:00.",
+   "gold": [
+    "promise company: вернуть деньги за сборку"
+   ],
+   "round8": [
+    "promise company: вернуть деньги за сборку"
+   ],
+   "round9": [
+    "promise company: вернуть деньги за сборку"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "вернуть деньги за сборку",
+     "quote": "Мы вернём вам деньги за сборку завтра до 15:00.",
+     "due": {
+      "type": "DayRef",
+      "days_ahead": 1,
+      "at": "15:00:00"
+     },
+     "due_quote": "завтра до 15:00",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 82,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Видим ваше сообщение.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 84,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какие-нибудь новости по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какие-нибудь новости по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какие-нибудь новости по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, есть ли какие-нибудь новости по моему обращению?",
+     "quote": "Подскажите, пожалуйста, есть ли какие-нибудь новости по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 102,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если ремонт не закончат до 25 января, выдадим вам подменный аппарат.",
+   "gold": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 25 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если ремонт не закончат до 25 января, выдадим вам подменный аппарат."
+   ],
+   "round9": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 25 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если ремонт не закончат до 25 января, выдадим вам подменный аппарат."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "выдать подменный аппарат",
+     "quote": "Если ремонт не закончат до 25 января, выдадим вам подменный аппарат.",
+     "condition": "Если ремонт не закончат до 25 января",
+     "due": {
+      "type": "DateRef",
+      "day": 25,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 25 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 127,
+   "why": [
+    "control"
+   ],
+   "text": "Вышлем вам инструкцию 🙂",
+   "gold": [
+    "promise company: выслать инструкцию"
+   ],
+   "round8": [
+    "promise company: выслать клиенту инструкцию"
+   ],
+   "round9": [
+    "promise company: выслать клиенту инструкцию"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выслать клиенту инструкцию",
+     "quote": "Вышлем вам инструкцию",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 138,
+   "why": [
+    "control"
+   ],
+   "text": "Это снова я, напоминаю о себе.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0016",
+   "seq": 165,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Как там мой вопрос, что по нему?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Как там мой вопрос, что по нему?"
+   ],
+   "round9": [
+    "AskQuestion: Как там мой вопрос, что по нему?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Как там мой вопрос, что по нему?",
+     "quote": "Как там мой вопрос, что по нему?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Привет, у меня возникла проблема с заказом 606146.",
+   "gold": [
+    "fact order.number: 606146"
+   ],
+   "round8": [
+    "fact order.number: 606146",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 606146",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "606146",
+     "quote": "заказом 606146",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "у меня возникла проблема с заказом 606146",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 3,
+   "why": [
+    "control"
+   ],
+   "text": "Спасибо за обращение! Я свяжусь с вами по телефону до 14 января.",
+   "gold": [
+    "promise company: связаться по телефону"
+   ],
+   "round8": [
+    "promise company: связаться с клиентом по телефону по заказу 606146"
+   ],
+   "round9": [
+    "promise company: связаться с клиентом по телефону по заказу 606146"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "связаться с клиентом по телефону по заказу 606146",
+     "quote": "Я свяжусь с вами по телефону до 14 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 14,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 14 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 17,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, как продвигается мой вопрос?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, как продвигается мой вопрос?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, как продвигается мой вопрос?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, как продвигается мой вопрос?",
+     "quote": "Подскажите, пожалуйста, как продвигается мой вопрос?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 27,
+   "why": [
+    "control"
+   ],
+   "text": "Доставьте, пожалуйста, на ул. Речная, 82.",
+   "gold": [
+    "fact delivery.address: ул. Речная, 82"
+   ],
+   "round8": [
+    "fact delivery.address: ул. Речная, 82"
+   ],
+   "round9": [
+    "fact delivery.address: ул. Речная, 82"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "delivery.address",
+     "value": "ул. Речная, 82",
+     "quote": "на ул. Речная, 82",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 41,
+   "why": [
+    "control"
+   ],
+   "text": "Вышлем вам трек-номер посылки до 24 января",
+   "gold": [
+    "promise company: выслать трек-номер"
+   ],
+   "round8": [
+    "promise company: выслать клиенту трек-номер посылки"
+   ],
+   "round9": [
+    "promise company: выслать трек-номер посылки"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выслать трек-номер посылки",
+     "quote": "Вышлем вам трек-номер посылки до 24 января",
+     "due": {
+      "type": "DateRef",
+      "day": 24,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 24 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 43,
+   "why": [
+    "control"
+   ],
+   "text": "Оформим возврат по заказу 538916 до среды.",
+   "gold": [
+    "promise company: оформить возврат"
+   ],
+   "round8": [
+    "fact refund.status: будет оформлен возврат по заказу 538916",
+    "promise company: оформить возврат по заказу 538916"
+   ],
+   "round9": [
+    "fact order.number: 538916",
+    "promise company: оформить возврат по заказу 538916"
+   ],
+   "lost": [
+    "fact refund.status: будет оформлен возврат по заказу 538916"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "538916",
+     "quote": "по заказу 538916",
+     "change": false
+    },
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "оформить возврат по заказу 538916",
+     "quote": "Оформим возврат по заказу 538916 до среды.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 2,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до среды",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 45,
+   "why": [
+    "control"
+   ],
+   "text": "Пожалуйста, обращайтесь, если что-то понадобится.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 46,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если ремонт не закончат до 20 января, выдадим вам подменный аппарат.",
+   "gold": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 20 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если ремонт не закончат до 20 января, выдадим вам подменный аппарат."
+   ],
+   "round9": [
+    "offer company: выдать подменный аппарат, если ремонт не закончат до 20 января | Если ремонт не закончат до 20 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если ремонт не закончат до 20 января, выдадим вам подменный аппарат."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "выдать подменный аппарат, если ремонт не закончат до 20 января",
+     "quote": "Если ремонт не закончат до 20 января, выдадим вам подменный аппарат.",
+     "condition": "Если ремонт не закончат до 20 января",
+     "due": {
+      "type": "DateRef",
+      "day": 20,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 20 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 58,
+   "why": [
+    "control"
+   ],
+   "text": "Возврат по заказу 538916 пришёл, спасибо!",
+   "gold": [
+    "ResolveCommitment: Возврат по заказу 538916 пришёл, спасибо"
+   ],
+   "round8": [
+    "ResolveCommitment: Возврат по заказу 538916 пришёл"
+   ],
+   "round9": [
+    "ResolveCommitment: Возврат по заказу 538916 пришёл"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e43#1",
+     "quote": "Возврат по заказу 538916 пришёл",
+     "target_quote": "Оформим возврат по заказу 538916 до среды.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "yes",
+      "evidence_quote": "Возврат по заказу 538916 пришёл",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": ""
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 73,
+   "why": [
+    "round 8 silent loss",
+    "filed as offer.conditional"
+   ],
+   "text": "Возместим стоимость подъёма на этаж до 21 января.",
+   "gold": [
+    "promise company: возместить стоимость подъёма на этаж"
+   ],
+   "round8": [
+    "fact offer.conditional: Возместим стоимость подъёма на этаж до 21 января.",
+    "promise company: возместить стоимость подъёма на этаж"
+   ],
+   "round9": [
+    "promise company: возместить стоимость подъёма на этаж"
+   ],
+   "lost": [
+    "fact offer.conditional: Возместим стоимость подъёма на этаж до 21 января."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "возместить стоимость подъёма на этаж",
+     "quote": "Возместим стоимость подъёма на этаж до 21 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 21,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 21 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 83,
+   "why": [
+    "control"
+   ],
+   "text": "Мы вернём вам деньги за подписку до конца дня.",
+   "gold": [
+    "promise company: вернуть деньги за подписку"
+   ],
+   "round8": [
+    "promise company: вернуть деньги за подписку"
+   ],
+   "round9": [
+    "promise company: вернуть деньги за подписку"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "вернуть деньги за подписку",
+     "quote": "Мы вернём вам деньги за подписку до конца дня.",
+     "due": {
+      "type": "PeriodEnd",
+      "period": "day"
+     },
+     "due_quote": "до конца дня",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 84,
+   "why": [
+    "control"
+   ],
+   "text": "Восстановим доступ к личному кабинету до 27 января",
+   "gold": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round8": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету до 27 января",
+     "due": {
+      "type": "DateRef",
+      "day": 27,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 27 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 105,
+   "why": [
+    "control"
+   ],
+   "text": "Добрый день! Есть новости по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Есть новости по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: Есть новости по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Есть новости по моему обращению?",
+     "quote": "Есть новости по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 141,
+   "why": [
+    "control"
+   ],
+   "text": "Вышлем вам паспорт изделия",
+   "gold": [
+    "promise company: выслать паспорт изделия"
+   ],
+   "round8": [
+    "promise company: выслать клиенту паспорт изделия"
+   ],
+   "round9": [
+    "promise company: выслать клиенту паспорт изделия"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выслать клиенту паспорт изделия",
+     "quote": "Вышлем вам паспорт изделия",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 144,
+   "why": [
+    "control"
+   ],
+   "text": "Одно уже получила, спасибо.",
+   "gold": [],
+   "round8": [
+    "AnswerQuestion: Одно уже получила, спасибо.",
+    "ResolveCommitment: Одно уже получила, спасибо."
+   ],
+   "round9": [
+    "AnswerQuestion: Одно уже получила",
+    "ResolveCommitment: Одно уже получила"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AnswerQuestion",
+     "question_id": "e143#0",
+     "quote": "Одно уже получила"
+    },
+    {
+     "type": "ResolveCommitment",
+     "commitment_id": "e140#0",
+     "quote": "Одно уже получила",
+     "target_quote": "Вышлем вам инструкцию.",
+     "verification": {
+      "type": "Verification",
+      "verdict": "unsure",
+      "evidence_quote": "",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "error": ""
+     },
+     "context_quote": "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 157,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, как продвигается мой вопрос?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, как продвигается мой вопрос?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, как продвигается мой вопрос?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, как продвигается мой вопрос?",
+     "quote": "Подскажите, пожалуйста, как продвигается мой вопрос?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0017",
+   "seq": 185,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, как там продвигается мой вопрос?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, как там продвигается мой вопрос?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, как там продвигается мой вопрос?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, как там продвигается мой вопрос?",
+     "quote": "Подскажите, пожалуйста, как там продвигается мой вопрос?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Добрый день! У меня возникла проблема с заказом 208967.",
+   "gold": [
+    "fact order.number: 208967"
+   ],
+   "round8": [
+    "fact order.number: 208967",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 208967",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "208967",
+     "quote": "заказом 208967",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "возникла проблема с заказом 208967",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 31,
+   "why": [
+    "control"
+   ],
+   "text": "Это опять я, напоминаю о себе.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 58,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте, подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?\""
+   ],
+   "round9": [
+    "AskQuestion: подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Здравствуйте, подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?",
+     "quote": "подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 66,
+   "why": [
+    "control"
+   ],
+   "text": "Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?"
+   ],
+   "round9": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?",
+     "quote": "Подскажите, пожалуйста, есть ли какое-то продвижение по моей заявке?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 67,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если посылка не придёт до 23 января, оформим повторную отправку бесплатно.",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 23 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если посылка не придёт до 23 января, оформим повторную отправку бесплатно."
+   ],
+   "round9": [
+    "offer company: оформить повторную отправку бесплатно | Если посылка не придёт до 23 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если посылка не придёт до 23 января, оформим повторную отправку бесплатно."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку бесплатно",
+     "quote": "Если посылка не придёт до 23 января, оформим повторную отправку бесплатно.",
+     "condition": "Если посылка не придёт до 23 января",
+     "due": {
+      "type": "DateRef",
+      "day": 23,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 23 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 87,
+   "why": [
+    "control"
+   ],
+   "text": "Мне обещали прислать акт сверки, срок прошёл. Что происходит?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Что происходит?"
+   ],
+   "round9": [
+    "AskQuestion: Что происходит?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Что происходит?",
+     "quote": "Что происходит?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 89,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Восстановим доступ к рабочему пространству Гамма до конца недели.",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Гамма",
+    "promise company: восстановить доступ к рабочему пространству Гамма"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Гамма"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Гамма"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Гамма",
+     "quote": "Восстановим доступ к рабочему пространству Гамма до конца недели.",
+     "due": {
+      "type": "PeriodEnd",
+      "period": "week"
+     },
+     "due_quote": "до конца недели",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 92,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! Восстановим доступ к рабочему пространству Дельта в течение 3 рабочих дней. Спасибо за обращение!",
+   "gold": [
+    "promise company: восстановить доступ"
+   ],
+   "round8": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Дельта",
+    "promise company: восстановить доступ к рабочему пространству Дельта"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к рабочему пространству Дельта"
+   ],
+   "lost": [
+    "fact issue.summary: Восстановим доступ к рабочему пространству Дельта"
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к рабочему пространству Дельта",
+     "quote": "Восстановим доступ к рабочему пространству Дельта в течение 3 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 3,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 3 рабочих дней",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 112,
+   "why": [
+    "control"
+   ],
+   "text": "Уточню на складе и напишу вам до пятницы.",
+   "gold": [
+    "promise company: уточнить на складе и написать"
+   ],
+   "round8": [
+    "promise company: уточнить на складе и написать клиенту"
+   ],
+   "round9": [
+    "promise company: уточнить на складе и написать клиенту"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "уточнить на складе и написать клиенту",
+     "quote": "Уточню на складе и напишу вам до пятницы.",
+     "due": {
+      "type": "WeekdayRef",
+      "weekday": 4,
+      "at": null,
+      "week": null
+     },
+     "due_quote": "до пятницы",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 113,
+   "why": [
+    "control"
+   ],
+   "text": "Перезапустила телефон, но это не помогло.",
+   "gold": [
+    "SetStepOutcome: не помогло"
+   ],
+   "round8": [
+    "SetStepOutcome: Перезапустила телефон, но это не помогло."
+   ],
+   "round9": [
+    "SetStepOutcome: Перезапустила телефон, но это не помогло."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "SetStepOutcome",
+     "step_id": "e107#0",
+     "outcome": "failed",
+     "quote": "Перезапустила телефон, но это не помогло."
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0018",
+   "seq": 139,
+   "why": [
+    "control"
+   ],
+   "text": "Вышлем вам трек-номер посылки.",
+   "gold": [
+    "promise company: выслать трек-номер"
+   ],
+   "round8": [
+    "promise company: выслать клиенту трек-номер посылки"
+   ],
+   "round9": [
+    "promise company: выслать клиенту трек-номер посылки"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "выслать клиенту трек-номер посылки",
+     "quote": "Вышлем вам трек-номер посылки.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 1,
+   "why": [
+    "issue.summary fact"
+   ],
+   "text": "Здравствуйте! У меня проблема с заказом 179257.",
+   "gold": [
+    "fact order.number: 179257"
+   ],
+   "round8": [
+    "fact order.number: 179257",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "round9": [
+    "fact order.number: 179257",
+    "fact issue.summary: проблема с заказом"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "order.number",
+     "value": "179257",
+     "quote": "заказом 179257",
+     "change": false
+    },
+    {
+     "type": "AssertFact",
+     "slot": "issue.summary",
+     "value": "проблема с заказом",
+     "quote": "У меня проблема с заказом 179257",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 10,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какие-то новости по моему обращению?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: есть ли какие-то новости по моему обращению?"
+   ],
+   "round9": [
+    "AskQuestion: есть ли какие-то новости по моему обращению?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "есть ли какие-то новости по моему обращению?",
+     "quote": "есть ли какие-то новости по моему обращению?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 31,
+   "why": [
+    "control"
+   ],
+   "text": "Спасибо, что подождали!",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 65,
+   "why": [
+    "filed as offer.conditional"
+   ],
+   "text": "Здравствуйте! Возместим стоимость сборки до 19 января.",
+   "gold": [
+    "promise company: возместить стоимость сборки"
+   ],
+   "round8": [
+    "fact offer.conditional: Возместим стоимость сборки до 19 января.",
+    "promise company: возместить стоимость сборки"
+   ],
+   "round9": [
+    "promise company: возместить стоимость сборки"
+   ],
+   "lost": [
+    "fact offer.conditional: Возместим стоимость сборки до 19 января."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "возместить стоимость сборки",
+     "quote": "Возместим стоимость сборки до 19 января.",
+     "due": {
+      "type": "DateRef",
+      "day": 19,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 19 января",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 143,
+   "why": [
+    "control"
+   ],
+   "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?",
+   "gold": [],
+   "round8": [
+    "AskQuestion: Подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?"
+   ],
+   "round9": [
+    "AskQuestion: Здравствуйте! Подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "AskQuestion",
+     "text": "Здравствуйте! Подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?",
+     "quote": "Здравствуйте! Подскажите, пожалуйста, есть ли какие-то новости по моему вопросу?"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 155,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Здравствуйте! Если промокод не сработает до 28 января, начислим вам бонусы взамен. Хорошего дня!",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 28 января"
+   ],
+   "round8": [
+    "fact offer.conditional: Если промокод не сработает до 28 января, начислим вам бонусы взамен."
+   ],
+   "round9": [
+    "offer company: начислить клиенту бонусы взамен промокода | Если промокод не сработает до 28 января"
+   ],
+   "lost": [
+    "fact offer.conditional: Если промокод не сработает до 28 января, начислим вам бонусы взамен."
+   ],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить клиенту бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 28 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 28 января",
+     "due": {
+      "type": "DateRef",
+      "day": 28,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 28 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 158,
+   "why": [
+    "control"
+   ],
+   "text": "Восстановим доступ к личному кабинету.",
+   "gold": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round8": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "round9": [
+    "promise company: восстановить доступ к личному кабинету"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "company",
+     "action": "восстановить доступ к личному кабинету",
+     "quote": "Восстановим доступ к личному кабинету.",
+     "due": null,
+     "due_quote": "",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 166,
+   "why": [
+    "control"
+   ],
+   "text": "Хорошо, буду ждать.",
+   "gold": [],
+   "round8": [],
+   "round9": [],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": []
+  },
+  {
+   "ticket": "SIM-5353-M0019",
+   "seq": 175,
+   "why": [
+    "control"
+   ],
+   "text": "Спасибо за ожидание! Я проверю статус возврата и отпишусь в течение 5 рабочих дней.",
+   "gold": [
+    "promise company: проверить статус возврата и отписаться"
+   ],
+   "round8": [
+    "promise company: проверить статус возврата и отписаться клиенту"
+   ],
+   "round9": [
+    "promise company: проверить статус возврата и отписаться клиенту"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round9_proposals": [
+    {
+     "type": "MakeCommitment",
+     "owner": "agent",
+     "action": "проверить статус возврата и отписаться клиенту",
+     "quote": "Я проверю статус возврата и отпишусь в течение 5 рабочих дней.",
+     "due": {
+      "type": "Offset",
+      "amount": 5,
+      "unit": "business_day"
+     },
+     "due_quote": "в течение 5 рабочих дней",
+     "supersedes": null,
+     "target_quote": "",
+     "verification": null
+    }
+   ]
+  }
+ ]
+}

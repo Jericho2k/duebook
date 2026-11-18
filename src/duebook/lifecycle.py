@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from .card import Card, Commitment, CommitmentState, Confidence, Party
+from .card import Card, Commitment, CommitmentState, Conditional, Confidence, Party
 
 
 class Status(StrEnum):
@@ -41,6 +41,8 @@ class NoticeKind(StrEnum):
     BREACHED = "breached"
     #: A message no attempt could read (decision 0002).
     UNREADABLE = "unreadable"
+    #: A conditional offer's condition is due and nothing says whether it holds (0004).
+    CONDITION_DUE = "condition_due"
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,12 +73,12 @@ class Notice:
     key: str
     kind: NoticeKind
     ticket_id: str
-    #: None for an alert about a message rather than a promise.
+    #: None for an alert about a message or a conditional offer.
     commitment_id: str | None
     #: The deadline; for an unreadable message, when it was posted.
     due_at: datetime
     recipient: str | None
-    #: The message an unreadable alert is about.
+    #: The message an unreadable or condition-due alert is about.
     seq: int | None = None
 
 
@@ -132,6 +134,12 @@ def notices(card: Card, now: datetime, policy: AlertPolicy | None = None) -> lis
                 recipient=card.assignee if c.owner is Party.CUSTOMER else c.responsible,
             )
         )
+    for k in card.conditionals:
+        if _checkable(k, policy) and now >= k.due.deadline.due_at:
+            kind, due_at = NoticeKind.CONDITION_DUE, k.due.deadline.due_at
+            result.append(Notice(f"{card.ticket_id}:{k.id}:{kind.value}:{due_at.isoformat()}",
+                                 kind, card.ticket_id, None, due_at, card.assignee,
+                                 k.source.seq))  # fmt: skip
     for u in card.unread:
         if policy.alerts_since is None or u.at >= policy.alerts_since:
             result.append(Notice(f"{card.ticket_id}:{u.id}:{NoticeKind.UNREADABLE.value}",
@@ -151,6 +159,7 @@ def next_wakeup(card: Card, now: datetime, policy: AlertPolicy | None = None) ->
         if _alertable(c, policy):
             due_at = c.due.deadline.due_at
             moments += [due_at - _lead(c, policy), due_at]
+    moments += [k.due.deadline.due_at for k in card.conditionals if _checkable(k, policy)]
     future = [m for m in moments if m > now]
     return min(future) if future else None
 
@@ -163,6 +172,13 @@ def _alertable(c: Commitment, policy: AlertPolicy) -> bool:
     if policy.alerts_since is not None and c.due.deadline.due_at < policy.alerts_since:
         return False
     return policy.include_customer or c.owner is not Party.CUSTOMER
+
+
+def _checkable(k: Conditional, policy: AlertPolicy) -> bool:
+    """A pending offer with a trusted condition deadline, inside the alerting window."""
+    if not k.pending or k.due is None or k.due.confidence < policy.min_confidence:
+        return False
+    return policy.alerts_since is None or k.due.deadline.due_at >= policy.alerts_since
 
 
 def _lead(c: Commitment, policy: AlertPolicy) -> timedelta:

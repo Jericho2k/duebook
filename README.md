@@ -28,6 +28,8 @@ event stream, so it can be rebuilt, audited, and inspected as of any moment.
 | A new promise is a duplicate only when it restates an open one: it names nothing the open one does not, and the reverse, with no other deadline | Two promises alike in action but about different things are both kept; dropping a real promise is silent ([decision 0003](docs/decisions/0003-promise-identity.md)) |
 | A close (done, cancelled, renegotiated) must name its promise twice and be about it; if not, the promise stays open and the close becomes a suggestion | A promise closed by mistake is never alerted on again; one left open still is |
 | One side updating its own statement *supersedes*; two sides disagreeing is a *contradiction* | A change is history, a disagreement is an open problem |
+| An order, account, contract, invoice or tracking number is one of a set; only an explicit correction ("не 538916, а 538961") disputes one | A ticket can concern several orders, and a second one is not a disagreement ([decision 0005](docs/decisions/0005-identifier-facts.md)) |
+| A conditional offer owes nothing until a message says its condition held; then it becomes a promise. Its lapse needs the evidence of a close | "If it hasn't arrived by Friday, we'll refund" must neither alert nor be forgotten ([decision 0004](docs/decisions/0004-conditional-commitments.md)) |
 | A promise follows the ticket on handoff and is marked *inherited*; with no assignee it is *orphaned* | Handoff is where promises are lost |
 | The model never computes a date | It emits a structured expression; code resolves it against the message time, timezone and working calendar |
 | The model does not get to name a fact's slot freely | One thing must have one slot, or an update looks like a second fact and a disagreement goes unnoticed |
@@ -275,8 +277,9 @@ brief.dropped  # what did not fit, by section, with counts
 A deterministic rendering of the card, in Russian, for the operator taking a
 ticket over. No model writes it. It is ordered by what hurts most if missed:
 messages nobody could read automatically, promises broken or about to be, promises that changed hands or have nobody
-answerable, the other unresolved promises, open contradictions, current
-facts, what changed, steps that failed, open questions.
+answerable, the other unresolved promises, offers owed only if a condition
+comes true, open contradictions, current facts, what changed, steps that
+failed, open questions.
 
     Тикет T-1 на вт 12.01 12:00 · ответственный: Ольга [событие №7] · учтено событий: 7
 
@@ -338,10 +341,15 @@ someone else on the company's side (a courier, the finance department,
 engineers, the on-call engineer; with or without a deadline), two promises
 with one action about different objects, settled separately, and three
 messages that promise nothing: a prediction about a third party, a status
-report and a conditional offer (kept as an `offer.conditional` fact,
-[decision 0004](docs/decisions/0004-conditional-commitments.md)). `dev5`
-(8 tickets, seed 5151) is for tuning; `test4` (20 tickets, seed 5353) is
-never used for it. Every gold promise lost at the end is attributed to a
+report and a conditional offer, scored as an offer with its condition-due
+alert ([decision 0004](docs/decisions/0004-conditional-commitments.md)). `dev5`
+(8 tickets, seed 5151) is for tuning; `test4` (20 tickets, seed 5353) was
+never used for it. The `main4` profile (Round 9) adds the customer saying
+whether the offer's condition held, failed, or nothing; `dev6` (8 tickets,
+seed 6174) uses it. `--reread` reads chosen messages live inside a replay
+(`--replay` a record, or `oracle` for the planted proposals), so a prompt
+change can be checked on a few hundred messages instead of whole tickets.
+Every gold promise lost at the end is attributed to a
 stage: missed by the model, dropped by the reducer, or mishandled later
 (`bench.score.attribute`); the first two need the event memory's proposals.
 
@@ -409,8 +417,8 @@ memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
 (`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
 bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 8); the raw record is under
-`results/` and `results/round2/` to `results/round8/`.
+[docs/results.md](docs/results.md) (rounds 1 to 9); the raw record is under
+`results/` and `results/round2/` to `results/round9/`.
 
 ## Running the service
 
@@ -567,7 +575,9 @@ Round 7 removed Round 5's compact replies and batching, which lost promises,
 facts and failed steps; capped and escalated unreadable answers; and records a
 message no attempt could read instead of stalling its ticket. Round 8 keeps
 apart promises alike in action but about different things, counts delegated
-work as the company's promise, and reports on an unseen split (`test4`). The
+work as the company's promise, and reports on an unseen split (`test4`).
+Round 9 tracks conditional offers and lets a ticket hold several orders,
+checked by replay and 297 targeted reads rather than a full run. The
 evaluation is in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
 independently labeled real tickets are next.
 

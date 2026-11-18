@@ -29,9 +29,11 @@ from duebook.proposals import (
     AssertFact,
     CancelCommitment,
     MakeCommitment,
+    MakeConditional,
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    SettleConditional,
 )
 from duebook.temporal import DateRef, DayRef, Offset, Period, PeriodEnd, Unit, WeekdayRef
 
@@ -124,7 +126,21 @@ def test_the_instructions_say_bare_thanks_confirms_nothing():
 
 def test_the_instructions_make_a_side_accountable_for_work_it_delegates():
     assert "whoever does the work" in SYSTEM_PROMPT and "Курьер заберёт товар" in SYSTEM_PROMPT
-    assert "NOT commitments" in SYSTEM_PROMPT and '"offer.conditional"' in SYSTEM_PROMPT
+    assert "NOT commitments" in SYSTEM_PROMPT and "offer.conditional" not in SYSTEM_PROMPT
+
+
+def test_a_conditional_offer_and_its_outcome_are_read_into_their_own_proposals():
+    offer = {"owner": "company", "action": "вернуть деньги", "quote": "если не придёт, вернём",
+             "condition": "если не придёт", "due_quote": None, "due": NO_DUE}
+    outcome = {"id": "O1", "outcome": "failed", "target_quote": "вернём", "quote": "пришла"}
+    raw = output(conditionals=[offer], condition_outcomes=[outcome])
+    proposals, malformed = parse_output(raw, {"O1": "e1#0"})
+    assert malformed == []
+    assert proposals == [
+        MakeConditional(Party.COMPANY, "вернуть деньги", "если не придёт, вернём",
+                        "если не придёт"),
+        SettleConditional("e1#0", False, "пришла", "вернём"),
+    ]  # fmt: skip
 
 
 def test_handles_shown_to_the_model_map_back_to_real_ids():

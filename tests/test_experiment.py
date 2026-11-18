@@ -19,6 +19,7 @@ from duebook.bench.experiment import (
     record,
     recorded_proposals,
     refolded,
+    reread_changes,
     rewritten,
     run_all,
     sample_of,
@@ -38,7 +39,7 @@ from duebook.bench.score import score_ticket
 from duebook.extract import Completion, Usage
 from duebook.extract.extractor import Extraction
 from duebook.extract.schema import OUTPUT_SCHEMA
-from duebook.proposals import ResolveCommitment
+from duebook.proposals import AssertFact, ResolveCommitment
 from duebook.store.codec import decode_proposals, encode
 from duebook.temporal import WorkCalendar
 
@@ -326,6 +327,43 @@ def _recorded(proposals):
 
     return Recorded(tuple(proposals), Usage(170, 300_000, 12_000, 270_000, 0.01), Usage(),
                     1.0, 0.0, {"DeepInfra": 170})  # fmt: skip
+
+
+def test_a_targeted_rereading_asks_the_model_only_about_the_listed_messages():
+    t = MAIN_TICKETS[0]
+    promised = [c.seq for c in t.gold.commitments[:2]]
+    ledger = Ledger(cap_usd=1.0)
+    run = EventMemory(Priced(), ledger, recorded={t.ticket_id: _recorded(t.proposals)},
+                      reread={t.ticket_id: frozenset(promised)}).run(t)  # fmt: skip
+    assert ledger.spent.calls == 2
+    (first, second) = reread_changes([t], [run])
+    assert [first["seq"], second["seq"]] == promised
+    assert first["new"] == [] and first["lost"] == first["regressions"] == first["old"][:1]
+
+
+def test_a_recorded_close_follows_its_promise_to_where_the_new_read_put_it():
+    t = next(t for t in MAIN_TICKETS if any(c.fate is Fate.KEPT for c in t.gold.commitments))
+    kept = next(c for c in t.gold.commitments if c.fate is Fate.KEPT)
+    # The record had a fact before the promise; the new read has only the promise.
+    noted = AssertFact("note", "заметка", t.events[kept.seq - 1].text[:5])
+    proposals = [list(ps) for ps in t.proposals]
+    proposals[kept.seq - 1].insert(0, noted)
+    closes = [p for p in proposals[kept.resolved_seq - 1] if isinstance(p, ResolveCommitment)]
+    proposals[kept.resolved_seq - 1] = [replace(p, commitment_id=f"e{kept.seq}#1") for p in closes]
+
+    (made,) = t.proposals[kept.seq - 1]
+    answer = {k: [] for k in OUTPUT_SCHEMA["properties"]} | {"commitments": [
+        {"owner": made.owner.value, "action": made.action, "quote": made.quote,
+         "due_quote": made.due_quote, "due": None, "supersedes": None, "target_quote": None}]}
+
+    class Again:
+        def complete_json(self, messages, schema, name="output"):
+            return Completion(answer, Usage(1, 10, 1, 0, 0.0))
+
+    run = EventMemory(Again(), Ledger(), recorded={t.ticket_id: _recorded(proposals)},
+                      reread={t.ticket_id: frozenset({kept.seq})}).run(t)  # fmt: skip
+    (end,) = [p for p in run.snapshots[-1].promises if p.seq == kept.seq]
+    assert end.closed_seq == kept.resolved_seq
 
 
 def test_recorded_proposals_are_folded_again_and_only_unverified_closes_go_to_the_verifier(

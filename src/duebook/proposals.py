@@ -106,6 +106,33 @@ class CancelCommitment:
 
 
 @dataclass(frozen=True, slots=True)
+class MakeConditional:
+    """An offer owed only if a condition comes true (decision 0004)."""
+
+    owner: Party
+    action: str
+    #: The whole offer, condition included: its wording in the record.
+    quote: str
+    #: The words that state the condition ("если посылка не придёт до пятницы").
+    condition: str
+    #: The condition's deadline, read as a commitment's is.
+    due: DueExpr | None = None
+    due_quote: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SettleConditional:
+    """The message says whether a conditional offer's condition came true."""
+
+    conditional_id: str
+    #: True activates the offer; False lapses it.
+    holds: bool
+    quote: str
+    #: A span of the offer's wording, naming it a second time.
+    target_quote: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class RecordStep:
     action: str
     quote: str
@@ -149,6 +176,8 @@ Proposal = (
     | MakeCommitment
     | ResolveCommitment
     | CancelCommitment
+    | MakeConditional
+    | SettleConditional
     | RecordStep
     | SetStepOutcome
     | AskQuestion
