@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -233,9 +232,7 @@ class VerifyingReader:
         for p in pending:
             target = card.commitment(target_of(p) or "")
             if target is not None and target.unresolved and p.verification is None:
-                if (previous is not None and isinstance(p, ResolveCommitment)
-                    and previous.author.side is target.owner.side
-                    and (p.context_quote or overlap(p.quote, (target.source.quote,)) < NAMING)):
+                if _leans_on(previous, p, target):
                     candidates = [c for c in card.commitments
                                   if c.unresolved and c.owner.side is target.owner.side]
                     p, cost, provider = self.verifier.verify_context(candidates, p, event, previous)
@@ -254,6 +251,15 @@ class VerifyingReader:
             return extraction
         usage = VerifierUsage(providers.total(), failures, spent, dict(providers))
         return replace(extraction, proposals=tuple(proposals), verifier_usage=usage)
+
+
+def _leans_on(previous: MessagePosted | None, p: Proposal, target: Commitment) -> bool:
+    """Does a close rely on the preceding turn to name its target? Then every candidate
+    of the owing side is compared, not just the one proposed."""
+    if previous is None or not isinstance(p, ResolveCommitment):
+        return False
+    named = overlap(p.quote, (target.source.quote,)) >= NAMING
+    return previous.author.side is target.owner.side and (bool(p.context_quote) or not named)
 
 
 def _possible_reply(
@@ -291,9 +297,8 @@ def verifying_reader(
     *,
     model: str = DEFAULT_MODEL,
     reasoning: str = DEFAULT_VERIFIER_REASONING,
-    wrap_model: Callable[[JsonModel], JsonModel] = lambda client: client,
 ) -> VerifyingReader:
     """Reuse the connection options and route the verifier by its own model preset."""
     if isinstance(client, ChatClient):
         client = replace(client, model=model, reasoning=reasoning, settings=None)
-    return VerifyingReader(reader, Verifier(wrap_model(client), cal))
+    return VerifyingReader(reader, Verifier(client, cal))
