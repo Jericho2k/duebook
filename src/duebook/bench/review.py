@@ -8,7 +8,6 @@ import random
 from pathlib import Path
 
 from ..events import MessagePosted
-from .experiment import results_directory
 from .generate import SPLITS, SimTicket
 from .rewrite import with_rewritten_text
 
@@ -56,7 +55,7 @@ def main(argv: list[str] | None = None) -> None:
 
     split = SPLITS[args.split]
     tickets = random.Random(args.seed).sample(split.tickets(), min(args.tickets, split.count))
-    cache = (args.results or results_directory(split)) / "tickets" / f"{split.name}.json"
+    cache = (args.results or split.results) / "tickets" / f"{split.name}.json"
     source = "Generated template text."
     if cache.is_file():
         stored = json.loads(cache.read_text(encoding="utf-8"))

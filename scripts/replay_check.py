@@ -30,7 +30,7 @@ import duebook.bench.experiment as experiment
 import duebook.bench.methods as methods
 import duebook.bench.run as run
 import duebook.extract.client as client
-from duebook.bench.experiment import WRITER, results_directory, rewritten, to_json
+from duebook.bench.experiment import WRITER, rewritten, to_json
 from duebook.bench.generate import SPLITS
 from duebook.bench.meter import Ledger
 from duebook.bench.result import checkpoints
@@ -87,7 +87,7 @@ def snapshots_differ(name: str, rules: int) -> list[str]:
     record = load(name)
     split = SPLITS[record["split"]]
     tickets = (split.tickets() if record.get("template")
-               else rewritten(split, WRITER, Ledger(), results_directory(split) / "tickets")[0])
+               else rewritten(split, WRITER, Ledger(), split.results / "tickets")[0])
     by_id = {t.ticket_id: t for t in tickets}
     differ = []
     for raw in record["runs"]:

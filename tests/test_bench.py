@@ -24,8 +24,6 @@ from duebook.bench import (
     evaluate,
     generate,
     require_different_models,
-    run_ticket,
-    score,
 )
 from duebook.bench.experiment import to_json
 from duebook.bench.generate import MAIN3, PROMISE_BEATS, TWINS, Beat, CloseCase
@@ -164,8 +162,9 @@ def test_the_planted_proposals_through_the_real_reducer_score_exactly_one():
 
 def test_each_label_describes_what_the_card_really_ends_up_holding():
     for t in TICKETS:
-        card, _, failure = run_ticket(t, Oracle.of([t]))
-        assert failure is None
+        folded = fold(t, Oracle.of([t]))
+        card = folded.card
+        assert folded.failure is None
         by_seq = {c.source.seq: c for c in card.commitments}
         for gold in t.gold.commitments:
             found = by_seq[gold.seq]
@@ -329,8 +328,8 @@ def test_a_rewrite_keeps_the_planted_spans_and_the_labels_stay_true():
     texts = [e.text for e in rewritten.events if hasattr(e, "text")]
     assert all(text.startswith("Ой, слушайте…") for text in texts) and rewriter.discarded == 0
     assert rewriter.spent.calls == len(texts)
-    card, _, _ = run_ticket(rewritten, Oracle.of([rewritten]))
-    assert score(rewritten, card).commitments == Counts(tp=len(ticket.gold.commitments))
+    s = evaluate([rewritten], Oracle.of([rewritten])).score
+    assert s.commitments == Counts(tp=len(ticket.gold.commitments))
 
 
 def test_a_rewrite_that_lost_a_planted_span_is_discarded():
@@ -439,8 +438,9 @@ def test_the_main_profile_plants_renegotiations_and_cancellations_with_true_labe
     fates = {c.fate for t in MAIN_TICKETS for c in t.gold.commitments}
     assert {Fate.RENEGOTIATED, Fate.CANCELLED} <= fates
     for t in MAIN_TICKETS:
-        card, _, failure = run_ticket(t, Oracle.of([t]))
-        assert failure is None
+        folded = fold(t, Oracle.of([t]))
+        card = folded.card
+        assert folded.failure is None
         by_seq = {c.source.seq: c for c in card.commitments}
         expected = {
             Fate.KEPT: CommitmentState.FULFILLED,

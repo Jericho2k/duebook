@@ -13,10 +13,7 @@ checkpoints — each handoff and the end — and is judged by this code alone.
   absent. An hour off is wrong: an alert would fire at the wrong time.
 * *Statuses* — of the promises found, the share whose state agrees with what
   had happened by the checkpoint: still owed, done, or dropped (cancelled or
-  replaced by a renegotiated promise). Round 1 judged done / not done only;
-  its tickets planted no cancellation or renegotiation, so there the two agree
-  except that a promise wrongly called cancelled or replaced now counts as
-  wrong, as it should.
+  replaced by a renegotiated promise).
 * *Breach alerts* — a company promise the method holds as open, with a
   deadline it trusts, that has passed by the checkpoint is an alert. Precision
   and recall against the promises planted as broken; every alert that is not
@@ -81,9 +78,7 @@ from dataclasses import dataclass, field, fields
 from datetime import timedelta
 from enum import StrEnum
 
-from ..card import Card
 from ..events import Side
-from ..lifecycle import AlertPolicy
 from ..proposals import MakeCommitment, Proposal
 from .generate import PROMISE_BEATS, Beat, GoldCommitment, GoldFact, SimTicket
 from .match import mentions, mentions_any
@@ -95,8 +90,6 @@ from .result import (
     Promise,
     PromiseStatus,
     Snapshot,
-    checkpoints,
-    from_card,
 )
 
 #: Two deadlines this close are the same deadline.
@@ -213,17 +206,6 @@ class Score:
             out[f.name] = [value.tp, value.fp, value.fn] if isinstance(value, Counts) else value
         return out
 
-    @classmethod
-    def from_dict(cls, raw: dict) -> Score:
-        return cls(
-            **{
-                k: Counts(*v) if isinstance(v, list) else v
-                for k, v in raw.items()
-                if k in {f.name for f in fields(cls)}
-            }
-        )
-
-
 @dataclass(frozen=True, slots=True)
 class TicketScore:
     """One ticket: the end of it, and all its handoffs added up."""
@@ -245,11 +227,6 @@ def score_ticket(ticket: SimTicket, snapshots: Sequence[Snapshot]) -> TicketScor
         else:
             handoffs += s
     return TicketScore(end, handoffs)
-
-
-def score(ticket: SimTicket, card: Card, policy: AlertPolicy | None = None) -> Score:
-    """The event memory's card at the end of the ticket, scored."""
-    return score_snapshot(ticket, from_card(card, checkpoints(ticket)[-1], policy))
 
 
 def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:

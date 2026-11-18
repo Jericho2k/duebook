@@ -306,11 +306,6 @@ def test_an_unanswered_checkpoint_scores_as_nothing_found_and_is_counted():
     assert s.errors == 1 and s.commitments.tp == 0 and s.commitments.fn > 0
 
 
-def test_a_score_round_trips_through_json():
-    s = score_ticket(TICKETS[0], oracle_snapshots(TICKETS[0])).all
-    assert Score.from_dict(s.as_dict()) == s
-
-
 def test_the_card_adapter_shows_a_disputed_slot_only_as_a_dispute():
     t = next(t for t in TICKETS if any(d.settled_seq is None for d in t.gold.contradictions))
     folded = fold(t, Oracle.of([t]), [t.events[-1].seq])

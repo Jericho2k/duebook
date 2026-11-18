@@ -308,7 +308,7 @@ python -m duebook.bench --seed 1 --tickets 200        # self-check, no model cal
 python -m duebook.bench --split dev3                 # self-check a fixed split
 python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.2
 python -m duebook.bench.experiment --split dev2 --methods event_memory --max-usd 0.02 \
-    --replay results/round2/dev2-4.json   # recorded proposals, only the verifier is asked
+    --replay results/round2/dev2-4.json   # recorded proposals folded again: no model call
 python -m duebook.bench.report results/round2/test2.json --dev results/round2/dev2-*.json
 python -m duebook.bench.review --split test2  # regenerate the human spot-check
 ```

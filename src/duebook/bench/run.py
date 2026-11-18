@@ -261,14 +261,6 @@ def refold(
     return fold(ticket, Replayed(answers), stops, cal, guards)
 
 
-def run_ticket(
-    ticket: SimTicket, extractor: Reader, cal: WorkCalendar | None = None
-) -> tuple[Card, Usage, tuple[str, int, str] | None]:
-    """Fold one ticket. Returns the card reached, the cost, and the failure if any."""
-    folded = fold(ticket, extractor, (), cal)
-    return folded.card, folded.usage, folded.failure
-
-
 def snapshots(
     ticket: SimTicket, folded: Folded, policy: AlertPolicy | None = None
 ) -> tuple[Snapshot, ...]:
