@@ -19,6 +19,7 @@ from duebook.bench.experiment import (
     record,
     recorded_proposals,
     refolded,
+    reread_changes,
     rewritten,
     run_all,
     sample_of,
@@ -326,6 +327,18 @@ def _recorded(proposals):
 
     return Recorded(tuple(proposals), Usage(170, 300_000, 12_000, 270_000, 0.01), Usage(),
                     1.0, 0.0, {"DeepInfra": 170})  # fmt: skip
+
+
+def test_a_targeted_rereading_asks_the_model_only_about_the_listed_messages():
+    t = MAIN_TICKETS[0]
+    promised = [c.seq for c in t.gold.commitments[:2]]
+    ledger = Ledger(cap_usd=1.0)
+    run = EventMemory(Priced(), ledger, recorded={t.ticket_id: _recorded(t.proposals)},
+                      reread={t.ticket_id: frozenset(promised)}).run(t)  # fmt: skip
+    assert ledger.spent.calls == 2
+    (first, second) = reread_changes([t], [run])
+    assert [first["seq"], second["seq"]] == promised
+    assert first["new"] == [] and first["lost_promises"] == first["old"][:1]
 
 
 def test_recorded_proposals_are_folded_again_and_only_unverified_closes_go_to_the_verifier(

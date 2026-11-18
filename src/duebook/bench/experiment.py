@@ -74,8 +74,9 @@ from ..extract.cost import Usage
 from ..extract.extractor import reading_clients
 from ..extract.prompt import Bound
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
-from ..proposals import Proposal
+from ..proposals import AssertFact, MakeCommitment, MakeConditional, Proposal
 from ..reducer import UNGUARDED, Guards, apply
+from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
@@ -106,6 +107,8 @@ ROUND7 = RESULTS / "round7"
 ROUND8 = RESULTS / "round8"
 ROUND9 = RESULTS / "round9"
 CACHE = Path(".cache/responses")
+#: ``--replay oracle``: the planted proposals stand in for a recorded run.
+ORACLE = Path("oracle")
 #: Finished (method, ticket) runs of a run in progress, to resume from.
 JOURNAL = Path(".cache/runs")
 #: What all live model calls of round 2 may cost together.
@@ -194,8 +197,10 @@ def rewritten(
 def make_methods(
     names: Sequence[str], model: str, ledger: Ledger, cal: WorkCalendar,
     cache: ResponseCache | None = None, recorded: dict[str, Recorded] | None = None,
+    reread: dict[str, frozenset[int]] | None = None,
 ) -> list:  # fmt: skip
-    """The methods by name; ``recorded`` replays proposals for ``event_memory``."""
+    """The methods by name; ``recorded`` replays proposals for ``event_memory``, except
+    the messages in ``reread``, which are read again live."""
     key = os.environ.get("DUEBOOK_OPENROUTER_API_KEY", "proxy-injected")
     reader = ChatClient(api_key=key, model=model, cache=cache)
     # Answering a checkpoint means writing out the whole account; it needs room.
@@ -211,12 +216,11 @@ def make_methods(
                 timeout=120 if extracting == "low" else reader.timeout))
             # The verifier is called as ``cli.extractor`` calls it: the same
             # client, with the verifier's reasoning.
-            verifier = (
-                replace(reader, reasoning=verifying) if verifying and recorded is None else None
-            )
+            live = recorded is None or reread is not None
+            verifier = replace(reader, reasoning=verifying) if verifying and live else None
             methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
                                        recorded=recorded if name == "event_memory" else None,
-                                       escalation=escalation))
+                                       escalation=escalation, reread=reread))
         elif name == "event_memory_bounded":
             methods.append(EventMemory(reader, ledger, cal, bound=Bound(), name=name))
         elif name == "full_context":
@@ -371,6 +375,62 @@ def project_from(path: Path, methods, tickets, subsets) -> dict[str, dict[str, f
     return estimates
 
 
+def project_reread(path: Path, calls: int) -> dict[str, dict[str, float]]:
+    """Budget a targeted re-extraction from what one extraction call cost in ``path``."""
+    runs = [r for r in load_runs(path) if r.method == "event_memory"]
+    used = [Usage(**r.detail["extraction_usage"]) for r in runs]
+    rate = sum(u.usd() or 0.0 for u in used) / max(sum(u.calls for u in used), 1)
+    verifying = sum((r.detail.get("verifier") or {}).get("usd") or 0.0 for r in runs)
+    rate += verifying / max(sum(u.calls for u in used), 1)
+    return {"event_memory": {"upper": 2 * rate * calls, "expected": rate * calls,
+                             "sample_usd": 0.0, "sample_charged": 0.0, "reused": 0.0}}  # fmt: skip
+
+
+def reread_changes(tickets: Sequence[SimTicket], runs: Sequence[MethodRun]) -> list[dict]:
+    """Per message read again: what the record and the live read proposed, and what was lost.
+
+    A promise of a side, or a fact's slot, that the record had and the new read
+    has not is listed as lost; ``gold`` says what the label holds at that message.
+    """
+    by_id = {t.ticket_id: t for t in tickets}
+    rows = []
+    for run in runs:
+        ticket = by_id[run.ticket_id]
+        for seq, old, new in run.detail.get("reread", ()):
+            old, new = (_items(decode_proposals(p)) for p in (old, new))
+            rows.append({
+                "ticket": run.ticket_id, "seq": seq, "text": ticket.events[seq - 1].text,
+                "gold": _items(ticket.proposals[seq - 1]), "old": old, "new": new,
+                "lost_promises": _lost(old, new, "promise"), "lost_facts": _lost(old, new, "fact"),
+            })  # fmt: skip
+    return rows
+
+
+def _items(proposals: Sequence[Proposal]) -> list[str]:
+    """Each proposal as one line: its kind, whose or which slot, and its words."""
+    out = []
+    for p in proposals:
+        match p:
+            case MakeCommitment():
+                out.append(f"promise {p.owner.side.value}: {p.action}")
+            case AssertFact():
+                out.append(f"fact {DEFAULT_VOCABULARY.normalise(p.slot)}: {p.value}")
+            case MakeConditional():
+                out.append(f"offer {p.owner.side.value}: {p.action} | {p.condition}")
+            case _:
+                out.append(f"{type(p).__name__}: {p.quote}")
+    return out
+
+
+def _lost(old: list[str], new: list[str], kind: str) -> list[str]:
+    """Items of ``kind`` whose side or slot the new read no longer has as often."""
+    def keys(items):
+        return Counter(i.split(":")[0] for i in items if i.startswith(kind))
+
+    missing = keys(old) - keys(new)
+    return [i for i in old if i.split(":")[0] in missing]
+
+
 def _transcript(ticket: SimTicket, seq: int, cal: WorkCalendar) -> str:
     return "\n".join(render_event(e, cal) for e in ticket.events[:seq])
 
@@ -396,8 +456,14 @@ def refolded(run: MethodRun, ticket: SimTicket, cal: WorkCalendar, name: str) ->
                    ingest_usage=usage, ingest_seconds=seconds, detail=detail)  # fmt: skip
 
 
-def recorded_proposals(path: Path) -> dict[str, Recorded]:
-    """Per ticket: what a recorded ``event_memory`` run proposed, and what that cost."""
+def recorded_proposals(path: Path, tickets: Sequence[SimTicket] = ()) -> dict[str, Recorded]:
+    """Per ticket: what a recorded ``event_memory`` run proposed, and what that cost.
+
+    The path ``oracle`` stands for the proposals planted in ``tickets``.
+    """
+    if path == ORACLE:
+        return {t.ticket_id: Recorded(t.proposals, Usage(), Usage(), 0.0, 0.0, {})
+                for t in tickets}  # fmt: skip
     out = {}
     for run in load_runs(path):
         if run.method != "event_memory":
@@ -834,7 +900,11 @@ def main(argv: Sequence[str] | None = None) -> None:
                         help="run a method on the first N tickets only: mem0=3,rolling_summary=5")
     parser.add_argument("--tickets", type=int, help="only the first N tickets of the split")
     parser.add_argument("--replay", type=Path,
-                        help="a result whose event_memory proposals event_memory folds again")
+                        help="a result whose event_memory proposals event_memory folds again, "
+                             "or 'oracle' for the planted proposals")
+    parser.add_argument("--reread", type=Path,
+                        help="with --replay: a JSON file {ticket: [seq, ...]} of messages read "
+                             "again live, against the card the replay rebuilds")
     parser.add_argument("--frozen", type=Path,
                         help="a result whose runs of the methods not run now are scored again")
     parser.add_argument("--sample-events", type=int, default=30,
@@ -909,11 +979,20 @@ def main(argv: Sequence[str] | None = None) -> None:
           f"(${writing:.4f} this run); session has ${left:.4f} left of "
           f"${args.session_cap:.2f}", file=sys.stderr)  # fmt: skip
 
-    recorded = recorded_proposals(args.replay) if args.replay else None
-    methods = make_methods(names, args.model, ledger, cal, cache, recorded)
-    projected = (project_from(args.projection_from, methods, tickets, subsets)
-                 if args.projection_from else project(methods, tickets, subsets, ledger, cal,
-                                                     args.sample_events))  # fmt: skip
+    recorded = recorded_proposals(args.replay, tickets) if args.replay else None
+    reread = None
+    if args.reread:
+        listed = json.loads(args.reread.read_text())["tickets"]
+        reread = {t: frozenset(seqs) for t, seqs in listed.items()}
+        tickets = [t for t in tickets if t.ticket_id in reread]
+    methods = make_methods(names, args.model, ledger, cal, cache, recorded, reread)
+    if reread is not None:
+        calls = sum(len(seqs) for seqs in reread.values())
+        projected = project_reread(args.projection_from or args.replay, calls)
+    elif args.projection_from:
+        projected = project_from(args.projection_from, methods, tickets, subsets)
+    else:
+        projected = project(methods, tickets, subsets, ledger, cal, args.sample_events)
     judged = "expected" if args.expected else "upper"
     total = sum(p[judged] for p in projected.values())
     for name, p in projected.items():
@@ -983,6 +1062,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "projection_from": str(args.projection_from) if args.projection_from else None,
         "guard_effects": effects,
         "verifier": verdict_table(verified) | {"rows": verified},
+        "reread": reread_changes(tickets, reference) if reread is not None else None,
         "summary": summary,
         "runs": [record(r, score_ticket(by_id[r.ticket_id], r.snapshots)) for r in runs],
     }  # fmt: skip
