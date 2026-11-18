@@ -67,7 +67,7 @@ from typing import Any
 
 from ..card import Card
 from ..events import MessagePosted
-from ..extract.client import DEFAULT_MODEL, ChatClient, ResponseCache
+from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCache
 from ..extract.cost import Usage
 from ..extract.prompt import Bound
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
@@ -77,7 +77,7 @@ from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
 from .generate import MAIN, MAIN2, SPLITS, CloseCase, SimTicket, Split
-from .meter import Ledger, Meter, OverBudget
+from .meter import Ledger, Meter
 from .methods import EventMemory, Method, MethodRun, Recorded
 from .result import Snapshot, checkpoints, snapshot_of
 from .rewrite import Rewriter, require_different_models, with_rewritten_text
@@ -96,6 +96,7 @@ CACHE = Path(".cache/responses")
 JOURNAL = Path(".cache/runs")
 #: What all live model calls of round 2 may cost together.
 SESSION_CAP = 1.50
+WRITER_ATTEMPTS = 3
 METHODS = ("event_memory", "full_context", "rolling_summary", "mem0", "graphiti")
 #: The event memory's configurations: (extractor reasoning, verifier reasoning
 #: or None for no verifier).
@@ -141,7 +142,16 @@ def rewritten(
         def one(job) -> tuple[str, str, str, int, Usage]:
             ticket, event = job
             rewriter = Rewriter(Meter(client, ledger))
-            text = rewriter.text(event, ticket.anchors.get(event.id, ()))
+            # A broken connection costs one message, not the paid rewrites of
+            # the whole split: it is tried again, then left in template words.
+            for attempt in range(WRITER_ATTEMPTS):
+                try:
+                    text = rewriter.text(event, ticket.anchors.get(event.id, ()))
+                    break
+                except ModelError as error:
+                    rewriter.spent += error.usage
+                    if attempt == WRITER_ATTEMPTS - 1:
+                        text, rewriter.discarded = event.text, rewriter.discarded + 1
             return ticket.ticket_id, event.id, text, rewriter.discarded, rewriter.spent
 
         out: dict[str, Any] = {
@@ -806,8 +816,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     try:
         where = results_directory(split) / "tickets"
         tickets, written = rewritten(split, args.writer, ledger, where, args.workers)
-    except OverBudget:
-        spend("rewriting, stopped at the cap")
+    except BaseException as error:
+        spend(f"rewriting, stopped: {type(error).__name__}")
         raise
     if args.rewrite_only:
         spend("rewriting the tickets")

@@ -94,14 +94,15 @@ def replayed(result: dict[str, Any]) -> dict[str, Any]:
     the guards and without: end-of-ticket close counts and breach alerts, summed."""
     from ..reducer import UNGUARDED, Guards
     from ..store.codec import decode_proposals
-    from .experiment import ROUND2, rewritten
+    from .experiment import results_directory, rewritten
     from .meter import Ledger
     from .result import checkpoints
     from .run import refold, snapshots
     from .score import Score, score_ticket
 
     split = SPLITS[result["split"]]
-    tickets, _ = rewritten(split, result["writer"], Ledger(cap_usd=0), ROUND2 / "tickets")
+    where = results_directory(split) / "tickets"
+    tickets, _ = rewritten(split, result["writer"], Ledger(cap_usd=0), where)
     by_id = {t.ticket_id: t for t in tickets}
     out = {}
     for name, guards in (("guards on", Guards()), ("guards off", UNGUARDED)):

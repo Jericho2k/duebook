@@ -153,6 +153,36 @@ def test_tickets_are_rewritten_once_and_then_read_from_the_cache(tmp_path):
         rewritten(split, "another/writer", Ledger(), tmp_path)
 
 
+def test_a_message_the_writer_cannot_be_reached_for_is_tried_again_then_kept_as_written(
+    tmp_path,
+):
+    from duebook.extract.client import ModelError
+
+    class Flaky:
+        calls = 0
+
+        def complete_json(self, messages, schema, name="output"):
+            Flaky.calls += 1
+            if "Здравствуйте" in messages[1]["content"] or Flaky.calls % 2:
+                raise ModelError("transport, not retried", Usage(1, 5, 0))
+            return Completion({"text": "Короче, " + messages[1]["content"]}, Usage(1, 5, 5))
+
+    split = replace(SPLITS["dev"], count=1)
+    import duebook.bench.experiment as experiment
+
+    original = experiment.ChatClient
+    experiment.ChatClient = lambda **kw: Flaky()
+    try:
+        (ticket,), stored = rewritten(split, "some/writer", Ledger(), tmp_path)
+    finally:
+        experiment.ChatClient = original
+    template = split.tickets()[0]
+    for before, after in zip(template.events, ticket.events, strict=True):
+        if getattr(before, "text", "").startswith("Здравствуйте"):
+            assert after.text == before.text
+    assert stored["tickets"][ticket.ticket_id]["discarded"] >= 1
+
+
 def test_the_test_split_is_not_run_twice(tmp_path):
     (tmp_path / "test.json").write_text("{}")
     with pytest.raises(SystemExit, match="run once"):
