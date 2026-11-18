@@ -153,14 +153,18 @@ class Guards:
     #: A new promise is a duplicate only when it restates an open one: same wording,
     #: no other deadline (decision 0003). Off: the same action is enough.
     identity: bool = True
+    #: An identifier slot holds a set; only an explicit correction disputes a value
+    #: (decision 0005). Off: one current value per slot.
+    identifiers: bool = True
 
 
 #: The reducer as it was before the guards: who may close, never what.
 UNGUARDED = Guards(target=False, relevance=False, ambiguity=False, verifier=False)
 #: The rules each stored event was decided under (``event_proposals.close_rules``),
 #: so a card is rebuilt as it was decided (decision 0001). Absent: the current rules.
-CLOSE_RULES = {1: Guards(legacy=True, identity=False),
-               2: Guards(exact_context=False, identity=False), 3: Guards(identity=False)}
+CLOSE_RULES = {1: Guards(legacy=True, identity=False, identifiers=False),
+               2: Guards(exact_context=False, identity=False, identifiers=False),
+               3: Guards(identity=False, identifiers=False), 4: Guards(identifiers=False)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,7 +305,7 @@ def _admit(
 ) -> tuple[Card, list[Reason]]:
     match proposal:
         case AssertFact():
-            return _assert_fact(card, event, proposal, source, new_id, vocab)
+            return _assert_fact(card, event, proposal, source, new_id, vocab, guards)
         case MakeCommitment():
             return _make_commitment(card, event, proposal, source, new_id, text, cal, guards)
         case ResolveCommitment():
@@ -323,7 +327,8 @@ def _admit(
 
 
 def _assert_fact(
-    card: Card, event: MessagePosted, p: AssertFact, source: Source, new_id: str, vocab: Vocabulary
+    card: Card, event: MessagePosted, p: AssertFact, source: Source, new_id: str,
+    vocab: Vocabulary, guards: Guards,
 ) -> tuple[Card, list[Reason]]:
     # The proposed name is not trusted to be the name used last time: see slots.
     slot = vocab.normalise(p.slot, {f.slot for f in card.facts})
@@ -334,6 +339,14 @@ def _assert_fact(
     side = event.author.side
     current = [f for f in card.facts if f.current and f.slot == slot]
     agreeing = next((f for f in current if _norm(f.value) == _norm(value)), None)
+    identifier = guards.identifiers and slot in vocab.identifiers
+    if identifier:
+        # Another order is not another value of the first (decision 0005): only
+        # the values this message explicitly corrects compete with the new one.
+        rivals = (_corrected(event.text, current) if agreeing is None else
+                  {i for c in card.open_contradictions() if agreeing.id in c.fact_ids
+                   for i in c.fact_ids})  # fmt: skip
+        current = [f for f in current if f.id in rivals or f is agreeing]
 
     if agreeing is not None:
         # Saying it again adds nothing — unless it is the OTHER side conceding,
@@ -364,6 +377,13 @@ def _assert_fact(
     return card, []
 
 
+def _corrected(text: str, facts: Sequence[Fact]) -> set[str]:
+    """The facts whose value the message negates: "заказ не 538916, а 538961"."""
+    said = _norm(text)
+    negated = r"(?<!\w)(?:не|not)\s+(?:\S+\s+){0,2}"
+    return {f.id for f in facts if re.search(negated + re.escape(_norm(f.value)) + r"(?!\w)", said)}
+
+
 def _supersede(card: Card, old: Sequence[Fact], by: Fact, at) -> Card:
     ids = {f.id for f in old}
     return replace(
@@ -376,10 +396,14 @@ def _supersede(card: Card, old: Sequence[Fact], by: Fact, at) -> Card:
 
 def _settle(card: Card, slot: str, winner: Fact, losers: Sequence[Fact], at) -> Card:
     card = _supersede(card, losers, by=winner, at=at)
+    # Only the disagreements these values were in: an identifier slot can hold others.
+    ids = {winner.id, *(f.id for f in losers)}
     return replace(
         card,
         contradictions=tuple(
-            replace(c, resolved_at=at) if c.slot == slot and c.resolved_at is None else c
+            replace(c, resolved_at=at)
+            if c.slot == slot and c.resolved_at is None and ids & set(c.fact_ids)
+            else c
             for c in card.contradictions
         ),
     )

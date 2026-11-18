@@ -150,7 +150,7 @@ def from_card(
 ) -> Snapshot:
     """What the event memory holds: the card, read the way the handoff brief reads it.
 
-    A disputed slot is shown once, as a dispute, and not among current facts —
+    A disputed value is shown once, as a dispute, and not among current facts —
     the brief does the same, because a value one side contests is not a fact
     yet.
     """
@@ -179,11 +179,11 @@ def from_card(
     )
     facts_by_id = {f.id: f for f in card.facts}
     open_disputes = card.open_contradictions()
-    disputed = {c.slot for c in open_disputes}
+    disputed = {i for c in open_disputes for i in c.fact_ids}
     facts = tuple(
         FactItem(f.slot, f.value, f.source.seq)
         for f in card.current_facts()
-        if f.slot not in disputed
+        if f.id not in disputed
     )
     failed = tuple(
         FailedStep(s.action, s.source.seq, s.outcome_source.seq if s.outcome_source else None)

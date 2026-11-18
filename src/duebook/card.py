@@ -34,7 +34,8 @@ class Source:
 @dataclass(frozen=True, slots=True)
 class Fact:
     id: str
-    #: What the fact is about, e.g. "order.status". One current value per slot.
+    #: What the fact is about, e.g. "order.status". One current value per slot,
+    #: except an identifier slot, which holds a set (decision 0005).
     slot: str
     value: str
     source: Source

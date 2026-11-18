@@ -3,7 +3,7 @@ from datetime import timedelta
 
 import psycopg
 import pytest
-from helpers import ANNA, CAL, IVAN, START, persist, promise, story
+from helpers import ANNA, CAL, IVAN, START, Ticket, persist, promise, story
 from psycopg.types.json import Jsonb
 
 from duebook import AlertPolicy, Card, Reason
@@ -239,3 +239,22 @@ def test_a_promise_recorded_before_decision_0003_replays_under_the_same_action_r
         ("T-1", event.seq, Jsonb(encode([again])), START),
     )
     assert len(store.replay("T-1").commitments) == 1
+
+
+def test_a_second_order_recorded_before_decision_0005_replays_as_a_dispute(store, conn):
+    t = Ticket("T-1")
+    t.say(ANNA, "Проблема с заказом 512407", AssertFact("order.number", "512407", "512407"))
+    second = AssertFact("order.number", "538916", "538916")
+    t.say(IVAN, "Оформим возврат по заказу 538916", second)
+    assert t.card.open_contradictions() == ()
+    first, _ = t.log[0]
+    event, _ = t.log[-1]
+    store.record(first, t.log[0][1], now=first.at)
+    store.ingest(event, START)
+    conn.execute(
+        "insert into event_proposals"
+        " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
+        " values (%s, %s, %s, '[]', %s, 4)",
+        ("T-1", event.seq, Jsonb(encode([second])), START),
+    )
+    assert len(store.replay("T-1").open_contradictions()) == 1

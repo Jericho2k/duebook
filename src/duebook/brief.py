@@ -277,7 +277,7 @@ def _sections(w: _Writer) -> list[Section]:
         for c in card.open_contradictions()
         if all(i in w.facts for i in c.fact_ids)
     ]
-    disputed = {c.slot for c in card.open_contradictions()}
+    disputed = {i for c in card.open_contradictions() for i in c.fact_ids}
     failed = [s for s in card.steps if s.outcome is StepOutcome.FAILED]
     questions = [q for q in card.questions if q.open]
 
@@ -296,7 +296,7 @@ def _sections(w: _Writer) -> list[Section]:
                 tuple(w.contradiction(*d) for d in disputes)),
         # A disputed value is not a fact yet; it is shown once, as a dispute.
         Section("facts", "Что известно сейчас",
-                tuple(w.fact(f) for f in card.current_facts() if f.slot not in disputed)),
+                tuple(w.fact(f) for f in card.current_facts() if f.id not in disputed)),
         Section("changes", "Что изменилось",
                 tuple(w.change(old, new) for old, new in card.changed_facts())),
         Section("failed", "Не помогло — не предлагать снова",
