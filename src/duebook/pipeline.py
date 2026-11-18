@@ -150,17 +150,19 @@ class Pipeline:
             previous = self.store.held(ticket_id)
             attempts = previous.attempts if previous is not None and previous.seq == seq else 0
             now = self.clock()
-            self.store.hold(
-                ticket_id, seq, f"{type(error).__name__}: {error}", now=now,
-                retry_at=now + min(self.retry_base * 2**attempts, self.retry_cap),
-                usage=previous.usage if previous is not None else None,
-            )  # fmt: skip
+            self.store.hold(ticket_id, seq, f"{type(error).__name__}: {error}", now=now,
+                            retry_at=self._retry_at(attempts, now),
+                            usage=previous.usage if previous is not None else None)  # fmt: skip
         except (psycopg.OperationalError, psycopg.InterfaceError):
             raise
         except Exception:
             log.exception("could not hold %s either", ticket_id)
             return False
         return True
+
+    def _retry_at(self, attempts: int, now: datetime) -> datetime:
+        """When to try again after ``attempts`` failures: the delay doubles up to the cap."""
+        return now + min(self.retry_base * 2**attempts, self.retry_cap)
 
     def run(
         self,
@@ -200,14 +202,10 @@ class Pipeline:
                     if not gives_up(error, attempts + 1):
                         failed = getattr(error, "usage", None) or Usage()
                         spent += failed
-                        hold = self.store.hold(
-                            ticket_id,
-                            event.seq,
-                            f"{type(error).__name__}: {error}",
-                            now=now,
-                            retry_at=now + min(self.retry_base * 2**attempts, self.retry_cap),
-                            usage=asdict(earlier + failed),
-                        )
+                        hold = self.store.hold(ticket_id, event.seq,
+                                               f"{type(error).__name__}: {error}", now=now,
+                                               retry_at=self._retry_at(attempts, now),
+                                               usage=asdict(earlier + failed))  # fmt: skip
                         return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
                     # ...until the message itself is shown to be unreadable.
                     extraction = unread(event, error)
