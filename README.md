@@ -409,8 +409,8 @@ memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
 (`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
 bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 7); the raw record is under
-`results/` and `results/round2/` to `results/round7/`.
+[docs/results.md](docs/results.md) (rounds 1 to 8); the raw record is under
+`results/` and `results/round2/` to `results/round8/`.
 
 ## Running the service
 
@@ -565,8 +565,10 @@ Round 5 adds the negative verdict veto and contextual confirmation. Round 6
 refused contextual closes whose question names something the target does not.
 Round 7 removed Round 5's compact replies and batching, which lost promises,
 facts and failed steps; capped and escalated unreadable answers; and records a
-message no attempt could read instead of stalling its ticket. The evaluation
-is in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
+message no attempt could read instead of stalling its ticket. Round 8 keeps
+apart promises alike in action but about different things, counts delegated
+work as the company's promise, and reports on an unseen split (`test4`). The
+evaluation is in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
 independently labeled real tickets are next.
 
 ## Development

@@ -1,8 +1,158 @@
 # Results: event memory against the baselines
 
-Seven rounds, run on 2026-11-17 and 18. Rounds 5 to 7 reuse the frozen
+Eight rounds, run on 2026-11-17 and 18. Rounds 5 to 7 reuse the frozen
 Round 4 comparison. Round 4 contains the original run on a fresh test split.
-The earlier rounds follow in reverse order.
+Round 8 runs our method on a new, unseen split (`test4`). The earlier rounds
+follow in reverse order.
+
+## Round 8 — promise identity, what counts as a promise, and an unseen test
+
+**`test4` is the first unseen test of this version.** Its 20 tickets
+(seed 5353, profile `main3`) were generated, rewritten once and run once, and
+nobody read them before the run. Nothing was tuned on them. The other figures
+in this document come from `test3`, which our method had already been run on
+four times.
+
+On `test4` our method kept 463 of 464 gold promises. It made no false close
+at any checkpoint and no false alert. It read every delegated undertaking and
+every pair of same-action promises right, and it put no promise on any
+prediction or status report. The one promise lost was a silent loss that this
+round's prompt change caused (below). False disputes rose to 2.30 per ticket,
+against 0.00 in Round 7. It cost $0.0159 a ticket.
+
+### What changed
+
+1. **Promise identity** ([decision 0003](decisions/0003-promise-identity.md),
+   accepted). A new commitment is refused as a duplicate only when it restates
+   an open one: same owner, wording that names nothing the other's does not
+   (in either direction), and equal deadlines or one absent. Until now the same
+   action was enough. Rule version 4; events recorded under versions 1 to 3
+   replay with the old rule.
+   **Replay at $0.** Every saved run's proposals were folded under both rules:
+   Rounds 4 to 7 on `test3`, Round 2's `test2` and `dev2`, `dev3` and `dev4`.
+   Under each run's own closing rules, the old duplicate rule refused nothing
+   and dropped **no** real promise. Under today's closing rules it dropped
+   **one** (Round 4, M0017 seq 130: "Отправим вам замену через неделю", a
+   renegotiation proposed without `supersedes` while the first promise was
+   still open). The new rule keeps it and refuses nothing the old rule
+   admitted. The benchmark's actions had always named their objects, so it
+   never exercised this rule; `main3` now does.
+   [Replay](../results/round8/identity-replay.json)
+2. **What counts as a promise** (prompt only). A commitment is the speaker's
+   side becoming accountable for something happening, whoever does the work.
+   Work by a courier, the finance department or engineers is a company
+   commitment. A prediction about a third party and a status report are not
+   commitments. The `action` must name what is affected. The instructions are
+   still first and fixed, and 88% of prompt tokens were served from cache.
+3. **Conditional offers** ([decision 0004](decisions/0004-conditional-commitments.md),
+   proposed): designed, not built. Until the owner decides, the prompt files a
+   conditional offer as an `offer.conditional` fact, never as a commitment.
+   This keeps the offer visible on the card and in the brief instead of
+   dropping it silently. `test4` shows what this costs (below).
+4. **Benchmark.** The `main3` profile adds these beats to `main2`: two
+   delegated undertakings (with or without a date), two promises with one
+   action on different objects (settled separately), a prediction, a status
+   report and a conditional offer. Every earlier split is byte-identical and
+   now pinned by hash. On `dev5`, `test4` and 200 seeded `main3` tickets the
+   oracle scores 1.000. The scorer puts every gold promise in one stage:
+   (a) missed by the model, (b) dropped by the reducer, or (c) mishandled
+   later (closed or alerted against its label).
+
+### Development on `dev5`
+
+`dev5` (8 tickets, seed 5151) was run once. All 179 gold promises were right
+and there was no false close or false alert. False disputes were 1.75 per
+ticket. One prompt fix was considered and not made, because it would cost a
+full second `dev5` run ($0.125: a prompt change empties the response cache).
+After that, `test4` would have fitted the cap only on its expected cost.
+Some of the `dev5` analysis below was finished after the `test4` run had
+started, so `test4` carries what it found.
+[dev5](../results/round8/dev5.json)
+
+### Round 8 on `test4`, beside Round 7 on `test3`
+
+These are **different ticket sets**: `test4` uses the `main3` profile, and
+`test3` uses `main2`, which our method had seen four times. **The baselines
+were not run on `test4`.** Their `test3` numbers stay in Round 7's table.
+[Record](../results/round8/test4.json)
+
+| Measure | **Round 8, `test4`** (unseen) | Round 7, `test3` (seen 4×) |
+|---|---:|---:|
+| Gold promises | 464 | 367 |
+| Missing: (a) missed by the model | **1** | 2 |
+| Missing: (b) dropped by the reducer | **0** | 0 |
+| (c) Mishandled later | **0** | 1 |
+| False closes per ticket, end / across checkpoints | **0.00 / 0.00** | 0.00 / 0.00 |
+| False alerts per ticket | **0.00** | 0.05 |
+| Breach-alert precision / recall | **1.000 / 1.000** | 0.992 / 1.000 |
+| False disputes per ticket | **2.30** | 0.00 |
+| Dispute recall | **1.000** | 1.000 |
+| Failed-step precision / recall | **1.000 / 1.000** | 1.000 / 1.000 |
+| Fact recall / freshness error | **0.914 / 0.024** | 1.000 / 0.000 |
+| Context-dependent / ambiguous / unrelated close | **20/20, 20/20, 20/20** | 19/20, 20/20, 20/20 |
+| Commitment precision / recall / F1 | **0.996 / 0.998 / 0.997** | 0.986 / 0.995 / 0.991 |
+| Status accuracy / deadline accuracy | **1.000 / 1.000** | 0.997 / 1.000 |
+| Cost per ticket | **$0.0159** | $0.0140 |
+
+The stages for Round 7 come from rescoring its record.
+
+The new beats on `test4` (end of ticket):
+
+| Beat | Cases | Result |
+|---|---:|---|
+| Delegated, with a date | 16 | 16 right |
+| Delegated, without a date | 24 | 24 right |
+| Two promises with one action, different objects | 40 | 40 right |
+| Prediction about a third party | 20 | 20 without a promise |
+| Status report | 20 | 20 without a promise |
+| Conditional offer | 20 | 20 without a promise; 17 shown as a fact, 3 not |
+
+### What is wrong
+
+- **The only lost promise is a silent loss that this round's prompt caused.**
+  In M0002, "Начислим вам компенсацию бонусами." was filed as an
+  `offer.conditional` fact and not as a commitment. It never alerts. The same
+  confusion explains the 3 conditional offers not shown: in M0012, M0015 and
+  M0017 a later plain promise was also filed under `offer.conditional` and
+  replaced the offer as its current value. On `dev5` this happened once,
+  where the promise was kept as a commitment as well. The interim "offer as a
+  fact" rule needs a tighter wording, or decision 0004's conditional item, and
+  a dev run before it can be trusted.
+- **False disputes, 2.30 per ticket** (46 across checkpoints; `dev5` 1.75).
+  - 26 are `issue.summary` facts the model added beside a commitment, mostly
+    for "restore access" promises (12 times on `test4`). This never happened
+    in Round 7's `test3` or `dev4`, so this round's prompt or the new
+    access-promise wording probably causes it.
+  - 20 are `order.number` disputes, a **benchmark artifact**: in the
+    same-action beat the agent names a second order number ("Оформим возврат
+    по заказу 538916"), and the model files it against the customer's order.
+    The same disputes hide 6 order numbers from the current facts, which is
+    most of the fall in fact recall.
+- **Freshness error 0.024.** These are 7 checkpoint presentations of a
+  contested device-model code that the model filed under `delivery.status`.
+- **Cost** is 14% above Round 7 per ticket ($0.0159 against $0.0140), with
+  the longer instructions and about 8 more planted messages a ticket.
+
+**Projection and spend.** The `test4` projection from `dev5` was $0.324
+expected, $0.374 at the dearest dev rate, and $0.562 at the runner's 1.5×
+upper bound. The upper bound did not fit the $0.497 left, so, as in Round 7,
+the run was judged on the expected figure and capped at $0.49 by its
+ledger. It cost $0.3159. The session spent **$0.5185 of the $0.70 cap**:
+$0.0230 rewriting `dev5`, $0.0549 rewriting `test4`, $0.1247 for `dev5` and
+$0.3159 for `test4`. No baseline was run. [Spend log](../results/round8/spend.jsonl)
+
+```bash
+python -m duebook.bench.experiment --split dev5 --methods "" --rewrite-only \
+    --max-usd 0.05 --session-cap 0.70 --results results/round8
+python -m duebook.bench.experiment --split test4 --methods "" --rewrite-only \
+    --max-usd 0.10 --session-cap 0.70 --results results/round8
+python -m duebook.bench.experiment --split dev5 --methods event_memory \
+    --max-usd 0.16 --session-cap 0.70 --results results/round8 \
+    --projection-from results/round7/dev4.json --expected
+python -m duebook.bench.experiment --split test4 --methods event_memory \
+    --max-usd 0.49 --session-cap 0.70 --results results/round8 \
+    --projection-from results/round8/dev5.json --expected
+```
 
 ## Round 7 — Round 4's answer format back, no stalled ticket, no batching
 
