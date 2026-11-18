@@ -1034,13 +1034,15 @@ def _model_dispute(plan: _Plan) -> None:
     second = plan.within(first + timedelta(minutes=5), first + timedelta(hours=5), Role.AGENT)
     seqs: list[int] = []
     plan.add(first, lambda b: seqs.append(b.fact(
-        Role.CUSTOMER, f"Мне пришёл {product} модели {got}.", "device.model", got, got,
-        (got.split("-")[1],),
+        Role.CUSTOMER, f"Мне пришёл {product} модели {got}.", "device.model", got,
+        f"модели {got}", (got.split("-")[1],),
     )))  # fmt: skip
 
     def answer(b: _Builder) -> None:
+        # The span says what the code is: a bare "BL-967" survived a rewrite
+        # into "your waybill number is BL-967", which is no longer a model.
         seq = b.fact(Role.AGENT, f"По накладной вам отправлен {sent}.", "device.model", sent,
-                     sent, (sent.split("-")[1],))  # fmt: skip
+                     f"отправлен {sent}", (sent.split("-")[1],))  # fmt: skip
         b.contradictions.append(GoldContradiction("device.model", (seqs[0], seq), (got, sent)))
 
     plan.add(second, answer)

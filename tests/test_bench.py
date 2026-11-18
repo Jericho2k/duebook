@@ -468,11 +468,14 @@ def test_round_two_splits_use_fresh_seeds():
     assert SPLITS["test2"].count >= 20 and SPLITS["test2"].profile is MAIN
 
 
+# Round 4 widened the planted span of the two device-model statements to the
+# word that makes the code a model; nothing else changed, and round 2's records
+# score the same against the tickets generated now.
 @pytest.mark.parametrize(
     ("name", "digest"),
     [
-        ("dev2", "520681e4fd3a392572990f0dce12affb159566c70461e2cc6a1c0e3c78e690b1"),
-        ("test2", "0289991ca7a6c7c16f029db5353198ed877c027d50539d2c890b25b1ce9d859f"),
+        ("dev2", "86d842568209e51c98a254bae25119e05913143e78e79db28b82ca8f582daded"),
+        ("test2", "8469160533fcb977f257e2cbbbdf550e784b9bed3c13e50ffbe6e39377c80aa0"),
     ],
 )
 def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name, digest):
@@ -543,3 +546,14 @@ def test_rewriting_keeps_the_close_case_replies_and_twin_context_verbatim():
         if case.kind is not CloseCase.WRONG_THING:
             assert rewritten.events[case.seq - 2] == ticket.events[case.seq - 2]
     assert len(writer.requests) == ticket.messages - 5
+
+
+def test_a_product_code_is_kept_together_with_the_word_that_makes_it_a_model():
+    ticket = SPLITS["dev3"].tickets()[0]
+    dispute = next(d for d in ticket.gold.contradictions if d.slot == "device.model")
+    told, recorded = (ticket.events[seq - 1] for seq in dispute.seqs)
+    # A rewrite may keep the code and change what it is; that one is discarded.
+    assert not acceptable(recorded.text, f"Номер вашей накладной — {dispute.values[1]}.",
+                          ticket.anchors[recorded.id])  # fmt: skip
+    assert not acceptable(told.text, f"Мне пришёл заказ {dispute.values[0]}.",
+                          ticket.anchors[told.id])  # fmt: skip
