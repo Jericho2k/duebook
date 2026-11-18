@@ -333,6 +333,18 @@ cases per ticket. Use `dev3` (4 tickets, seed 4444) and `dev4` (8 tickets,
 seed 4747, Round 7) for tuning and `test3` (20 tickets, seed 4343) for
 evaluation.
 
+The `main3` profile (Round 8) adds who is accountable: two undertakings by
+someone else on the company's side (a courier, the finance department,
+engineers, the on-call engineer; with or without a deadline), two promises
+with one action about different objects, settled separately, and three
+messages that promise nothing: a prediction about a third party, a status
+report and a conditional offer (kept as an `offer.conditional` fact,
+[decision 0004](docs/decisions/0004-conditional-commitments.md)). `dev5`
+(8 tickets, seed 5151) is for tuning; `test4` (20 tickets, seed 5353) is
+never used for it. Every gold promise lost at the end is attributed to a
+stage: missed by the model, dropped by the reducer, or mishandled later
+(`bench.score.attribute`); the first two need the event memory's proposals.
+
 | Measure | What the method must show at the end of the ticket |
 |---|---|
 | `rescue_close_correct` | The twin identified by the preceding turn is fulfilled and its rival is still open. |

@@ -185,6 +185,31 @@ class GoldCloseCase:
     target_seq: int | None = None
 
 
+class Beat(StrEnum):
+    """Round 8's beats on what counts as a promise (``main3``)."""
+
+    #: Someone else on the company's side will do it: a company commitment.
+    DELEGATED_DATED = "delegated_dated"
+    DELEGATED_UNDATED = "delegated_undated"
+    #: Two open promises with one action, about different objects.
+    SAME_ACTION = "same_action"
+    #: Not commitments.
+    PREDICTION = "prediction"
+    STATUS_REPORT = "status_report"
+    #: Not a commitment; recorded as an ``offer.conditional`` fact (decision 0004).
+    CONDITIONAL = "conditional"
+
+
+#: Beats whose message makes a gold commitment; the others make none.
+PROMISE_BEATS = frozenset({Beat.DELEGATED_DATED, Beat.DELEGATED_UNDATED, Beat.SAME_ACTION})
+
+
+@dataclass(frozen=True, slots=True)
+class GoldBeat:
+    kind: Beat
+    seq: int
+
+
 @dataclass(frozen=True, slots=True)
 class Gold:
     commitments: tuple[GoldCommitment, ...] = ()
@@ -196,6 +221,7 @@ class Gold:
     #: The seq of every handoff from one operator to another.
     handoffs: tuple[int, ...] = ()
     close_cases: tuple[GoldCloseCase, ...] = ()
+    beats: tuple[GoldBeat, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -249,6 +275,9 @@ class Profile:
     #: Promises the customer calls off before the deadline.
     cancelled: tuple[int, int] = (0, 0)
     close_cases: bool = False
+    #: Plant Round 8's beats: delegated undertakings, a prediction, a status
+    #: report, two promises with one action, a conditional offer.
+    accountability: bool = False
 
 
 STANDARD = Profile(
@@ -266,7 +295,8 @@ MAIN = Profile(
     twins=(1, 2), renegotiated=(1, 1), cancelled=(0, 1),
 )  # fmt: skip
 MAIN2 = replace(MAIN, name="main2", close_cases=True)
-PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2)}
+MAIN3 = replace(MAIN2, name="main3", accountability=True)
+PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2, MAIN3)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,6 +327,9 @@ SPLITS = {
         Split("test3", seed=4343, count=20, profile=MAIN2),
         # Round 7: a larger development split, rewritten like test3.
         Split("dev4", seed=4747, count=8, profile=MAIN2),
+        # Round 8: who is accountable. test4 is never used for tuning.
+        Split("dev5", seed=5151, count=8, profile=MAIN3),
+        Split("test4", seed=5353, count=20, profile=MAIN3),
     )
 }
 
@@ -377,6 +410,44 @@ TWINS = [
      "перезвонить"),
     (Party.COMPANY, "Пришлём вам {obj} {due}", "прислать {obj}", "{Obj} получила, спасибо",
      ("гарантийный талон", "копию чека", "договор", "накладную"), None),
+]
+#: Work someone else on the company's side will do: company commitments (Round 8).
+DELEGATED = [
+    (Party.COMPANY, "Курьер заберёт у вас документы на подпись {due}",
+     "забрать документы курьером", "Курьер документы забрал, спасибо"),
+    (Party.COMPANY, "Финансовый отдел вернёт вам переплату {due}", "вернуть переплату",
+     "Переплату финансовый отдел вернул, вижу на карте"),
+    (Party.COMPANY, "Наши инженеры выпустят исправление для приложения {due}",
+     "выпустить исправление для приложения", "Исправление вышло, приложение работает"),
+    (Party.COMPANY, "Дежурный инженер подключится к вашему компьютеру удалённо {due}",
+     "удалённо подключиться к компьютеру", "Дежурный инженер подключался, всё настроил"),
+]
+#: One action, two objects: (sentence with {obj} and {due}, the action without
+#: the object, as a careless reading writes it, confirmation with {obj}, objects).
+SAME_ACTION = [
+    ("Восстановим доступ к рабочему пространству {obj} {due}", "восстановить доступ",
+     "Доступ к пространству {obj} появился, спасибо", ("Альфа", "Бета", "Гамма", "Дельта")),
+    ("Оформим возврат по заказу {obj} {due}", "оформить возврат",
+     "Возврат по заказу {obj} пришёл, спасибо", ("512407", "538916", "561230", "587044")),
+]
+#: What someone outside the company usually does: not a commitment.
+PREDICTIONS = [
+    "Обычно банк зачисляет возврат на карту за 3–5 рабочих дней, это от нас не зависит.",
+    "Как правило, транспортная компания доставляет такие посылки примерно за неделю.",
+    "Платёжная система обычно обновляет статус платежа в течение суток.",
+]
+#: What is happening now: not a commitment.
+STATUS_REPORTS = [
+    "Ваша заявка на возврат сейчас на рассмотрении в бухгалтерии.",
+    "Инженеры сейчас разбираются с вашей проблемой.",
+    "Ваш вопрос передан в отдел логистики, там его изучают.",
+]
+#: Offers that owe nothing until a condition holds (decision 0004), with the
+#: stem that recognises the offer among facts.
+CONDITIONALS = [
+    ("Если ремонт не закончат {day}, выдадим вам подменный аппарат", ("подменн",)),
+    ("Если промокод не сработает {day}, начислим вам бонусы взамен", ("промокод",)),
+    ("Если посылка не придёт {day}, оформим повторную отправку бесплатно", ("повторн",)),
 ]
 #: The customer's own promises, confirmed by the company.
 CUSTOMER_PROMISES = [
@@ -472,6 +543,7 @@ class _Builder:
     facts: list[GoldFact] = field(default_factory=list)
     handoffs: list[int] = field(default_factory=list)
     close_cases: list[GoldCloseCase] = field(default_factory=list)
+    beats: list[GoldBeat] = field(default_factory=list)
 
     @property
     def seq(self) -> int:
@@ -644,6 +716,8 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
 
     if profile.close_cases:
         _close_cases(plan)
+    if profile.accountability:
+        _accountability(plan)
 
     # Planned last: by now it is known when the ticket ends, and this promise's
     # deadline must still be ahead then.
@@ -669,7 +743,8 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
         events=tuple(b.events),
         proposals=tuple(b.proposals),
         gold=Gold(tuple(b.commitments), tuple(b.changes), tuple(b.contradictions),
-                  tuple(b.repeated), tuple(b.facts), tuple(b.handoffs), tuple(b.close_cases)),
+                  tuple(b.repeated), tuple(b.facts), tuple(b.handoffs), tuple(b.close_cases),
+                  tuple(b.beats)),
         end=b.now + timedelta(hours=1),
         anchors=b.anchors,
     )  # fmt: skip
@@ -818,6 +893,78 @@ def _twin_promises(plan: _Plan, kind, at: datetime) -> None:
         plan.add(when, lambda b, p=promise, e=expr, ph=phrase, d=due_at, f=fate, m=made: m.append(
             _committed(b, Role.AGENT, p, ph, e, d, f)
         ))  # fmt: skip
+        _settle_later(plan, promise, fate, when, due_at, made, second_at + timedelta(minutes=30))
+
+
+def _accountability(plan: _Plan) -> None:
+    """Round 8's beats: who is accountable, and what is not a promise at all."""
+    for promise in plan.rng.sample(DELEGATED, 2):
+        _delegated_promise(plan, promise, plan.moment(0.05, 0.75), plan.rng.random() < 0.5)
+    _same_action_promises(plan, plan.rng.choice(SAME_ACTION), plan.moment(0.1, 0.6))
+    for kind, options in ((Beat.PREDICTION, PREDICTIONS), (Beat.STATUS_REPORT, STATUS_REPORTS)):
+        text = plan.rng.choice(options)
+        plan.add(plan.moment(0.05, 0.9), lambda b, k=kind, t=text: b.beats.append(
+            GoldBeat(k, b.say(Role.AGENT, t, verbatim=True))
+        ))  # fmt: skip
+    offer, key = plan.rng.choice(CONDITIONALS)
+    at = plan.moment(0.1, 0.8)
+    offer = offer.format(day=_date_deadline(at, plan.rng.randint(3, 6), plan.cal)[0])
+
+    def conditional(b: _Builder) -> None:
+        seq = b.fact(Role.AGENT, f"{offer}.", "offer.conditional", offer, offer, key)
+        b.beats.append(GoldBeat(Beat.CONDITIONAL, seq))
+
+    plan.add(at, conditional)
+
+
+def _delegated_promise(plan: _Plan, promise, at: datetime, dated: bool) -> None:
+    """Someone else on the company's side does the work; the company owes it."""
+    if dated:
+        fate = plan.rng.choice([Fate.KEPT, Fate.BROKEN])
+        phrase, expr, due_at = _choose_deadline(plan, at, DEADLINES, at + timedelta(minutes=30))
+    else:
+        fate, (phrase, expr, due_at) = plan.rng.choice([Fate.KEPT, Fate.OPEN]), (None, None, None)
+    beat = Beat.DELEGATED_DATED if dated else Beat.DELEGATED_UNDATED
+    made: list[int] = []
+
+    def make(b: _Builder) -> None:
+        made.append(_committed(b, Role.AGENT, promise, phrase, expr, due_at, fate))
+        b.beats.append(GoldBeat(beat, made[0]))
+
+    plan.add(at, make)
+    if fate is not Fate.OPEN:
+        # An undated promise kept is confirmed within two days.
+        _settle_later(plan, promise, fate, at, due_at or at + timedelta(days=2), made)
+
+
+def _same_action_promises(plan: _Plan, kind, at: datetime) -> None:
+    """Two promises with one action about different objects, each settled on its own.
+
+    Half the time they share the deadline too, so only the object tells them apart.
+    """
+    sentence, action, confirmation, objects = kind
+    pair = plan.rng.sample(objects, 2)
+    fates = plan.rng.choice([(Fate.KEPT, Fate.BROKEN), (Fate.BROKEN, Fate.KEPT),
+                             (Fate.KEPT, Fate.KEPT)])  # fmt: skip
+    second_at = plan.within(at + timedelta(minutes=5), at + timedelta(hours=3), Role.AGENT)
+    after = second_at + timedelta(hours=6)
+    shared = _choose_deadline(plan, at, DEADLINES + LONG_DEADLINES, after)
+    for obj, fate, when in ((pair[0], fates[0], at), (pair[1], fates[1], second_at)):
+        promise = (Party.COMPANY, sentence.replace("{obj}", obj), action,
+                   confirmation.format(obj=obj))  # fmt: skip
+        if plan.rng.random() < 0.5:
+            phrase, expr, due_at = shared
+            if resolve(expr, when, plan.cal).due_at != due_at:
+                phrase, expr, due_at = _choose_deadline(plan, when, DEADLINES, after)
+        else:
+            phrase, expr, due_at = _choose_deadline(plan, when, DEADLINES + LONG_DEADLINES, after)
+        made: list[int] = []
+
+        def make(b: _Builder, p=promise, ph=phrase, e=expr, d=due_at, f=fate, m=made) -> None:
+            m.append(_committed(b, Role.AGENT, p, ph, e, d, f))
+            b.beats.append(GoldBeat(Beat.SAME_ACTION, m[0]))
+
+        plan.add(when, make)
         _settle_later(plan, promise, fate, when, due_at, made, second_at + timedelta(minutes=30))
 
 
