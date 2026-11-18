@@ -53,19 +53,31 @@ value is current, stale (it was changed, or lost a dispute) or contested.
   against the planted failed fixes. A step is recognised by any message it
   rests on or by a word stem of the step.
 
+**Where a promise was lost** (``attribute``) — every gold promise at the end
+of a ticket is in one stage: *right*; *missed by the model* (no commitment of
+its side proposed at its message); *dropped by the reducer* (proposed, never
+on the card); *mishandled later* (on the card, but closed or open, alerted or
+not, against the label). The first two need the method's proposals, which
+only the event memory has; for another method a promise not on its answer is
+*missing*. Round 8's beats are reported the same way, and a beat that makes no
+promise is judged by whether a promise was put on its message.
+
 Counts add up across checkpoints and tickets, so a result is a micro-average.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass, field, fields
 from datetime import timedelta
+from enum import StrEnum
 
 from ..card import Card
 from ..events import Side
 from ..lifecycle import AlertPolicy
-from .generate import GoldCommitment, GoldFact, SimTicket
+from ..proposals import MakeCommitment, Proposal
+from .generate import PROMISE_BEATS, Beat, GoldCommitment, GoldFact, SimTicket
 from .match import mentions, mentions_any
 from .result import (
     Checkpoint,
@@ -482,3 +494,55 @@ def _failed_steps(ticket: SimTicket, snap: Snapshot) -> Counts:
             remaining.remove(hit)
             tp += 1
     return Counts(tp, len(remaining), len(gold) - tp)
+
+
+# ------------------------------------------------- where promises are lost ----
+
+
+class Stage(StrEnum):
+    RIGHT = "right"
+    MISSED_BY_MODEL = "missed_by_model"
+    DROPPED_BY_REDUCER = "dropped_by_reducer"
+    MISHANDLED_LATER = "mishandled_later"
+    #: Not on the answer of a method whose proposals are unknown.
+    MISSING = "missing"
+
+
+def attribute(
+    ticket: SimTicket, end: Snapshot, proposed: Sequence[Sequence[Proposal]] | None = None
+) -> dict[int, Stage]:
+    """The stage each gold promise is in at the end, by the message it was made in."""
+    cp = end.checkpoint
+    pairs, _, missed = match([c for c in ticket.gold.commitments if c.seq <= cp.seq],
+                             end.promises)  # fmt: skip
+    out = {}
+    for g, f in pairs:
+        wrong = _state(f.status) != _gold_state(g, cp) or alerted_at(f, cp) != _breached(g, cp)
+        out[g.seq] = Stage.MISHANDLED_LATER if wrong else Stage.RIGHT
+    for g in missed:
+        if proposed is None:
+            out[g.seq] = Stage.MISSING
+            continue
+        said = proposed[g.seq - 1] if g.seq <= len(proposed) else ()
+        made = any(isinstance(p, MakeCommitment) and p.owner.side is g.owner.side for p in said)
+        out[g.seq] = Stage.DROPPED_BY_REDUCER if made else Stage.MISSED_BY_MODEL
+    return out
+
+
+def beat_outcomes(
+    ticket: SimTicket, end: Snapshot, stages: dict[int, Stage]
+) -> dict[str, Counter[str]]:
+    """Per Round 8 beat: its promise's stage, or whether a promise was wrongly made."""
+    out: dict[str, Counter[str]] = {}
+    promised = {f.seq for f in end.promises}
+    for beat in ticket.gold.beats:
+        counts = out.setdefault(beat.kind.value, Counter())
+        if beat.kind in PROMISE_BEATS:
+            counts[stages[beat.seq].value] += 1
+            continue
+        counts["promise_made" if beat.seq in promised else "no_promise"] += 1
+        if beat.kind is Beat.CONDITIONAL:
+            (fact,) = [f for f in ticket.gold.facts if f.seq == beat.seq]
+            shown = any(mentions(item.text, fact.key) for item in end.facts)
+            counts["offer_shown" if shown else "offer_not_shown"] += 1
+    return out

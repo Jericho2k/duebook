@@ -17,9 +17,18 @@ from duebook.bench.result import (
     checkpoints,
     from_card,
 )
-from duebook.bench.run import fold, snapshots
-from duebook.bench.score import Score, alerted_at, fact_status, score_snapshot, score_ticket
+from duebook.bench.run import fold, refold, snapshots
+from duebook.bench.score import (
+    Score,
+    Stage,
+    alerted_at,
+    attribute,
+    fact_status,
+    score_snapshot,
+    score_ticket,
+)
 from duebook.lifecycle import NoticeKind
+from duebook.proposals import MakeCommitment
 
 TICKETS = generate(seed=11, count=40)
 
@@ -315,3 +324,37 @@ def test_promises_of_any_status_are_reported_with_their_source_message():
     snap = end_of(t)
     assert {p.seq for p in snap.promises} == {c.seq for c in t.gold.commitments}
     assert all(isinstance(p, Promise) for p in snap.promises)
+
+
+# ------------------------------------------------ where a promise is lost ----
+
+
+def lose_first_promise(change):
+    """The oracle's proposals with the first gold promise's changed, and the stage it ends in."""
+    ticket = TICKETS[0]
+    seq = ticket.gold.commitments[0].seq
+    proposals = [list(ps) for ps in ticket.proposals]
+    proposals[seq - 1] = [change(p) if isinstance(p, MakeCommitment) else p
+                          for p in proposals[seq - 1]]  # fmt: skip
+    proposals[seq - 1] = [p for p in proposals[seq - 1] if p is not None]
+    end = snapshots(ticket, refold(ticket, proposals))[-1]
+    return attribute(ticket, end, proposals)[seq], attribute(ticket, end)[seq]
+
+
+def test_a_promise_never_proposed_is_missed_by_the_model():
+    assert lose_first_promise(lambda p: None) == (Stage.MISSED_BY_MODEL, Stage.MISSING)
+
+
+def test_a_promise_proposed_and_refused_is_dropped_by_the_reducer():
+    ungrounded = lambda p: replace(p, quote="этого в сообщении нет")  # noqa: E731
+    assert lose_first_promise(ungrounded) == (Stage.DROPPED_BY_REDUCER, Stage.MISSING)
+
+
+def test_a_promise_closed_against_its_label_is_mishandled_later():
+    ticket = next(t for t in TICKETS if any(c.fate is Fate.BROKEN for c in t.gold.commitments))
+    broken = next(c for c in ticket.gold.commitments if c.fate is Fate.BROKEN)
+    end = end_of(ticket)
+    assert attribute(ticket, end, ticket.proposals)[broken.seq] is Stage.RIGHT
+    closed = tuple(replace(p, status=PromiseStatus.FULFILLED) if p.seq == broken.seq else p
+                   for p in end.promises)  # fmt: skip
+    assert attribute(ticket, replace(end, promises=closed))[broken.seq] is Stage.MISHANDLED_LATER

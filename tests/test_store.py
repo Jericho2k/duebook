@@ -8,7 +8,13 @@ from psycopg.types.json import Jsonb
 
 from duebook import AlertPolicy, Card, Reason
 from duebook.brief import compose
-from duebook.proposals import AssertFact, ResolveCommitment, Verdict, Verification
+from duebook.proposals import (
+    AssertFact,
+    MakeCommitment,
+    ResolveCommitment,
+    Verdict,
+    Verification,
+)
 from duebook.reducer import OutOfOrder
 from duebook.store import Conflict, Store, connect
 from duebook.store.codec import encode
@@ -214,3 +220,22 @@ def test_old_closes_replay_under_their_original_rule(store, conn, rules):
         (ticket.card.ticket_id, event.seq, Jsonb(encode([close])), START, rules),
     )
     assert not store.replay("T-1").commitments[0].unresolved
+
+
+def test_a_promise_recorded_before_decision_0003_replays_under_the_same_action_rule(store, conn):
+    ticket = promise("T-1")
+    persist(store, ticket)
+    call = ticket.card.commitments[0]
+    quote = "Перезвоню вам насчёт гарантии"
+    again = MakeCommitment(call.owner, call.action, quote)
+    ticket.say(IVAN, f"{quote}.", again)
+    assert len(ticket.card.commitments) == 2
+    event, _ = ticket.log[-1]
+    store.ingest(event, START)
+    conn.execute(
+        "insert into event_proposals"
+        " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
+        " values (%s, %s, %s, '[]', %s, 3)",
+        ("T-1", event.seq, Jsonb(encode([again])), START),
+    )
+    assert len(store.replay("T-1").commitments) == 1

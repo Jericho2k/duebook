@@ -58,6 +58,7 @@ import random
 import sys
 import threading
 import time
+from collections import Counter
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, is_dataclass, replace
@@ -78,13 +79,21 @@ from ..reducer import UNGUARDED, Guards, apply
 from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
-from .generate import MAIN, MAIN2, SPLITS, CloseCase, SimTicket, Split
+from .generate import MAIN, MAIN2, MAIN3, SPLITS, CloseCase, SimTicket, Split
 from .meter import Ledger, Meter
 from .methods import EventMemory, Method, MethodRun, Recorded
 from .result import Snapshot, checkpoints, snapshot_of
 from .rewrite import Rewriter, require_different_models, with_rewritten_text
 from .run import refold, snapshots
-from .score import Score, TicketScore, match, same_deadline, score_ticket
+from .score import (
+    Score,
+    TicketScore,
+    attribute,
+    beat_outcomes,
+    match,
+    same_deadline,
+    score_ticket,
+)
 
 #: Rewrites the tickets of round 2: of the cheap models tried on the same dev
 #: messages, the one that reworded most without adding anything a label would
@@ -94,6 +103,7 @@ RESULTS = Path("results")
 ROUND2 = RESULTS / "round2"
 ROUND4 = RESULTS / "round4"
 ROUND7 = RESULTS / "round7"
+ROUND8 = RESULTS / "round8"
 CACHE = Path(".cache/responses")
 #: Finished (method, ticket) runs of a run in progress, to resume from.
 JOURNAL = Path(".cache/runs")
@@ -122,7 +132,7 @@ def results_directory(split: Split) -> Path:
     """The round that defined the split: its rewritten tickets are kept there."""
     if split.name == "dev4":
         return ROUND7
-    return {MAIN: ROUND2, MAIN2: ROUND4}.get(split.profile, RESULTS)
+    return {MAIN: ROUND2, MAIN2: ROUND4, MAIN3: ROUND8}.get(split.profile, RESULTS)
 
 
 def rewritten(
@@ -636,8 +646,24 @@ def summarise(
         rows["usd_total"] = sum(runs_of[m, tid].usage.usd() or 0.0 for tid in order)
         rows["deadline_errors"] = deadline_errors([by_id[t] for t in order],
                                                   [runs_of[m, t] for t in order])  # fmt: skip
+        rows |= losses([by_id[t] for t in order], [runs_of[m, t] for t in order])
         summary["methods"][m] = rows
     return summary
+
+
+def losses(tickets: Sequence[SimTicket], runs: Sequence[MethodRun]) -> dict[str, Any]:
+    """Where each gold promise stands at the end, and how Round 8's beats fared."""
+    stages: Counter[str] = Counter()
+    beats: dict[str, Counter[str]] = {}
+    for ticket, run in zip(tickets, runs, strict=True):
+        raw = run.detail.get("proposals")
+        proposed = [decode_proposals(p) for p in raw] if raw is not None else None
+        end = run.snapshots[-1]
+        found = attribute(ticket, end, proposed)
+        stages.update(stage.value for stage in found.values())
+        for kind, counts in beat_outcomes(ticket, end, found).items():
+            beats.setdefault(kind, Counter()).update(counts)
+    return {"promise_stages": dict(stages), "beats": {k: dict(v) for k, v in beats.items()}}
 
 
 def deadline_errors(tickets: Sequence[SimTicket], runs: Sequence[MethodRun]) -> dict[str, Any]:
@@ -962,6 +988,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     keys.extend(case.value for case in CloseCase
                 if case.value in summary["methods"][summary["reference"]])  # fmt: skip
     print(table(summary, keys))
+    for m, rows in summary["methods"].items():
+        print(f"{m}: promises {rows['promise_stages']}; beats {rows['beats']}", file=sys.stderr)
     print(f"guards: {effects['verdicts']}", file=sys.stderr)
     print(json.dumps({k: v for k, v in result["verifier"].items() if k != "rows"},
                      ensure_ascii=False), file=sys.stderr)  # fmt: skip

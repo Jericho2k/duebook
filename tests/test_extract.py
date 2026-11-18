@@ -122,6 +122,11 @@ def test_the_instructions_say_bare_thanks_confirms_nothing():
     assert "thanks that imply" not in SYSTEM_PROMPT
 
 
+def test_the_instructions_make_a_side_accountable_for_work_it_delegates():
+    assert "whoever does the work" in SYSTEM_PROMPT and "Курьер заберёт товар" in SYSTEM_PROMPT
+    assert "NOT commitments" in SYSTEM_PROMPT and '"offer.conditional"' in SYSTEM_PROMPT
+
+
 def test_handles_shown_to_the_model_map_back_to_real_ids():
     raw = output(resolved=[{"id": "c1", "quote": "готово"}, {"id": "C9", "quote": "готово"}])
     proposals, _ = parse_output(raw, {"C1": "e1#0"})

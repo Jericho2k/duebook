@@ -25,6 +25,7 @@ event stream, so it can be rebuilt, audited, and inspected as of any moment.
 | Nobody can bind the other side | "You promised me a refund" is a customer's claim, not a company promise |
 | The debtor's "done" is a *claim*; only the other side or a system of record *verifies* | "We sent the refund" and "the refund arrived" are different facts |
 | The debtor cannot cancel their own promise, only renegotiate it | A dropped promise must stay visible |
+| A new promise is a duplicate only when it restates an open one: it names nothing the open one does not, and the reverse, with no other deadline | Two promises alike in action but about different things are both kept; dropping a real promise is silent ([decision 0003](docs/decisions/0003-promise-identity.md)) |
 | A close (done, cancelled, renegotiated) must name its promise twice and be about it; if not, the promise stays open and the close becomes a suggestion | A promise closed by mistake is never alerted on again; one left open still is |
 | One side updating its own statement *supersedes*; two sides disagreeing is a *contradiction* | A change is history, a disagreement is an open problem |
 | A promise follows the ticket on handoff and is marked *inherited*; with no assignee it is *orphaned* | Handoff is where promises are lost |
@@ -332,6 +333,18 @@ cases per ticket. Use `dev3` (4 tickets, seed 4444) and `dev4` (8 tickets,
 seed 4747, Round 7) for tuning and `test3` (20 tickets, seed 4343) for
 evaluation.
 
+The `main3` profile (Round 8) adds who is accountable: two undertakings by
+someone else on the company's side (a courier, the finance department,
+engineers, the on-call engineer; with or without a deadline), two promises
+with one action about different objects, settled separately, and three
+messages that promise nothing: a prediction about a third party, a status
+report and a conditional offer (kept as an `offer.conditional` fact,
+[decision 0004](docs/decisions/0004-conditional-commitments.md)). `dev5`
+(8 tickets, seed 5151) is for tuning; `test4` (20 tickets, seed 5353) is
+never used for it. Every gold promise lost at the end is attributed to a
+stage: missed by the model, dropped by the reducer, or mishandled later
+(`bench.score.attribute`); the first two need the event memory's proposals.
+
 | Measure | What the method must show at the end of the ticket |
 |---|---|
 | `rescue_close_correct` | The twin identified by the preceding turn is fulfilled and its rival is still open. |
@@ -396,8 +409,8 @@ memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
 (`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
 bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 7); the raw record is under
-`results/` and `results/round2/` to `results/round7/`.
+[docs/results.md](docs/results.md) (rounds 1 to 8); the raw record is under
+`results/` and `results/round2/` to `results/round8/`.
 
 ## Running the service
 
@@ -552,8 +565,10 @@ Round 5 adds the negative verdict veto and contextual confirmation. Round 6
 refused contextual closes whose question names something the target does not.
 Round 7 removed Round 5's compact replies and batching, which lost promises,
 facts and failed steps; capped and escalated unreadable answers; and records a
-message no attempt could read instead of stalling its ticket. The evaluation
-is in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
+message no attempt could read instead of stalling its ticket. Round 8 keeps
+apart promises alike in action but about different things, counts delegated
+work as the company's promise, and reports on an unseen split (`test4`). The
+evaluation is in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
 independently labeled real tickets are next.
 
 ## Development

@@ -28,7 +28,7 @@ from duebook.bench import (
     score,
 )
 from duebook.bench.experiment import to_json
-from duebook.bench.generate import TWINS, CloseCase
+from duebook.bench.generate import MAIN3, PROMISE_BEATS, TWINS, Beat, CloseCase
 from duebook.bench.match import mentions
 from duebook.bench.rewrite import acceptable
 from duebook.bench.run import fold
@@ -222,7 +222,7 @@ def test_an_invented_promise_costs_precision_and_not_recall():
     def invent(event, proposals):
         extra = []
         if getattr(event, "text", "").startswith(("По нашим данным", "По накладной")):
-            extra = [MakeCommitment(Party.COMPANY, f"проверить {event.seq}", "По")]
+            extra = [MakeCommitment(Party.COMPANY, f"проверить {event.seq:03d}", "По")]
         return [*proposals, *extra]
 
     s = evaluated(invent)
@@ -466,7 +466,7 @@ def test_the_oracle_scores_perfectly_at_the_end_and_handoffs_of_every_split(name
         assert s.change_accuracy == s.fact_recall == 1.0 and s.freshness_error == 0.0
         assert s.closes_missed == s.suggestions_right == s.suggestions_wrong == s.errors == 0
         assert all(getattr(s, case.value).recall == 1.0 for case in CloseCase)
-    if SPLITS[name].profile is MAIN2:
+    if SPLITS[name].profile in (MAIN2, MAIN3):
         assert all(getattr(report.score, case.value).tp == len(tickets) for case in CloseCase)
 
 
@@ -497,7 +497,7 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
     tickets = to_json(SPLITS[name].tickets())
     for ticket in tickets:
         # Compare the full round-2 record using its original schema.
-        assert ticket["gold"].pop("close_cases") == []
+        assert ticket["gold"].pop("close_cases") == [] and ticket["gold"].pop("beats") == []
         for proposals in ticket["proposals"]:
             for proposal in proposals:
                 assert proposal.pop("context_quote", "") == ""
@@ -505,6 +505,56 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
         tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
     )
     assert sha256(data.encode("utf-8")).hexdigest() == digest
+
+
+# Captured before Round 8 added its beats: every earlier split is unchanged.
+@pytest.mark.parametrize(
+    ("name", "digest"),
+    [
+        ("dev", "feaf64c23f238b8d2facab55cc30ca93d20bd3aa141021080627a08b35012d01"),
+        ("test", "6a1951e375b01a8b7e836e426e35d7f6a76b25a258639f0537dcbdaaf7684586"),
+        ("long", "8fdd677923744a857bea058ce98a60cca615a21065e05b9b96532169c41c23cc"),
+        ("dev3", "f3e4320e9d36bbe7180f3a28ad88aa9bee6ac703a07d0a3f8c81d3b644052c44"),
+        ("test3", "aea3c2b06e4b780f6341e836241694eeb2f4de5a9ffb15f0ff67afa8fc42b4cf"),
+        ("dev4", "6b68885372bc2758ec179fc3e4e608dc16c2755a06881fc779af0213f8ada4a8"),
+    ],
+)
+def test_earlier_splits_match_the_hashes_captured_before_main3(name, digest):
+    tickets = to_json(SPLITS[name].tickets())
+    for ticket in tickets:
+        assert ticket["gold"].pop("beats") == []
+    data = json.dumps(
+        tickets, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=time.isoformat
+    )
+    assert sha256(data.encode("utf-8")).hexdigest() == digest
+
+
+def test_round_eight_splits_plant_every_beat():
+    for name in ("dev5", "test4"):
+        assert SPLITS[name].profile is MAIN3
+        kinds = set()
+        for ticket in SPLITS[name].tickets():
+            mine = [b.kind for b in ticket.gold.beats]
+            kinds |= set(mine)
+            assert mine.count(Beat.SAME_ACTION) == 2
+            assert mine.count(Beat.DELEGATED_DATED) + mine.count(Beat.DELEGATED_UNDATED) == 2
+        assert kinds == set(Beat)
+
+
+def test_a_beat_that_is_not_a_promise_plants_no_commitment():
+    for ticket in SPLITS["dev5"].tickets():
+        promised = {c.seq for c in ticket.gold.commitments}
+        for beat in ticket.gold.beats:
+            made = [p for p in ticket.proposals[beat.seq - 1] if isinstance(p, MakeCommitment)]
+            assert bool(made) is (beat.kind in PROMISE_BEATS) is (beat.seq in promised)
+
+
+def test_two_promises_with_one_action_survive_only_under_promise_identity():
+    for ticket in SPLITS["dev5"].tickets():
+        pair = [b.seq for b in ticket.gold.beats if b.kind is Beat.SAME_ACTION]
+        for guards, kept in ((Guards(), 2), (Guards(identity=False), 1)):
+            card = fold(ticket, Oracle.of([ticket]), guards=guards).card
+            assert sum(c.source.seq in pair for c in card.commitments) == kept
 
 
 def test_the_round_three_splits_use_main2_at_fresh_distinct_seeds():

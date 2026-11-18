@@ -207,10 +207,27 @@ def names_other(text: str, target: Iterable[str]) -> bool:
     A renegotiation restates its promise with a new date: it may add a detail
     or drop one, but a promise about a different thing is a new promise.
     """
+    added, dropped = _differences(text, target)
+    return bool(added) and bool(dropped)
+
+
+def restates(wording: Iterable[str], target: Iterable[str]) -> bool:
+    """Do two wordings name the same things, neither naming anything the other does not?
+
+    Promise identity (decision 0003): "доступ к пространству Альфа" and
+    "доступ к пространству Бета" are two promises, however alike their actions.
+    """
+    text = " ".join(wording)
+    added, dropped = _differences(text, target)
+    # Wordings that name nothing ("напишу вам") cannot be told apart, so not joined.
+    return bool(content(text)) and not added and not dropped
+
+
+def _differences(text: str, target: Iterable[str]) -> tuple[list[Stem], list[Stem]]:
+    """What ``text`` names that ``target`` does not, and what it leaves out of it."""
     mine = content(text)
     theirs = [s for t in target for s in content(t)]
-    dropped = [t for t in theirs if not any(t.meets(s) for s in mine)]
-    return bool(_added(mine, theirs)) and bool(dropped)
+    return _added(mine, theirs), _added(theirs, mine)
 
 
 def names_beyond(question: str, target: Iterable[str]) -> bool:

@@ -1,0 +1,6 @@
+{"at": "2026-11-18T18:48:45.066672+00:00", "split": "dev5", "what": "rewriting the tickets", "methods": "", "label": "round 8 step 4: rewrite dev5 once", "usd": 0.023044763999999943, "reused_usd": 0.0}
+{"at": "2026-11-18T19:07:05.786677+00:00", "split": "dev5", "what": "cost projection only", "methods": "event_memory", "label": "round 8 step 5: dev5 projection from dev4", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-18T19:07:12.755608+00:00", "split": "dev5", "what": "run", "methods": "event_memory", "label": "round 8 step 5: dev5 run 1", "usd": 0.12468510319999984, "reused_usd": 0.0005985056}
+{"at": "2026-11-18T18:56:49.266252+00:00", "split": "test4", "what": "rewriting the tickets", "methods": "", "label": "round 8 step 4: rewrite test4 once (not read)", "usd": 0.05486237479999991, "reused_usd": 0.0}
+{"at": "2026-11-18T19:16:54.437946+00:00", "split": "test4", "what": "cost projection only", "methods": "event_memory", "label": "round 8 step 5: test4 projection from dev5", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-18T19:17:03.338333+00:00", "split": "test4", "what": "run", "methods": "event_memory", "label": "round 8 step 5: test4, once (first unseen test of this version)", "usd": 0.3158747704000001, "reused_usd": 0.0028293552}
