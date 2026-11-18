@@ -1,0 +1,2 @@
+{"at": "2026-11-18T15:08:13.421620+00:00", "split": "test3", "what": "individual re-reads of round 5 batches", "methods": "event_memory", "label": "step 2", "usd": 0.003784804800000001, "reused_usd": 0.0}
+{"at": "2026-11-18T15:10:46.024974+00:00", "split": "test3", "what": "individual re-reads of lost disputes", "methods": "event_memory", "label": "step 2", "usd": 0.0002015272, "reused_usd": 5.16264e-05}
