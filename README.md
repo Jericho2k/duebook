@@ -382,10 +382,11 @@ tickets are journalled, so an interrupted run resumes without paying twice.
 
 The baselines (`bench.baselines`) read with the same model as the event
 memory: (a) the whole transcript at each checkpoint, (b) a summary updated
-after every event, (c) Mem0 (`pip install -e ".[mem0]"`). The comparison, its
-numbers with 95% bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1, 2 and 3); the raw record is
-under `results/`, `results/round2/` and `results/round3/`.
+after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
+(`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
+bootstrap intervals, and its threats to validity are in
+[docs/results.md](docs/results.md) (rounds 1 to 4); the raw record is under
+`results/` and `results/round2/` to `results/round4/`.
 
 ## Running the service
 
@@ -523,16 +524,25 @@ on 150-200 message tickets, where the event memory made no false close on the
 verifier with round 2's configuration and kept round 2's: no configuration
 made a false close, the verifier agreed with the guards on all 119 closes it
 was asked about but changed no outcome, and reasoning cost 2.3 times as much
-and read three deadlines wrong. A final run on a fresh seed (`test3`) is
-projected, not run.
+and read three deadlines wrong. Round 4, the final comparison on a fresh
+seed (`test3`, 20 tickets with three hard close cases each), ran once: the
+event memory read every deadline right, showed no stale fact and every open
+dispute, where every baseline fell short on each, at $0.013 a ticket. It lost every
+rescue case (the reply that settles a promise names nothing, and the
+extractor sees one message), and in 4 of 20 tickets closed a callback on an
+unrelated "the money arrived": the verifier said no, and the guards let it
+through. The test tickets and the baselines' answers are frozen.
 
 Each service command has been run against a local PostgreSQL with uvicorn and
 a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
 checked with `docker compose config` but not yet built or started.
 
-Next: the final run on `test3` once its budget is approved; a helpdesk
-adapter; real tickets, which are what would show whether the verifier's
-rescue of wordless confirmations is worth its cost; a verifier from another
+Next: the two losses round 4 found, measured on its frozen proposals: the
+verifier's "no" as a veto (it would have removed every false close at the end
+of a ticket), and showing the extractor the previous turn, for replies like
+"Ага, вижу" (a new extraction, not a replay); a helpdesk adapter; real
+tickets, which are what would show whether the verifier's rescue of wordless
+confirmations is worth its cost; a verifier from another
 model family; a word-by-word comparison of `target_quote` that tolerates a
 skipped function word (round 2's one blocked true close).
 
