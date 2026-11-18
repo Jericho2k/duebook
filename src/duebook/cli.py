@@ -134,6 +134,8 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
 
 
 def extractor(settings: Settings):
+    from dataclasses import replace
+
     from .extract import ChatClient, Extractor
     from .extract.verifier import verifying_reader
 
@@ -145,7 +147,12 @@ def extractor(settings: Settings):
         base_url=settings.openrouter_base_url,
     )
     cal = settings.calendar()
-    reader = Extractor(client, cal)
+    timeout = settings.extraction_batch_timeout.total_seconds()
+    batch_model = (
+        replace(client, total_timeout=timeout, http_retries=0, content_retries=0)
+        if timeout else None
+    )
+    reader = Extractor(client, cal, batch_model=batch_model)
     if settings.verifier_enabled:
         return verifying_reader(
             reader,
@@ -163,7 +170,8 @@ def process(settings: Settings, args: argparse.Namespace, stopper: Stopper, read
     reader = reader or extractor(settings)
 
     def body(store) -> None:
-        pipeline = Pipeline(store, reader, clock=_now)
+        pipeline = Pipeline(store, reader, clock=_now,
+                            batch_timeout=settings.extraction_batch_timeout)
         if args.once:
             _report(pipeline.process(settings.process_batch, stopper))
             stopper.set()

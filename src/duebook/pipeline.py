@@ -11,8 +11,8 @@ The steps run in a fixed order and each guards the next.
    ``seq`` order, starting after the last applied one. An event that arrived
    ahead of its predecessor simply waits in the log; when the missing one
    arrives, both are applied in the same pass.
-3. **Extract, then record.** The model is shown the card as of the previous
-   event and the one new message. What it proposes goes to
+3. **Extract, then record.** The model reads the card and each new message,
+   with its preceding turn as context. What it proposes goes to
    ``Store.record``, which applies the reducer and writes the event's
    proposals, the snapshot and any due alerts in one transaction.
 
@@ -50,9 +50,10 @@ from datetime import UTC, datetime, timedelta
 import psycopg
 
 from .card import Card
-from .events import Event
+from .events import Event, MessagePosted
 from .extract.cost import Usage
-from .extract.extractor import Reader
+from .extract.extractor import BATCH_TIMEOUT, MAX_BATCH_SIZE, Reader, read_batch, read_event
+from .lifecycle import next_wakeup
 from .store.store import Hold, Store
 
 log = logging.getLogger(__name__)
@@ -82,6 +83,7 @@ class Pipeline:
     #: Delay before the first retry of a failed extraction; doubles up to the cap.
     retry_base: timedelta = timedelta(minutes=1)
     retry_cap: timedelta = timedelta(hours=1)
+    batch_timeout: timedelta = BATCH_TIMEOUT
 
     def handle(self, event: Event) -> Handled:
         """Take one event from the helpdesk. Safe to call again with the same event."""
@@ -175,6 +177,7 @@ class Pipeline:
     def _advance(self, ticket_id: str, *, new: bool) -> Handled:
         applied: list[int] = []
         spent = Usage()
+        prepared = {}
         with self.store.exclusive(ticket_id):
             while True:
                 card = self.store.card(ticket_id)
@@ -190,7 +193,13 @@ class Pipeline:
 
                 earlier = _usage(hold.usage) if hold is not None else Usage()
                 try:
-                    extraction = self.extractor.extract(card, event)
+                    previous = self.store.previous_turn(event)
+                    if not prepared and hold is None and self._can_batch(card, event, now):
+                        messages = self.store.next_messages(event, MAX_BATCH_SIZE)
+                        turns = [(e, self.store.previous_turn(e)) for e in messages]
+                        prepared = read_batch(self.extractor, card, turns)
+                    extraction = read_event(self.extractor, card, event, previous,
+                                            prepared.pop(event.seq, None))  # fmt: skip
                 except Exception as error:  # any failure to read holds the ticket
                     failed = getattr(error, "usage", None) or Usage()
                     spent += failed
@@ -209,7 +218,7 @@ class Pipeline:
                 self.store.record(
                     event,
                     extraction.proposals,
-                    now=now,
+                    now=self.clock(),
                     usage=asdict(earlier + extraction.usage),
                     verifier_usage=asdict(extraction.verifier_usage)
                     if extraction.verifier_usage is not None else None,
@@ -221,6 +230,13 @@ class Pipeline:
 
             waiting = card.last_seq + 1 if self.store.backlog(ticket_id) else None
         return Handled(ticket_id, card, new, tuple(applied), waiting_for=waiting, usage=spent)
+
+    def _can_batch(self, card: Card, event: Event, now: datetime) -> bool:
+        if (not isinstance(event, MessagePosted) or not event.text.strip()
+            or not getattr(self.extractor, "extract_batch", None) or not self.batch_timeout):
+            return False
+        wakeup = next_wakeup(card, now, self.store.policy)
+        return wakeup is None or wakeup > now + self.batch_timeout
 
 
 def _usage(raw: dict | None) -> Usage:

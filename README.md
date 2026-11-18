@@ -42,11 +42,8 @@ span copied from that commitment's original wording, which the card shows the
 model — and `duebook.closing` decides, deterministically, whether to admit it:
 
 * the span must be in the target's original wording;
-* the closing words must share content with the target (crude Russian and
-  English stems; thanks, function words and deadline words do not count;
-  generic verbs such as "напишу" count for less than words that name a thing),
-  or plainly confirm a deed when the target is the only open promise of its
-  side;
+* the closing words must identify the target. For a brief confirmation, a
+  verified quote from the preceding public turn can supply the subject;
 * no other open promise of that side may fit the closing words as well;
 * a renegotiation may add or drop detail, but not name a different thing.
 
@@ -58,31 +55,23 @@ measuring what they do.
 
 ### A second opinion on destructive changes
 
-The lexical checks also stop some true closes: "Спасибо, всё получила" shares
-no word with "вернём деньги за доставку" and, with a callback also open, is
-refused. `extract.VerifyingReader` puts every proposal that would resolve,
-cancel or replace an open commitment — a few per ticket, never an ordinary
-message — to a separate model call (`extract.Verifier`). It sees only that
-commitment (owner, action, original words, deadline) and the new message with
-its author, and answers yes / no / unsure with `evidence_quote`, copied from
-the message. The verdict rides on the proposal (`verification`) and is stored
-with it, so a replay reproduces the card without a model; the reducer stays
-pure.
+`extract.VerifyingReader` asks about proposed completions, cancellations and
+replacements. For a short confirmation that relies on the preceding side's
+public turn, it compares the open promises of the owing side together. It can
+identify a single target with a quote from each turn. The reducer checks both
+quotes against their source messages, checks for a rival target, and stores
+both sources on the fulfilled commitment. An ambiguous reply may leave a
+suggestion for an agent to clarify.
 
 `duebook process` enables the verifier by default. It uses the same endpoint
 and API key as the extractor, with DeepSeek V4.1 Flash and low reasoning.
 
-The reducer weighs it in layers. **Hard**, never overridden: who may close
-(nobody binds or releases the other side), the span of the target's wording,
-ambiguity (the closing words — and the verifier's evidence — fit another open
-commitment of that side as well), a renegotiation that names a different
-thing. **Soft**: lexical relevance. A close is admitted when relevance passes
-OR the verifier said yes with evidence that is literally, word for word, in
-the message and is more than thanks or acknowledgement. Any other verdict —
-no, unsure, a quote not in the message, a verifier that could not be asked —
-leaves the close to the deterministic checks, and what they refuse becomes a
-suggestion, as before. Bare thanks still closes nothing, whatever the
-verifier says. `Guards(verifier=False)` ignores verdicts, for measurement.
+A verifier `no` rejects that proposed change. A `yes` still requires
+evidence of the subject and the action, even with one open promise. An unsure
+verdict or a failed verification leaves the deterministic checks in force.
+The stored verdict and the version of the closing rule let the log replay
+without calling a model. [Closing rule decision](docs/decisions/0001-verifier-veto.md).
+`Guards(verifier=False)` ignores verdicts and contextual closes for measurement.
 
 ```python
 from duebook.extract import ChatClient, Extractor, Verifier, VerifyingReader
@@ -119,8 +108,17 @@ Friday.
 
 ## Extraction and what it costs
 
-The extractor shows the model the card and the one message that just arrived —
-never the whole transcript — and works against any OpenAI-compatible endpoint.
+The extractor works against an OpenAI-compatible endpoint. It shows the card,
+the event text, and the preceding public turn from the other side. Its
+structured response lists only kinds of changes with entries. An empty read
+is `{"updates":[]}`.
+
+The processor can read up to four already-waiting, consecutive text events of
+one ticket together. It collects one response per event and applies events in
+sequence. A response that depends on an earlier change can request an
+individual reread against the updated card. The processor starts immediately,
+uses the configured batch request timeout, and reads individually near a
+scheduled alert or after a failed batch.
 The default reader is `deepseek/deepseek-v4.1-flash` with reasoning switched
 off (left at "low" it spends 1,000-2,300 hidden tokens a message) and locked
 to one OpenRouter host (DeepInfra, fp8, no fallbacks), so the fixed
@@ -497,6 +495,7 @@ key.
 | `DUEBOOK_WORKER_NAME` | role@host:pid | this process's name in outbox claims |
 | `DUEBOOK_PROCESS_IDLE_SECONDS` | 1 | processor sleep when there is no work |
 | `DUEBOOK_PROCESS_BATCH` | 20 | tickets per processor pass |
+| `DUEBOOK_EXTRACTION_BATCH_TIMEOUT_SECONDS` | 10 | batch request timeout and minimum slack before a scheduled alert. Zero disables batching |
 | `DUEBOOK_SCHEDULE_MAX_IDLE_SECONDS` | 30 | longest scheduler sleep |
 | `DUEBOOK_DELIVER_IDLE_SECONDS` | 5 | delivery worker sleep when the queue is empty |
 | `DUEBOOK_DELIVER_BATCH` | 10 | alerts claimed per pass |
@@ -537,14 +536,10 @@ Each service command has been run against a local PostgreSQL with uvicorn and
 a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
 checked with `docker compose config` but not yet built or started.
 
-Next: the two losses round 4 found, measured on its frozen proposals: the
-verifier's "no" as a veto (it would have removed every false close at the end
-of a ticket), and showing the extractor the previous turn, for replies like
-"Ага, вижу" (a new extraction, not a replay); a helpdesk adapter; real
-tickets, which are what would show whether the verifier's rescue of wordless
-confirmations is worth its cost; a verifier from another
-model family; a word-by-word comparison of `target_quote` that tolerates a
-skipped function word (round 2's one blocked true close).
+Round 5 adds the negative verdict veto, contextual confirmation, compact
+replies, and batching for queued messages. The evaluation is in
+[docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
+independently labeled real tickets are next.
 
 ## Development
 

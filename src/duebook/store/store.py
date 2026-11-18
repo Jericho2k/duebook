@@ -28,11 +28,10 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from ..card import Card
-from ..events import Event
+from ..events import Event, MessagePosted, Role, Side, other_side, remember_turn
 from ..lifecycle import AlertPolicy, next_wakeup, notices
 from ..proposals import Proposal
-from ..reducer import Rejection, apply
-from ..reducer import replay as fold
+from ..reducer import LEGACY_GUARDS, Rejection, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
@@ -134,7 +133,10 @@ class Store:
         with self.conn.transaction():
             self.ingest(event, now)
             card = self._lock(event.ticket_id, now)
-            outcome = apply(card, event, proposals, self.cal, self.vocab)
+            previous = self.previous_turn(event) if any(
+                getattr(p, "context_quote", "") for p in proposals
+            ) else None
+            outcome = apply(card, event, proposals, self.cal, self.vocab, previous=previous)
             if outcome.replayed:
                 return Recorded(card, replayed=True)
 
@@ -271,22 +273,58 @@ class Store:
         ).fetchone()
         return decode_event(row["body"]) if row else None
 
+    def previous_turn(self, event: Event) -> MessagePosted | None:
+        side = other_side(event)
+        if side is None:
+            return None
+        roles = [Role.CUSTOMER] if side is Side.CUSTOMER else [Role.AGENT, Role.BOT]
+        row = self.conn.execute(
+            "select body from events where ticket_id = %s and seq < %s"
+            " and body->>'type' = 'MessagePosted' and (body->>'public')::boolean"
+            " and body->'author'->>'role' = any(%s) and body->>'text' ~ '[^[:space:]]'"
+            " order by seq desc limit 1",
+            (event.ticket_id, event.seq, roles),
+        ).fetchone()
+        return decode_event(row["body"]) if row else None
+
+    def next_messages(self, first: MessagePosted, limit: int) -> list[MessagePosted]:
+        rows = self.conn.execute(
+            "select body from events where ticket_id = %s and seq > %s"
+            " order by seq limit %s", (first.ticket_id, first.seq, limit - 1),
+        ).fetchall()
+        events = [first]
+        for seq, row in enumerate(rows, first.seq + 1):
+            event = decode_event(row["body"])
+            if event.seq != seq or not isinstance(event, MessagePosted) or not event.text.strip():
+                break
+            events.append(event)
+        return events
+
     def stream(
         self, ticket_id: str, upto: int | None = None
     ) -> Iterator[tuple[Event, tuple[Proposal, ...]]]:
         """Applied events with their proposals, in order."""
-        rows = self.conn.execute(
-            "select e.body, p.proposals from events e"
+        for row in self._applied(ticket_id, upto):
+            yield decode_event(row["body"]), decode_proposals(row["proposals"])
+
+    def _applied(self, ticket_id: str, upto: int | None) -> list[dict]:
+        return self.conn.execute(
+            "select e.body, p.proposals, p.close_rules from events e"
             " join event_proposals p using (ticket_id, seq)"
             " where e.ticket_id = %s and (%s::bigint is null or e.seq <= %s) order by e.seq",
             (ticket_id, upto, upto),
         ).fetchall()
-        for row in rows:
-            yield decode_event(row["body"]), decode_proposals(row["proposals"])
 
     def replay(self, ticket_id: str, upto: int | None = None) -> Card:
         """The card rebuilt from the log alone — as of ``upto`` when given."""
-        return fold(ticket_id, self.stream(ticket_id, upto), self.cal, self.vocab)
+        card, turns = Card(ticket_id), {}
+        for row in self._applied(ticket_id, upto):
+            guards = LEGACY_GUARDS if row["close_rules"] == 1 else None
+            event, proposals = decode_event(row["body"]), decode_proposals(row["proposals"])
+            card = apply(card, event, proposals, self.cal, self.vocab, guards=guards,
+                         previous=turns.get(other_side(event))).card  # fmt: skip
+            remember_turn(turns, event)
+        return card
 
     def held(self, ticket_id: str) -> Hold | None:
         row = self.conn.execute("select * from holds where ticket_id = %s", (ticket_id,)).fetchone()

@@ -16,7 +16,7 @@ from duebook import (
     WorkCalendar,
     apply,
 )
-from duebook.events import Event
+from duebook.events import Event, other_side, remember_turn
 from duebook.proposals import (
     AnswerQuestion,
     AskQuestion,
@@ -50,6 +50,7 @@ class Ticket:
         self.last: Outcome | None = None
         #: Every event with the proposals made for it, for tests that store a ticket.
         self.log: list[tuple[Event, tuple]] = []
+        self.turns = {}
 
     def wait(self, **delta) -> Ticket:
         self.now += timedelta(**delta)
@@ -82,7 +83,9 @@ class Ticket:
 
     def _apply(self, event, proposals) -> Outcome:
         self.log.append((event, tuple(proposals)))
-        self.last = apply(self.card, event, proposals, CAL, self.vocab)
+        self.last = apply(self.card, event, proposals, CAL, self.vocab,
+                          previous=self.turns.get(other_side(event)))  # fmt: skip
+        remember_turn(self.turns, event)
         self.card = self.last.card
         return self.last
 

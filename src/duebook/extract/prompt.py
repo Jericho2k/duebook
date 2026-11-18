@@ -1,10 +1,7 @@
 """What the model is shown: fixed instructions, the card so far, one new message.
 
-The model never sees the whole transcript. It sees the card — the system's own
-bounded account of the ticket — and the single message that just arrived. That
-is what keeps the cost of a long ticket linear, and it is also a discipline: if
-the card is not enough to interpret the next message, the card is missing
-something, which is a defect to find rather than to paper over with context.
+The card bounds the context. The preceding turn can identify the subject of
+a short reply, while proposed updates quote the message being processed.
 
 The instructions come first and never change, so a provider's prompt cache can
 serve them.
@@ -28,7 +25,7 @@ from ..temporal import WorkCalendar
 
 _INSTRUCTIONS = """\
 You maintain the record of a customer support ticket. You are given the record \
-so far and ONE new message. Report only what this new message adds or changes.
+so far and one or more new messages. Report only what each new message adds or changes.
 
 Hard rules:
 - Every item needs "quote": a short span copied character for character from \
@@ -36,7 +33,8 @@ the new message. Never paraphrase, translate or merge spans in a quote. If you \
 cannot quote it, do not report it.
 - Report only what the message states. No inference, no advice, no summary.
 - Write "action", "value" and "text" in the language of the message.
-- When the message adds nothing, return empty lists. Most messages add little.
+- The "updates" array includes only groups with items. Set "type" to the section \
+name below and put its entries in "items". When nothing changes, use an empty array.
 
 facts — stable details of the case (order number, product, plan, device, what \
 is broken, current state of the problem).
@@ -99,6 +97,12 @@ message) and shows which one it is; "quote" is the words of the new message \
 that name what was done or called off. Report every such statement: the \
 record checks each close against the commitment's own words before it \
 accepts it, so do not hold one back.
+For resolved only, a brief reply that confirms receipt or completion can \
+refer to something named in the preceding turn. Propose the possible target \
+and copy the words naming it from that turn into "context_quote". Use null \
+when the current message identifies the target itself. If a reply confirms \
+one of several things without saying which, propose a possible target for \
+review. Never extract facts, promises or other changes from context alone.
 
 steps — a fix or diagnostic action that was suggested or tried. "outcome" is \
 "pending" unless this same message says whether it worked.
@@ -245,10 +249,33 @@ def build_messages(
     cal: WorkCalendar,
     vocab: Vocabulary = DEFAULT_VOCABULARY,
     bound: Bound | None = None,
+    *,
+    previous: MessagePosted | None = None,
 ) -> tuple[list[dict[str, str]], dict[str, str]]:
     rendered = render_card(card, event.at, cal, bound)
-    user = f"{rendered.text}\n\n{render_message(event, cal)}"
+    user = "\n\n".join((rendered.text, render_turn(event, cal, previous)))
     return (
         [{"role": "system", "content": system_prompt(vocab)}, {"role": "user", "content": user}],
         rendered.aliases,
     )
+
+
+def render_turn(event: MessagePosted, cal: WorkCalendar, previous: MessagePosted | None) -> str:
+    message = render_message(event, cal)
+    if previous is None:
+        return message
+    return (f"PRECEDING TURN (read-only, message {previous.seq}, "
+            f"{previous.author.role.value}):\n{previous.text}\n\n{message}")
+
+
+def build_batch(card, turns, cal, vocab, bound):
+    """Share one card while grounding each result in its own message."""
+    rendered = render_card(card, turns[0][0].at, cal, bound)
+    sections = [rendered.text, "Return one row per seq, including empty rows. Read in order. "
+                "Never use a later message to interpret an earlier one. Set reread true if "
+                "the message refers to a promise, step or question first added in this batch, "
+                "or you need the updated card to decide what this message changes."]
+    for event, previous in turns:
+        sections.append(f"SEQ {event.seq}\n{render_turn(event, cal, previous)}")
+    return ([{"role": "system", "content": system_prompt(vocab)},
+             {"role": "user", "content": "\n\n".join(sections)}], rendered.aliases)

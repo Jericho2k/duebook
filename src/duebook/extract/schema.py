@@ -73,8 +73,7 @@ _DUE = _obj(
     }
 )
 
-OUTPUT_SCHEMA: dict[str, Any] = _obj(
-    {
+_SECTIONS = {
         "facts": _list({"slot": _STR, "value": _STR, "quote": _STR, "change": {"type": "boolean"}}),
         "commitments": _list(
             {
@@ -87,7 +86,8 @@ OUTPUT_SCHEMA: dict[str, Any] = _obj(
                 "target_quote": _OPT_STR,
             }
         ),
-        "resolved": _list({"id": _STR, "target_quote": _STR, "quote": _STR}),
+        "resolved": _list({"id": _STR, "target_quote": _STR, "quote": _STR,
+                           "context_quote": _OPT_STR}),  # fmt: skip
         "cancelled": _list({"id": _STR, "target_quote": _STR, "quote": _STR}),
         "steps": _list(
             {"action": _STR, "quote": _STR, "outcome": _enum([o.value for o in StepOutcome])}
@@ -95,8 +95,16 @@ OUTPUT_SCHEMA: dict[str, Any] = _obj(
         "step_outcomes": _list({"id": _STR, "outcome": _enum(["worked", "failed"]), "quote": _STR}),
         "questions": _list({"text": _STR, "quote": _STR}),
         "answers": _list({"id": _STR, "quote": _STR}),
-    }
-)
+}
+_UPDATES = {
+    "type": "array",
+    "items": {"anyOf": [_obj({"type": _enum([name]), "items": items})
+                        for name, items in _SECTIONS.items()]},
+}
+OUTPUT_SCHEMA = _obj({"updates": _UPDATES})
+BATCH_SCHEMA = _obj({"messages": _list({
+    "seq": {"type": "integer"}, "reread": {"type": "boolean"}, "updates": _UPDATES,
+})})
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,7 +144,8 @@ def parse_output(
         ),
         "answers": lambda i: AnswerQuestion(ref(i["id"]), _text(i["quote"])),
         "resolved": lambda i: ResolveCommitment(
-            ref(i["id"]), _text(i["quote"]), _text(i.get("target_quote") or "")
+            ref(i["id"]), _text(i["quote"]), _text(i.get("target_quote") or ""),
+            context_quote=_text(i.get("context_quote") or ""),
         ),
         "cancelled": lambda i: CancelCommitment(
             ref(i["id"]), _text(i["quote"]), _text(i.get("target_quote") or "")
@@ -155,6 +164,19 @@ def parse_output(
 
     proposals: list[Proposal] = []
     malformed: list[Malformed] = []
+    if "updates" in raw:
+        sections: dict[str, list] = {}
+        items = raw["updates"]
+        if not isinstance(items, list):
+            return [], [Malformed("updates", items, "not a list")]
+        for update in items:
+            if (not isinstance(update, dict) or not isinstance(update.get("type"), str)
+                or update["type"] not in builders
+                or not isinstance(update.get("items"), list)):
+                malformed.append(Malformed("updates", update, "invalid section"))
+                continue
+            sections.setdefault(update["type"], []).extend(update["items"])
+        raw = sections
     for section, build in builders.items():
         items = raw.get(section) or []
         if not isinstance(items, list):

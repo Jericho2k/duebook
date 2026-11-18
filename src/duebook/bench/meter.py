@@ -75,6 +75,7 @@ class Tally:
     #: call (when it was first made).
     cache_hits: int = 0
     providers: dict[str, int] = field(default_factory=dict)
+    single_extract_seconds: list[float] = field(default_factory=list)
 
     @property
     def usage(self) -> Usage:
@@ -116,7 +117,10 @@ class Meter:
             self.ledger.add(completion.usage)
         host = getattr(completion, "provider", None) or "unknown"
         self.tally.providers[host] = self.tally.providers.get(host, 0) + 1
-        self.tally.record(completion.usage, time.perf_counter() - started, self.answering)
+        seconds = time.perf_counter() - started
+        if name == "ticket_update" and not completion.cached:
+            self.tally.single_extract_seconds.append(seconds)
+        self.tally.record(completion.usage, seconds, self.answering)
         return completion
 
     def spend(self, usage: Usage, seconds: float) -> None:

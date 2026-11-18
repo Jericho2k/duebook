@@ -36,6 +36,7 @@ SECRET = "hook-secret"
 KEY = "read-key"
 PROMISE = "Перезвоню вам через 2 часа"
 REFUND = "Вернём деньги за доставку"
+REFUND_CONTEXT = "Проверьте, пожалуйста, поступили ли деньги за доставку"
 RECEIVED = "всё получила"
 #: The promise is made 15 minutes in and is due two hours later.
 DEADLINE = START + timedelta(minutes=15, hours=2)
@@ -71,8 +72,10 @@ def conversation(verification: Verification | None) -> Ticket:
     )
     t.wait(minutes=30)
     t.assign(IVAN.id, OLGA.id)  # Ivan's shift ends; the promise passes to Olga
-    t.say(OLGA, REFUND, MakeCommitment(Party.COMPANY, "вернуть деньги", REFUND))
-    t.say(ANNA, f"Спасибо, {RECEIVED}!", ResolveCommitment("e5#0", RECEIVED, REFUND, verification))
+    t.say(OLGA, f"{REFUND}. {REFUND_CONTEXT}?",
+          MakeCommitment(Party.COMPANY, "вернуть деньги", REFUND))  # fmt: skip
+    t.say(ANNA, f"Спасибо, {RECEIVED}!",
+          ResolveCommitment("e5#0", RECEIVED, REFUND, verification, REFUND_CONTEXT))  # fmt: skip
     return t
 
 
@@ -109,22 +112,34 @@ def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
             "due_quote": "через 2 часа", "due": due(kind="offset", amount=2, unit="hour"),
         }]),
         output(commitments=[{"owner": "company", "action": "вернуть деньги", "quote": REFUND}]),
-        output(resolved=[{"id": "C2", "quote": RECEIVED, "target_quote": REFUND}]),
+        output(resolved=[{"id": "C2", "quote": RECEIVED, "target_quote": REFUND,
+                          "context_quote": REFUND_CONTEXT}]),
     ])  # fmt: skip
     asked = []
 
     def stub_post(_, body):
         name = body["response_format"]["json_schema"]["name"]
         asked.append(name)
+        if name == "ticket_batch":
+            start = 2 if len(asked) == 1 else 5
+            rows = [{"seq": start, "reread": False, **next(extracted)}]
+            if start == 2:
+                rows.append({"seq": 3, "reread": False, **next(extracted)})
+            else:
+                rows.append({"seq": 6, "reread": True, **output()})
+            return chat_response(json.dumps({"messages": rows}))
         if name == "ticket_update":
             return chat_response(json.dumps(next(extracted)))
-        assert name == "verdict" and outcome != "disabled"
+        assert name == "context_verdict" and outcome != "disabled"
+        prompt = body["messages"][1]["content"]
+        assert PROMISE in prompt and REFUND_CONTEXT in prompt
         assert body["model"] == DEFAULT_MODEL and body["provider"]["order"] == ["deepinfra/fp8"]
         assert body["reasoning"] == {"effort": "low", "exclude": True}
         if outcome == "timeout":
             raise httpx.ReadTimeout("stub timeout")
         return chat_response(
-            json.dumps({"verdict": "yes", "evidence_quote": RECEIVED}),
+            json.dumps({"verdict": "yes", "evidence_quote": RECEIVED, "id": "C2",
+                        "target_quote": REFUND, "context_quote": REFUND_CONTEXT}),
             cost=0.00002,
             reasoning=25,
         )
@@ -152,8 +167,11 @@ def test_the_service_verifies_closes_and_alerts_once_on_broken_promises(
             assert cli.process(settings, args, cli.Stopper()) == 0
         enabled = outcome != "disabled"
         counts = {"verifier_calls": int(enabled), "verifier_failures": int(outcome == "timeout")}
-        expected_calls = ["ticket_update"] * 4 + (["verdict"] if enabled else [])
+        expected_calls = ["ticket_batch", "ticket_batch", "ticket_update"]
+        if enabled:
+            expected_calls.append("context_verdict")
         assert asked == expected_calls and store.card("T-77") == ticket.card
+        assert store.replay("T-77") == ticket.card
         status = client.get("/tickets/T-77/status", headers=auth).json()
         assert status == {"ticket_id": "T-77", "last_seq": 6, "backlog": 0, "hold": None, **counts}
         assert counts.items() <= client.get("/health").json().items()

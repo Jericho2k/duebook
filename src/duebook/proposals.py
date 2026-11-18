@@ -41,8 +41,8 @@ class Verdict(StrEnum):
 class Verification:
     """A second model's verdict on one close, with the words it rests on.
 
-    Only a YES whose ``evidence_quote`` is literally in the message counts
-    (``closing.vouches``); anything else is as good as no verdict.
+    NO can reject a change. To support a contextual close, YES must cite the
+    confirming reply and the proposal must identify the preceding turn.
     """
 
     verdict: Verdict
@@ -91,6 +91,8 @@ class ResolveCommitment:
     target_quote: str = ""
     #: The verifier's verdict on this close, when one was asked.
     verification: Verification | None = None
+    #: An identifying span in the preceding public turn from the other side.
+    context_quote: str = ""
 
 
 @dataclass(frozen=True, slots=True)

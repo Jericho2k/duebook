@@ -174,7 +174,7 @@ def test_bare_thanks_never_fulfils_even_the_only_open_promise(text):
     assert t.card.commitment(call).state is CommitmentState.OPEN
 
 
-def test_a_plain_confirmation_closes_the_only_open_promise_of_that_side_and_no_more():
+def test_a_plain_confirmation_needs_evidence_even_with_one_open_promise():
     alone = Ticket()
     alone.assign(None, IVAN.id)
     refund = promise(alone, "Вернём деньги до пятницы.", "Вернём деньги до пятницы",
@@ -182,7 +182,7 @@ def test_a_plain_confirmation_closes_the_only_open_promise_of_that_side_and_no_m
     ok = alone.say(
         ANNA, "Всё получила!", ResolveCommitment(refund, "Всё получила", "Вернём деньги")
     )
-    assert ok.rejections == ()
+    assert reasons(ok) == [Reason.NOT_ABOUT_TARGET]
 
     crowded = Ticket()
     refund, call = callback_and_refund(crowded)
@@ -430,10 +430,10 @@ def received_with_a_callback_open(verification: Verification | None):
     return t, refund, call, t.wait(hours=30).say(ANNA, text, close)
 
 
-def test_a_verified_receipt_closes_the_refund_that_shares_no_word_with_it():
+def test_a_yes_alone_does_not_close_a_refund():
     t, refund, call, out = received_with_a_callback_open(said("yes", "всё получила"))
-    assert out.rejections == ()
-    assert t.card.commitment(refund).state is CommitmentState.FULFILLED
+    assert reasons(out) == [Reason.NOT_ABOUT_TARGET]
+    assert t.card.commitment(refund).state is CommitmentState.OPEN
     assert t.card.commitment(call).state is CommitmentState.OPEN
 
 
@@ -441,7 +441,6 @@ def test_a_verified_receipt_closes_the_refund_that_shares_no_word_with_it():
     "verification",
     [
         None,  # nobody was asked
-        Verification(Verdict.NO, "", "stub"),
         Verification(Verdict.UNSURE, "", "stub"),
         # A yes whose evidence is not in the message is the verifier talking.
         Verification(Verdict.YES, "деньги пришли", "stub"),
@@ -488,15 +487,26 @@ def test_a_verifier_yes_cannot_override_ambiguity_between_two_similar_promises()
     assert all(c.state is CommitmentState.OPEN for c in t.card.commitments)
 
 
-def test_the_verifiers_evidence_counts_toward_ambiguity_too():
-    # The proposal quotes thanks; the verifier's evidence names money, which
-    # fits both refunds: ambiguous, not certain.
+def test_a_no_vetoes_even_a_grounded_close_without_blocking_other_proposals():
     t = Ticket()
-    delivery, case = two_refunds(t)
-    close = ResolveCommitment(case, "Спасибо", "вернём деньги за чехол",
-                              said("yes", "деньги на карте"))  # fmt: skip
-    out = t.wait(hours=5).say(ANNA, "Спасибо, деньги на карте.", close)
+    refund, _ = callback_and_refund(t)
+    close = ResolveCommitment(refund, "Деньги пришли", "Вернём деньги", said("no"))
+    fact = AssertFact("order.number", "4815", "заказ 4815")
+    out = t.say(ANNA, "Деньги пришли, заказ 4815.", close, fact)
+    assert reasons(out) == [Reason.VERIFIER_REJECTED]
+    assert t.card.commitment(refund).state is CommitmentState.OPEN
+    assert t.card.facts[-1].value == "4815"
+
+
+def test_a_context_excerpt_cannot_hide_a_rival_in_the_same_question():
+    t = Ticket()
+    delivery, _ = two_refunds(t)
+    t.say(IVAN, "Проверьте, пришли ли деньги за доставку или деньги за чехол?")
+    close = ResolveCommitment(delivery, "Ага, вижу", "вернём вам деньги за доставку",
+                              said("yes", "Ага, вижу"), "деньги за доставку")  # fmt: skip
+    out = t.say(ANNA, "Ага, вижу.", close)
     assert reasons(out) == [Reason.AMBIGUOUS_TARGET]
+    assert all(c.unresolved for c in t.card.commitments)
 
 
 def test_a_verifier_yes_cannot_let_the_debtor_cancel_their_own_promise():
@@ -603,7 +613,7 @@ def test_only_proposals_that_would_close_an_open_promise_are_put_to_the_verifier
     assert extraction.total_usage.calls == 2 and extraction.total_usage.reasoning_tokens == 300
     out = apply(t.card, msg, extraction.proposals, CAL)
     assert t.card.commitment(refund).unresolved
-    assert out.card.commitment(refund).state is CommitmentState.FULFILLED
+    assert out.card.commitment(refund).state is CommitmentState.OPEN
 
     # An ordinary message costs no verification.
     quiet = message(t, "Жду.")
