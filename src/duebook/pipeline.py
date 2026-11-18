@@ -171,10 +171,13 @@ class Pipeline:
         idle: timedelta = timedelta(seconds=1),
         limit: int = 20,
         stop: Callable[[], bool] = lambda: False,
+        report: Callable[[list[Handled]], None] = lambda done: None,
     ) -> None:
         """Process until ``stop`` says so, sleeping ``idle`` whenever a pass found nothing."""
         while not stop():
-            if not self.process(limit, stop):
+            done = self.process(limit, stop)
+            report(done)
+            if not done:
                 sleep(idle.total_seconds())
 
     def _advance(self, ticket_id: str, *, new: bool) -> Handled:
