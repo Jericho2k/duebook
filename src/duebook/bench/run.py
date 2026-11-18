@@ -14,30 +14,25 @@ proposals can be folded again under other rules — the reducer without its
 closing guards, say — at no cost and on exactly the same model output. It also
 keeps every close the guards refused.
 
-A ticket whose extraction fails is stopped at that event, as in production,
-and scored on the card it reached: the promises it never got to count as
-missed. Failures are reported alongside the score, not folded into it
-silently.
+A message whose answers stay unreadable is recorded as unread after the
+pipeline's attempts and the ticket goes on, as in production (decision 0002).
+A ticket whose extraction fails otherwise is stopped at that event and scored
+on the card it reached: the promises it never got to count as missed.
+Failures are reported alongside the score, not folded into it silently.
 """
 
 from __future__ import annotations
 
 import time
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from ..card import Card
 from ..events import Event, MessagePosted, other_side, remember_turn
+from ..extract.client import ModelError
 from ..extract.cost import Usage
-from ..extract.extractor import (
-    BATCH_TIMEOUT,
-    MAX_BATCH_SIZE,
-    Extraction,
-    Reader,
-    read_batch,
-    read_event,
-)
-from ..lifecycle import AlertPolicy, next_wakeup
+from ..extract.extractor import ATTEMPTS, Extraction, Reader, gives_up, read_event, unread
+from ..lifecycle import AlertPolicy
 from ..proposals import CancelCommitment, MakeCommitment, Proposal, ResolveCommitment
 from ..reducer import GUARDED, Guards, apply
 from ..temporal import WorkCalendar
@@ -142,8 +137,6 @@ class Folded:
     proposals: tuple[tuple[Proposal, ...], ...] = ()
     #: Every close the guards refused.
     refused: tuple[Refused, ...] = ()
-    #: Batch size, wall time, and messages needing individual extraction.
-    batches: tuple[tuple[int, float, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,8 +158,6 @@ def fold(
     stops: Iterable[int] = (),
     cal: WorkCalendar | None = None,
     guards: Guards | None = None,
-    *,
-    batch: bool = False,
 ) -> Folded:
     """Read a ticket event by event, keeping the card at each of ``stops``."""
     wanted = set(stops)
@@ -176,27 +167,12 @@ def fold(
     read: list[tuple[Proposal, ...]] = []
     refused: list[Refused] = []
     failure = None
-    turns, prepared, batches = {}, {}, []
-    for index, event in enumerate(ticket.events):
+    turns = {}
+    for event in ticket.events:
         started = time.perf_counter()
         previous = turns.get(other_side(event))
         try:
-            wakeup = next_wakeup(card, event.at) if batch and not prepared else None
-            if batch and not prepared and (wakeup is None or wakeup > event.at + BATCH_TIMEOUT):
-                joined, upcoming = [], dict(turns)
-                for e in ticket.events[index : index + MAX_BATCH_SIZE]:
-                    if not isinstance(e, MessagePosted) or not e.text.strip():
-                        break
-                    joined.append((e, upcoming.get(other_side(e))))
-                    remember_turn(upcoming, e)
-                prepared = read_batch(extractor, card, joined)
-                if prepared:
-                    retries = sum(
-                        e.seq not in prepared or prepared[e.seq].reread for e, _ in joined
-                    )
-                    batches.append((len(joined), time.perf_counter() - started, retries))
-            extraction = read_event(extractor, card, event, previous,
-                                    prepared.pop(event.seq, None))  # fmt: skip
+            extraction = read_as_the_pipeline(extractor, card, event, previous)
         except Exception as error:  # held at this event, as the pipeline would
             seconds += time.perf_counter() - started
             spent += getattr(error, "usage", None) or Usage()
@@ -219,7 +195,26 @@ def fold(
     for seq in wanted - set(cards):
         cards[seq] = card
     return Folded(card, cards, spent, failure, seconds, tuple(prompts), tuple(read),
-                  tuple(refused), tuple(batches))  # fmt: skip
+                  tuple(refused))  # fmt: skip
+
+
+def read_as_the_pipeline(reader: Reader, card: Card, event: Event,
+                         previous: MessagePosted | None) -> Extraction:  # fmt: skip
+    """Read one message with the pipeline's attempts; raise where the pipeline would hold."""
+    spent = Usage()
+    for attempt in range(1, ATTEMPTS + 1):
+        try:
+            outcome = read_event(reader, card, event, previous)
+        except ModelError as error:
+            spent += error.usage
+            if gives_up(error, attempt):
+                return replace(unread(event, error), usage=spent)
+            if not error.unreadable:
+                error.usage = spent
+                raise
+            continue
+        return replace(outcome, usage=spent + outcome.usage)
+    raise AssertionError("unreachable: the last attempt gives up or returns")
 
 
 def _refused(card: Card, seq: int, proposal: Proposal, reason) -> Refused:

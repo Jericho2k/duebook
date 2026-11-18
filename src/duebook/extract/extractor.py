@@ -12,23 +12,29 @@ message nobody read. The caller holds the ticket at that event and retries.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
 from typing import Protocol
 
 from ..card import Card
 from ..events import Event, MessagePosted
-from ..proposals import Proposal
+from ..proposals import Proposal, Unreadable
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
-from .client import Completion, ModelError
+from .client import ChatClient, Completion, ModelError
 from .cost import Usage
-from .prompt import Bound, build_batch, build_messages
-from .schema import BATCH_SCHEMA, OUTPUT_SCHEMA, Malformed, parse_output
+from .prompt import Bound, build_messages
+from .schema import OUTPUT_SCHEMA, Malformed, parse_output
 
-MAX_BATCH_SIZE = 4
-BATCH_TIMEOUT = timedelta(seconds=10)
-ReadTurn = tuple[MessagePosted, MessagePosted | None]
+#: Round 4 answered in 79 output tokens a message on average. An answer that
+#: runs past this is looping, and is cut off rather than paid for to the end.
+ANSWER_TOKENS = 800
+#: The escalated read thinks first: reasoning "low" spends 1,000-2,800 hidden
+#: tokens before an answer of the same size.
+ESCALATED_TOKENS = 4_000
+#: Failed attempts at one message before it is recorded as unreadable
+#: (decision 0002): each attempt is a read and, if its answer was unreadable,
+#: the escalated read; the hold's backoff separates them.
+ATTEMPTS = 3
 
 
 class JsonModel(Protocol):
@@ -43,35 +49,37 @@ class Reader(Protocol):
     def extract(self, card: Card, event: Event) -> Extraction: ...
 
 
-def read_event(reader: Reader, card: Card, event: Event, previous: MessagePosted | None = None,
-               prepared: Extraction | None = None) -> Extraction:  # fmt: skip
+def read_event(reader: Reader, card: Card, event: Event,
+               previous: MessagePosted | None = None) -> Extraction:  # fmt: skip
     """Supply the preceding turn to readers that use conversational context."""
-    if prepared is not None and not prepared.reread:
-        verify = getattr(reader, "verify_extraction", None)
-        return verify(card, event, previous, prepared) if verify else prepared
     contextual = getattr(reader, "extract_with_context", None)
-    try:
-        outcome = contextual(card, event, previous) if contextual else reader.extract(card, event)
-    except ModelError as error:
-        if prepared is not None:
-            error.usage += prepared.usage
-        raise
-    return outcome if prepared is None else replace(outcome, usage=prepared.usage + outcome.usage)
+    return contextual(card, event, previous) if contextual else reader.extract(card, event)
 
 
-def read_batch(reader: Reader, card: Card, turns: list[ReadTurn]) -> dict[int, Extraction]:
-    """Read adjacent messages together, falling back individually on batch failure."""
-    extract = getattr(reader, "extract_batch", None)
-    if extract is None or len(turns) < 2:
-        return {}
-    try:
-        return extract(card, turns)
-    except ModelError as error:
-        # Fall back for the whole group. Account for the attempted call once.
-        prepared = {event.seq: Extraction(reread=True) for event, _ in turns}
-        first = turns[0][0].seq
-        prepared[first] = replace(prepared[first], usage=error.usage)
-        return prepared
+def reading_clients(client: ChatClient) -> tuple[ChatClient, ChatClient]:
+    """The extractor's client and its escalation.
+
+    At temperature 0 the same request fails the same way, so an unreadable
+    answer is not asked again: it is read once more with reasoning on.
+    """
+    first = replace(client, max_tokens=ANSWER_TOKENS, content_retries=0)
+    return first, replace(first, reasoning="low", max_tokens=ESCALATED_TOKENS)
+
+
+def gives_up(error: Exception, attempts: int) -> bool:
+    """Whether this failure, the ``attempts``-th at one message, ends the reading of it.
+
+    Only an answer that could not be read counts against the message: a
+    timeout or an outage says nothing about it, and the ticket waits.
+    """
+    return getattr(error, "unreadable", False) and attempts >= ATTEMPTS
+
+
+def unread(event: Event, error: Exception) -> Extraction:
+    """What is recorded for a message no attempt could read (decision 0002)."""
+    text = event.text if isinstance(event, MessagePosted) else ""
+    return Extraction((Unreadable(text, f"{type(error).__name__}: {error}"[:500]),),
+                      usage=getattr(error, "usage", None) or Usage())  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
@@ -92,7 +100,6 @@ class Extraction:
     #: Why earlier model attempts were discarded, if any were.
     retried: tuple[str, ...] = ()
     verifier_usage: VerifierUsage | None = None
-    reread: bool = False
 
     @property
     def total_usage(self) -> Usage:
@@ -107,7 +114,8 @@ class Extractor:
     #: Caps what the model is shown of a long card (see ``prompt.Bound``).
     #: None shows everything.
     bound: Bound | None = None
-    batch_model: JsonModel | None = None
+    #: Asked once when ``model``'s answer is cut off or unreadable.
+    escalation: JsonModel | None = None
 
     def extract(self, card: Card, event: Event) -> Extraction:
         return self.extract_with_context(card, event, None)
@@ -121,28 +129,21 @@ class Extractor:
             return Extraction()
         messages, aliases = build_messages(card, event, self.cal, self.vocab, self.bound,
                                            previous=previous)  # fmt: skip
-        completion = self.model.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
+        completion = self._complete(messages)
         proposals, malformed = parse_output(completion.data, aliases)
         return Extraction(tuple(proposals), tuple(malformed), completion.usage, completion.retried)
 
-    def extract_batch(self, card: Card, turns: list[ReadTurn]) -> dict[int, Extraction]:
-        if self.batch_model is None:
-            return {}
-        messages, aliases = build_batch(card, turns, self.cal, self.vocab, self.bound)
-        completed = self.batch_model.complete_json(messages, BATCH_SCHEMA, name="ticket_batch")
-        rows = completed.data.get("messages")
-        if not isinstance(rows, list) or len(rows) != len(turns) or any(
-            not isinstance(row, dict) or row.get("seq") != turn[0].seq
-            or not isinstance(row.get("reread"), bool) or not isinstance(row.get("updates"), list)
-            for row, turn in zip(rows, turns, strict=True)
-        ):
-            raise ModelError("batch response did not cover the requested messages", completed.usage)
-        result = {}
-        for row in rows:
-            proposals, malformed = parse_output(row, aliases)
-            result[row["seq"]] = Extraction(
-                tuple(proposals), tuple(malformed), reread=row["reread"] or bool(malformed)
-            )
-        first = turns[0][0].seq
-        result[first] = replace(result[first], usage=completed.usage, retried=completed.retried)
-        return result
+    def _complete(self, messages: list[dict[str, str]]) -> Completion:
+        try:
+            return self.model.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
+        except ModelError as error:
+            if not error.unreadable or self.escalation is None:
+                raise
+            first = error
+        try:
+            second = self.escalation.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
+        except ModelError as error:
+            error.usage += first.usage
+            raise
+        return replace(second, usage=first.usage + second.usage,
+                       retried=(str(first), *second.retried))  # fmt: skip

@@ -40,6 +40,7 @@ def payload(notice: Notice) -> dict[str, Any]:
         "commitment_id": notice.commitment_id,
         "due_at": notice.due_at.isoformat(),
         "recipient": notice.recipient,
+        "seq": notice.seq,
     }
 
 

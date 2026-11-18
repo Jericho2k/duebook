@@ -1,8 +1,143 @@
 # Results: event memory against the baselines
 
-Six rounds, run on 2026-11-17 and 18. Rounds 5 and 6 reuse the frozen Round 4
-comparison. Round 4 contains the original run on a fresh test split. The
-earlier rounds follow in reverse order.
+Seven rounds, run on 2026-11-17 and 18. Rounds 5 to 7 reuse the frozen
+Round 4 comparison. Round 4 contains the original run on a fresh test split.
+The earlier rounds follow in reverse order.
+
+## Round 7 — Round 4's answer format back, no stalled ticket, no batching
+
+Round 6's three open problems came from Round 5's compact answer format.
+With Round 4's format restored, the ticket that stalled reads on, false
+disputes fall from 2.55 to 0.00 per ticket, and failed-step precision
+returns to 1.000. On `test3` Round 7 misses the same two gold promises as
+Round 4 and makes no false close at any checkpoint. It raises 0.05 false
+alerts per ticket and recovers 19 of 20 context-dependent closes, at $0.0140
+a ticket. This is the **fourth look at `test3`** for our method (Rounds 4 to
+7), so these are follow-up numbers on a known set, not a fresh test.
+
+### What changed
+
+1. **Answer format.** The extractor again answers with one list per kind of
+   change, as in Round 4. `context_quote`, the verifier veto, the preceding
+   turn and the amended contextual-close rule stay. The compact format is
+   deleted. Read alone against Round 6's card, "Письма придут по отдельности.
+   Напишите, пожалуйста, какое получите первым." now answers in 95 tokens
+   with a question in both stalled tickets ($0.0005).
+   [Stall check](../results/round7/stall-check.json)
+2. **Fail fast, then escalate.** An extraction answer is capped at 800
+   tokens. An answer that is cut off, empty or not JSON is not asked again
+   at temperature 0. It is read once more with reasoning "low", under a
+   4,000-token ceiling. On the two stall messages that read is also right and
+   spends 2,006–2,746 hidden tokens ($0.0026). Timeouts are not retried.
+3. **An unreadable message no longer stalls its ticket**
+   ([decision 0002](decisions/0002-unreadable-message.md)). After the third
+   failed attempt, the event is applied with an explicit unreadable record.
+   The card and brief show "Сообщение №N не удалось прочитать — проверьте его
+   вручную" with its source. The assignee gets an `unreadable` alert, and the
+   ticket goes on. Timeouts and outages still only hold the ticket.
+4. **Batching is removed**, with its schema, settings, timeout and tests.
+
+In every run of this round, all 5,511 messages were answered on the first
+read: no escalation and no unread item occurred. Steps 2 and 3 are exercised
+by tests and the stall check only.
+
+### Development
+
+`dev3` uses template text, as in Round 5. `dev4` is new: seed 4747, eight
+`main2` tickets, rewritten once by the benchmark's writer (276 of 1,348
+rewrites discarded). Neither shows a regression against Round 4 on missing
+promises, false disputes or failed-step precision.
+[dev3](../results/round7/dev3.json) · [dev4](../results/round7/dev4.json)
+
+| Measure | `dev3` (4) | `dev4` (8) |
+|---|---:|---:|
+| Gold promises missing from the card | 1 of 79 | 1 of 154 |
+| Tickets stalled / unreadable items | 0 / 0 | 0 / 0 |
+| False closes per ticket, end / across checkpoints | 0.00 / 0.00 | 0.00 / 0.00 |
+| False alerts per ticket | 0.00 | 0.00 |
+| False disputes per ticket | 0.00 | 0.00 |
+| Dispute recall | 1.000 | 1.000 |
+| Failed-step precision | 1.000 | 1.000 |
+| Fact recall / freshness error | 1.000 / 0.000 | 1.000 / 0.027 |
+| Context-dependent / ambiguous / unrelated close | 4/4, 4/4, 4/4 | 8/8, 8/8, 8/8 |
+| Commitment F1 | 0.994 | 0.990 |
+| Cost per ticket | $0.0128 | $0.0139 |
+
+### Round 7 on `test3`
+
+One live run of our method, scored with the frozen baselines from
+`results/round4/test3.json`. Round 4 is that record's event memory. Rounds 5
+and 6 are rescored by the current code from their frozen records. Missing
+promises are counted by matching the final card with the gold promises (this
+count gives Round 5 15 rather than the 14 reported earlier).
+[Record](../results/round7/test3.json) · [Rounds compared](../results/round7/compare-rounds.json)
+
+| Measure | Round 4 | Round 5 | Round 6 | **Round 7** | Full context | Mem0 | Graphiti | Rolling summary |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Gold promises missing from the card | 2 | 15 | 12 | **2** | 0 | 6 | 19 | 24 |
+| Tickets stalled | 0 | 0 | 2 | **0** | 0 | 0 | 1 | 3 |
+| Unreadable items | — | — | — | **0** | — | — | — | — |
+| False closes per ticket | 0.20 | 0.05 | 0.00 | **0.00** | 0.10 | 0.15 | 0.80 | 0.25 |
+| False closes across checkpoints per ticket | 0.90 | 0.15 | 0.00 | **0.00** | 0.30 | 0.65 | 1.90 | 0.50 |
+| False alerts per ticket | 1.10 | 0.45 | 0.20 | **0.05** | 0.45 | 0.40 | 0.40 | 0.75 |
+| False disputes per ticket | 0.30 | 0.40 | 2.55 | **0.00** | 0.00 | 0.10 | 0.10 | 2.00 |
+| Dispute recall | 1.000 | 0.879 | 0.978 | **1.000** | 0.560 | 0.604 | 0.192 | 0.667 |
+| Failed-step precision | 1.000 | 0.776 | 0.777 | **1.000** | 0.792 | 0.771 | 0.771 | 0.963 |
+| Fact recall | 1.000 | 0.972 | 0.984 | **1.000** | 1.000 | 1.000 | 0.956 | 0.815 |
+| Freshness error | 0.000 | 0.064 | 0.016 | **0.000** | 0.291 | 0.310 | 0.278 | 0.333 |
+| Context-dependent close recovered | 0.00 | 0.85 | 0.90 | **0.95** | 0.85 | 0.90 | 0.60 | 0.50 |
+| Ambiguous close refrained | 1.00 | 0.95 | 1.00 | **1.00** | 0.95 | 0.85 | 0.60 | 0.50 |
+| Unrelated confirmation handled | 0.80 | 0.95 | 1.00 | **1.00** | 1.00 | 1.00 | 1.00 | 1.00 |
+| Commitment F1 | 0.989 | 0.975 | 0.970 | **0.991** | 0.997 | 0.990 | 0.942 | 0.797 |
+| Status accuracy | 0.926 | 0.957 | 0.989 | **0.997** | 0.948 | 0.945 | 0.913 | 0.915 |
+| Breach-alert precision / recall | 0.850 / 0.969 | 0.932 / 0.961 | 0.969 / 0.977 | **0.992 / 1.000** | 0.934 / 0.992 | 0.941 / 0.984 | 0.933 / 0.862 | 0.864 / 0.760 |
+| Cost per ticket | $0.01337 | $0.01102 | $0.01401 | **$0.01399** | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
+
+Graphiti covers 10 tickets and the rolling summary four. Paired over tickets
+with Round 4: 1.05 fewer false alerts per ticket [1.00, 1.15],
+status accuracy +0.071 [+0.059, +0.086], breach-alert precision +0.142
+[+0.131, +0.156], and $0.00066 [0.00046, 0.00084] more per ticket. Commitment
+F1 is level (+0.001 [0.000, 0.004]). Against full context: 0.40 fewer false
+alerts [0.15, 0.70], 0.30 fewer false closes across checkpoints [0.05,
+0.65], status accuracy +0.049 [+0.030, +0.068]. Commitment F1 is 0.007
+lower [0.000, 0.014], and Round 7 costs 3.2 times as much.
+
+What is still wrong:
+
+- **Two promises are missed**, the same two Round 4 missed (M0003 seq 114,
+  M0010 seq 143).
+- **One context-dependent close is missed** (M0000, seq 134). It is refused as
+  not about its target and kept as a suggestion. The promise stays open, which
+  causes the run's one false alert. It fails safe.
+- **Cost** is level with Round 6 and 4.6% above Round 4. Extraction answers
+  average 80.6 output tokens (Round 4: 79.0), 88.3% of prompt tokens come
+  from the cache, and the verifier costs $0.0012 a ticket.
+
+**Projection.** From `dev4`, the run projected $0.288 expected and $0.487 at
+the runner's upper bound. The upper bound is 1.5 times the dearest dev
+ticket's rate per message. With $0.413 left, the upper bound did not fit.
+The dearest rate itself did ($0.325), so the run was judged on the expected
+figure (`--expected`) and capped at $0.41 by its ledger. It cost $0.2798.
+
+**Spend.** The session charged **$0.4668** of the $0.60 cap. That was $0.0031
+for the stall check and escalated read, $0.0231 to rewrite `dev4`, $0.0509
+for `dev3`, and $0.1099 for `dev4`, including a $0.0024 projection sample
+for a first attempt refused by its own $0.15 cap. The `test3` run cost
+$0.2798. [Spend log](../results/round7/spend.jsonl)
+
+```bash
+python -m duebook.bench.experiment --split dev4 --methods "" --rewrite-only \
+    --max-usd 0.05 --session-cap 0.60 --results results/round7
+python -m duebook.bench.experiment --split dev3 --template --methods event_memory \
+    --max-usd 0.10 --session-cap 0.60 --results results/round7 \
+    --frozen results/round5/dev3.json --compare-frozen-event-memory
+python -m duebook.bench.experiment --split dev4 --methods event_memory \
+    --max-usd 0.18 --session-cap 0.60 --results results/round7
+python -m duebook.bench.experiment --split test3 --methods event_memory \
+    --max-usd 0.41 --session-cap 0.60 --results results/round7 \
+    --frozen results/round4/test3.json --compare-frozen-event-memory \
+    --projection-from results/round7/dev4.json --expected
+```
 
 ## Round 6 — batching off, and a tighter contextual close
 

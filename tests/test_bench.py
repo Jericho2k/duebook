@@ -283,6 +283,21 @@ def test_a_failed_extraction_stops_that_ticket_and_is_reported_not_hidden():
     assert report.usage.usd() == 0.002 and "extraction failures: 1" in report.summary()
 
 
+class AlwaysUnreadable(Failing):
+    def extract(self, card, event):
+        if event.ticket_id == self.fail_ticket and event.seq == 3:
+            raise ModelError("cut off", Usage(2, 100, 0, 0, 0.002), unreadable=True)
+        return self.oracle.extract(card, event)
+
+
+def test_a_message_unreadable_on_every_attempt_is_recorded_and_the_ticket_goes_on():
+    ticket = TICKETS[0]
+    folded = fold(ticket, AlwaysUnreadable([ticket], ticket.ticket_id))
+    assert folded.failure is None and folded.card.last_seq == len(ticket.events)
+    (item,) = folded.card.unread
+    assert item.source.seq == 3 and folded.usage.usd() == pytest.approx(0.006)
+
+
 def test_a_run_stops_at_its_spending_limit_and_says_so():
     report = evaluate(TICKETS, Altered(TICKETS, lambda e, p: p), max_usd=0.1)
     assert report.stopped_on_budget and report.tickets < len(TICKETS)
@@ -495,7 +510,7 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
 def test_the_round_three_splits_use_main2_at_fresh_distinct_seeds():
     assert len({split.seed for split in SPLITS.values()}) == len(SPLITS)
     assert (SPLITS["dev3"].count, SPLITS["test3"].count, SPLITS["test3"].seed) == (4, 20, 4343)
-    for name in ("dev3", "test3"):
+    for name in ("dev3", "test3", "dev4"):
         assert SPLITS[name].profile is MAIN2
         for ticket in SPLITS[name].tickets():
             assert 150 <= ticket.messages <= 200 and 3 <= len(ticket.gold.handoffs) <= 4

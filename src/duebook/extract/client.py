@@ -15,8 +15,9 @@ may answer differently, so a preset LOCKS the model to its hosts: no
 fallback to anyone else.
 
 Retries are few and deliberate. A 429 or a 5xx is retried once, and so is an
-empty or unreadable answer. A timeout is never retried: the answer may have
-been generated, and billed, after the client stopped waiting.
+empty, cut-off or unreadable answer unless ``content_retries`` is 0. A timeout
+is never retried: the answer may have been generated, and billed, after the
+client stopped waiting.
 
 A ``ResponseCache`` keeps answers to deterministic requests (temperature 0)
 on disk, keyed by the whole request body: a method re-run on unchanged input
@@ -25,7 +26,6 @@ costs nothing, and a re-run reads exactly the answers it read before.
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import os
@@ -121,12 +121,15 @@ class ModelError(RuntimeError):
     """The model could not be reached or did not return usable content."""
 
     def __init__(
-        self, message: str, usage: Usage | None = None, *, provider: str | None = None
+        self, message: str, usage: Usage | None = None, *, provider: str | None = None,
+        unreadable: bool = False,
     ) -> None:
         super().__init__(message)
         #: Whatever was spent before giving up. A failed call is still billed.
         self.usage = usage or Usage()
         self.provider = provider
+        #: The model answered, but not readably: cut off, empty or not JSON.
+        self.unreadable = unreadable
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,8 +202,6 @@ class ChatClient:
     #: Retries after an empty or unreadable answer.
     content_retries: int = 1
     timeout: float = 60.0
-    #: Optional wall-clock limit for a request across all transport phases.
-    total_timeout: float | None = None
     #: Extra request fields, merged last. Provider routing, reasoning effort, etc.
     extra: dict[str, Any] = field(default_factory=dict)
     http: httpx.Client | None = None
@@ -253,8 +254,8 @@ class ChatClient:
             problems.append(problem)
             if left[kind] <= 0:
                 tried = "; ".join(problems)
-                raise ModelError(f"gave up after {len(problems)} attempts: {tried}",
-                                 spent, provider=provider)  # fmt: skip
+                raise ModelError(f"gave up after {len(problems)} attempts: {tried}", spent,
+                                 provider=provider, unreadable=kind == "content")  # fmt: skip
             left[kind] -= 1
             if kind == "http":
                 self.sleep(2.0)
@@ -297,9 +298,13 @@ class ChatClient:
                 again("content", "response usage is unreadable")
                 continue
             try:
-                content = payload["choices"][0]["message"]["content"]
+                choice = payload["choices"][0]
+                content = choice["message"]["content"]
             except (KeyError, IndexError, TypeError):
                 again("content", "response has no message")
+                continue
+            if choice.get("finish_reason") == "length":
+                again("content", f"answer cut off at {self.max_tokens} tokens")
                 continue
             if not content:
                 # Typically a reasoning model that spent its budget thinking.
@@ -321,23 +326,13 @@ class ChatClient:
             return Completion(data, spent, tuple(problems), provider=provider)
 
     def _post(self, body: dict[str, Any]) -> httpx.Response:
-        args = {
-            "url": f"{self.base_url.rstrip('/')}/chat/completions",
-            "json": body,
-            "headers": {"Authorization": f"Bearer {self.api_key}"},
-            "timeout": self.timeout,
-        }
-        if self.total_timeout is not None:
-            try:
-                return asyncio.run(self._post_with_deadline(args))
-            except TimeoutError:
-                raise httpx.ReadTimeout("request exceeded its wall-clock deadline") from None
         http = self.http or httpx
-        return http.post(**args)
-
-    async def _post_with_deadline(self, args: dict[str, Any]) -> httpx.Response:
-        async with asyncio.timeout(self.total_timeout), httpx.AsyncClient() as http:
-            return await http.post(**args)
+        return http.post(
+            f"{self.base_url.rstrip('/')}/chat/completions",
+            json=body,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            timeout=self.timeout,
+        )
 
 
 def openrouter_fields(settings: ModelSettings) -> dict[str, Any]:

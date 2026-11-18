@@ -111,16 +111,9 @@ Friday.
 
 The extractor works against an OpenAI-compatible endpoint. It shows the card,
 the event text, and the preceding public turn from the other side. Its
-structured response lists only kinds of changes with entries. An empty read
-is `{"updates":[]}`.
-
-The processor reads each message individually by default. With
-`DUEBOOK_EXTRACTION_BATCHING=true` it reads up to four already-waiting,
-consecutive text events of one ticket together. It collects one response per
-event and applies events in sequence. A response that depends on an earlier
-change can request an individual reread against the updated card. A batch
-request has a 10 s deadline; the processor reads individually near a
-scheduled alert or after a failed batch.
+structured response has one list per kind of change; a message that adds
+nothing gets empty lists. Each message is read on its own, against the card
+as the previous message left it.
 The default reader is `deepseek/deepseek-v4.1-flash` with reasoning switched
 off (left at "low" it spends 1,000-2,300 hidden tokens a message) and locked
 to one OpenRouter host (DeepInfra, fp8, no fallbacks), so the fixed
@@ -129,15 +122,23 @@ model needs sent lives in a small presets table, `extract.client.PRESETS`
 (hosts and reasoning per model); `ChatClient(reasoning="low")` asks the same
 model to think. Every call records the host that answered, the prompt tokens
 served from cache and the hidden reasoning tokens. A 429 or 5xx is retried
-once, an empty or unreadable answer once, a timeout never — it may already
-have been generated and billed. A `ResponseCache` keeps answers to
-temperature-0 requests on disk, so re-running unchanged input costs nothing.
+once, a timeout never — it may already have been generated and billed. A
+`ResponseCache` keeps answers to temperature-0 requests on disk, so re-running
+unchanged input costs nothing.
+
+An extraction answer is capped at 800 tokens (Round 4 averaged 79). An answer
+cut off at the cap, empty or not JSON is not asked again: at temperature 0 the
+same request fails the same way. It is read once more with reasoning "low"
+(`extract.extractor.reading_clients`), a different read with room for 2,000-2,800
+hidden tokens.
 
 ```python
 from duebook import apply
 from duebook.extract import ChatClient, Extractor
+from duebook.extract.extractor import reading_clients
 
-extractor = Extractor(ChatClient(api_key=key))  # OpenRouter by default
+first, escalation = reading_clients(ChatClient(api_key=key))  # OpenRouter by default
+extractor = Extractor(first, escalation=escalation)
 extraction = extractor.extract(card, event)
 card = apply(card, event, extraction.proposals).card
 extraction.usage.usd()  # what this message cost
@@ -150,7 +151,8 @@ message: incremental cost grows linearly with ticket length, re-reading grows
 quadratically.
 
 A failed extraction raises. It never returns "nothing found", so a message the
-model could not read is retried rather than silently skipped.
+model could not read is retried rather than silently skipped, and after its
+last attempt is recorded as unread (see the pipeline below).
 Verifier timeouts, HTTP errors and unreadable answers are logged and stored as
 `unsure` verdicts. The event is applied using the deterministic checks.
 Each applied event records verifier usage separately from extraction, including
@@ -236,6 +238,14 @@ is recorded for it and nothing after it is applied; the hold is stored with
 the error, the cost of the failed calls and a retry time that backs off. Other
 tickets are not affected.
 
+A message whose answer is still unreadable on the third attempt does not stop
+the ticket ([decision 0002](docs/decisions/0002-unreadable-message.md)). It is
+applied with an explicit `Unreadable` record, so it is visibly unread rather
+than "nothing found". The card lists it, the brief leads with "Сообщение №N не
+удалось прочитать — проверьте его вручную", the assignee gets an `unreadable`
+alert through the outbox, and the next message is read. Timeouts and outages
+say nothing about the message and keep the ticket held.
+
 `handle` does both halves in the caller's time. The service splits them: the
 webhook only stores (`Store.ingest`), and processors apply what was stored:
 
@@ -263,7 +273,7 @@ brief.dropped  # what did not fit, by section, with counts
 
 A deterministic rendering of the card, in Russian, for the operator taking a
 ticket over. No model writes it. It is ordered by what hurts most if missed:
-promises broken or about to be, promises that changed hands or have nobody
+messages nobody could read automatically, promises broken or about to be, promises that changed hands or have nobody
 answerable, the other unresolved promises, open contradictions, current
 facts, what changed, steps that failed, open questions.
 
@@ -318,8 +328,9 @@ broken), a renegotiation and a cancellation — what makes a close easy to pin
 on the wrong promise. Its splits are `dev2` (4 tickets) and `test2` (20).
 
 The `main2` profile uses the same length and handoff ranges and adds three
-cases per ticket. Use `dev3` (4 tickets, seed 4444) for tuning and `test3`
-(20 tickets, seed 4343) for evaluation.
+cases per ticket. Use `dev3` (4 tickets, seed 4444) and `dev4` (8 tickets,
+seed 4747, Round 7) for tuning and `test3` (20 tickets, seed 4343) for
+evaluation.
 
 | Measure | What the method must show at the end of the ticket |
 |---|---|
@@ -385,8 +396,8 @@ memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
 (`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
 bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 4); the raw record is under
-`results/` and `results/round2/` to `results/round4/`.
+[docs/results.md](docs/results.md) (rounds 1 to 7); the raw record is under
+`results/` and `results/round2/` to `results/round7/`.
 
 ## Running the service
 
@@ -497,7 +508,6 @@ key.
 | `DUEBOOK_WORKER_NAME` | role@host:pid | this process's name in outbox claims |
 | `DUEBOOK_PROCESS_IDLE_SECONDS` | 1 | processor sleep when there is no work |
 | `DUEBOOK_PROCESS_BATCH` | 20 | tickets per processor pass |
-| `DUEBOOK_EXTRACTION_BATCHING` | `false` | `true` reads queued messages of a ticket together |
 | `DUEBOOK_SCHEDULE_MAX_IDLE_SECONDS` | 30 | longest scheduler sleep |
 | `DUEBOOK_DELIVER_IDLE_SECONDS` | 5 | delivery worker sleep when the queue is empty |
 | `DUEBOOK_DELIVER_BATCH` | 10 | alerts claimed per pass |
@@ -538,11 +548,12 @@ Each service command has been run against a local PostgreSQL with uvicorn and
 a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
 checked with `docker compose config` but not yet built or started.
 
-Round 5 adds the negative verdict veto, contextual confirmation, compact
-replies, and batching for queued messages. Round 6 found that batching left
-promises off the card, turned it off by default, and refused contextual
-closes whose question names something the target does not. The evaluation is
-in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
+Round 5 adds the negative verdict veto and contextual confirmation. Round 6
+refused contextual closes whose question names something the target does not.
+Round 7 removed Round 5's compact replies and batching, which lost promises,
+facts and failed steps; capped and escalated unreadable answers; and records a
+message no attempt could read instead of stalling its ticket. The evaluation
+is in [docs/results.md](docs/results.md). A helpdesk adapter and evaluation on
 independently labeled real tickets are next.
 
 ## Development

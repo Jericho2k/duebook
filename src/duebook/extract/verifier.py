@@ -21,21 +21,14 @@ from ..proposals import (
     MakeCommitment,
     Proposal,
     ResolveCommitment,
+    Unreadable,
     Verdict,
     Verification,
 )
 from ..temporal import WorkCalendar
 from .client import DEFAULT_MODEL, ChatClient, ModelError
 from .cost import Usage
-from .extractor import (
-    Extraction,
-    JsonModel,
-    Reader,
-    ReadTurn,
-    VerifierUsage,
-    read_batch,
-    read_event,
-)
+from .extractor import Extraction, JsonModel, Reader, VerifierUsage, read_event
 
 DEFAULT_VERIFIER_REASONING = "low"
 log = logging.getLogger(__name__)
@@ -218,9 +211,6 @@ class VerifyingReader:
     def extract(self, card: Card, event: Event) -> Extraction:
         return self.extract_with_context(card, event, None)
 
-    def extract_batch(self, card: Card, turns: list[ReadTurn]) -> dict[int, Extraction]:
-        return read_batch(self.reader, card, turns)
-
     def extract_with_context(
         self, card: Card, event: Event, previous: MessagePosted | None,
     ) -> Extraction:
@@ -230,7 +220,9 @@ class VerifyingReader:
     def verify_extraction(
         self, card: Card, event: Event, previous: MessagePosted | None, extraction: Extraction,
     ) -> Extraction:
-        if not isinstance(event, MessagePosted):
+        if not isinstance(event, MessagePosted) or any(
+            isinstance(p, Unreadable) for p in extraction.proposals
+        ):
             return extraction
         pending = extraction.proposals
         if previous is not None and not any(isinstance(p, ResolveCommitment) for p in pending):

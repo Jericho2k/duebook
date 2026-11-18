@@ -287,19 +287,6 @@ class Store:
         ).fetchone()
         return decode_event(row["body"]) if row else None
 
-    def next_messages(self, first: MessagePosted, limit: int) -> list[MessagePosted]:
-        rows = self.conn.execute(
-            "select body from events where ticket_id = %s and seq > %s"
-            " order by seq limit %s", (first.ticket_id, first.seq, limit - 1),
-        ).fetchall()
-        events = [first]
-        for seq, row in enumerate(rows, first.seq + 1):
-            event = decode_event(row["body"])
-            if event.seq != seq or not isinstance(event, MessagePosted) or not event.text.strip():
-                break
-            events.append(event)
-        return events
-
     def stream(
         self, ticket_id: str, upto: int | None = None
     ) -> Iterator[tuple[Event, tuple[Proposal, ...]]]:

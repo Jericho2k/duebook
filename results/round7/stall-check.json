@@ -1,0 +1,89 @@
+{
+ "what": "The two messages that stalled Round 6 (M0000 seq 133, M0003 seq 97), read alone against the card Round 6 had built before them, with Round 4's answer format restored.",
+ "answer_format": {
+  "reasoning": "off",
+  "max_tokens": 4000,
+  "reads": [
+   {
+    "ticket": "SIM-4343-M0000",
+    "seq": 133,
+    "text": "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым.",
+    "ok": true,
+    "proposals": [
+     "AskQuestion(text='Напишите, пожалуйста, какое получите первым.', quote='Напишите, пожалуйста, какое получите первым.')"
+    ],
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 2398,
+     "completion_tokens": 95,
+     "cached_tokens": 0,
+     "reported_usd": 0.00037562,
+     "reasoning_tokens": 0
+    },
+    "usd": 0.00037562
+   },
+   {
+    "ticket": "SIM-4343-M0003",
+    "seq": 97,
+    "text": "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым.",
+    "ok": true,
+    "proposals": [
+     "AskQuestion(text='Напишите, пожалуйста, какое получите первым.', quote='Напишите, пожалуйста, какое получите первым.')"
+    ],
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 2047,
+     "completion_tokens": 95,
+     "cached_tokens": 1280,
+     "reported_usd": 0.000152656,
+     "reasoning_tokens": 0
+    },
+    "usd": 0.000152656
+   }
+  ]
+ },
+ "escalated_read": {
+  "what": "The same two messages read as the step-2 escalation would read them: reasoning low, 4,000-token ceiling, to size the ceiling.",
+  "reasoning": "low",
+  "max_tokens": 4000,
+  "reads": [
+   {
+    "ticket": "SIM-4343-M0000",
+    "seq": 133,
+    "text": "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым.",
+    "ok": true,
+    "proposals": [
+     "AskQuestion(text='Напишите, пожалуйста, какое получите первым.', quote='Напишите, пожалуйста, какое получите первым.')"
+    ],
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 2423,
+     "completion_tokens": 2842,
+     "cached_tokens": 0,
+     "reported_usd": 0.00153286,
+     "reasoning_tokens": 2746
+    },
+    "usd": 0.00153286
+   },
+   {
+    "ticket": "SIM-4343-M0003",
+    "seq": 97,
+    "text": "Письма придут по отдельности. Напишите, пожалуйста, какое получите первым.",
+    "ok": true,
+    "proposals": [
+     "AssertFact(slot='delivery.status', value='Письма придут по отдельности', quote='Письма придут по отдельности.', change=False)",
+     "AskQuestion(text='Напишите, пожалуйста, какое получите первым.', quote='Напишите, пожалуйста, какое получите первым.')"
+    ],
+    "usage": {
+     "calls": 1,
+     "prompt_tokens": 2072,
+     "completion_tokens": 2153,
+     "cached_tokens": 1280,
+     "reported_usd": 0.001020516,
+     "reasoning_tokens": 2006
+    },
+    "usd": 0.001020516
+   }
+  ]
+ }
+}

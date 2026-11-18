@@ -36,7 +36,9 @@ of a task.
 8. The database changes only through numbered migrations in `store/migrations`.
 
 The closing rule and its historical replay behavior are recorded in
-[decision 0001](docs/decisions/0001-verifier-veto.md).
+[decision 0001](docs/decisions/0001-verifier-veto.md); what happens to a
+message the model cannot read, in
+[decision 0002](docs/decisions/0002-unreadable-message.md).
 
 If a task cannot be done well within these rules, do not change them. Do the
 part that fits, and write the proposed change as a decision record in

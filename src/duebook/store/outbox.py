@@ -82,10 +82,10 @@ class Outbox:
             for n in notices:
                 row = self.conn.execute(
                     "insert into outbox (key, ticket_id, commitment_id, kind, due_at, recipient,"
-                    " enqueued_at, available_at) values (%s, %s, %s, %s, %s, %s, %s, %s)"
+                    " seq, enqueued_at, available_at) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
                     " on conflict (key) do nothing returning key",
                     (n.key, n.ticket_id, n.commitment_id, n.kind.value, n.due_at, n.recipient,
-                     now, now),
+                     n.seq, now, now),
                 ).fetchone()  # fmt: skip
                 if row is not None:
                     new.append(n.key)
@@ -175,4 +175,5 @@ def _notice(row: dict) -> Notice:
         commitment_id=row["commitment_id"],
         due_at=row["due_at"],
         recipient=row["recipient"],
+        seq=row["seq"],
     )

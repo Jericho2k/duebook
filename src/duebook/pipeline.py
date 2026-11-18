@@ -20,7 +20,10 @@ If extraction fails the ticket is **held** at that event. Nothing is recorded
 for it — not an empty list, which would mean "a person read this and found
 nothing" — and nothing after it is applied, because every later reading would
 rest on a card that skipped a message. The hold is stored with the error and a
-retry time, and ``retry_held`` picks it up.
+retry time, and ``retry_held`` picks it up. When the third attempt also gets
+an unreadable answer, the message is recorded as **unreadable** instead: the
+card shows it for a person to read, the assignee is alerted, and the ticket
+moves on (decision 0002).
 
 ``handle`` reports a hold in its return value instead of raising. The event is
 already safe, so the caller should acknowledge it; a raise would make a queue
@@ -50,10 +53,9 @@ from datetime import UTC, datetime, timedelta
 import psycopg
 
 from .card import Card
-from .events import Event, MessagePosted
+from .events import Event
 from .extract.cost import Usage
-from .extract.extractor import BATCH_TIMEOUT, MAX_BATCH_SIZE, Reader, read_batch, read_event
-from .lifecycle import next_wakeup
+from .extract.extractor import Reader, gives_up, read_event, unread
 from .store.store import Hold, Store
 
 log = logging.getLogger(__name__)
@@ -83,8 +85,6 @@ class Pipeline:
     #: Delay before the first retry of a failed extraction; doubles up to the cap.
     retry_base: timedelta = timedelta(minutes=1)
     retry_cap: timedelta = timedelta(hours=1)
-    #: Read queued messages together (``Settings.extraction_batching``).
-    batching: bool = False
 
     def handle(self, event: Event) -> Handled:
         """Take one event from the helpdesk. Safe to call again with the same event."""
@@ -178,7 +178,6 @@ class Pipeline:
     def _advance(self, ticket_id: str, *, new: bool) -> Handled:
         applied: list[int] = []
         spent = Usage()
-        prepared = {}
         with self.store.exclusive(ticket_id):
             while True:
                 card = self.store.card(ticket_id)
@@ -195,25 +194,23 @@ class Pipeline:
                 earlier = _usage(hold.usage) if hold is not None else Usage()
                 try:
                     previous = self.store.previous_turn(event)
-                    if not prepared and hold is None and self._can_batch(card, event, now):
-                        messages = self.store.next_messages(event, MAX_BATCH_SIZE)
-                        turns = [(e, self.store.previous_turn(e)) for e in messages]
-                        prepared = read_batch(self.extractor, card, turns)
-                    extraction = read_event(self.extractor, card, event, previous,
-                                            prepared.pop(event.seq, None))  # fmt: skip
-                except Exception as error:  # any failure to read holds the ticket
-                    failed = getattr(error, "usage", None) or Usage()
-                    spent += failed
+                    extraction = read_event(self.extractor, card, event, previous)
+                except Exception as error:  # any failure to read holds the ticket...
                     attempts = hold.attempts if hold is not None and hold.seq == event.seq else 0
-                    hold = self.store.hold(
-                        ticket_id,
-                        event.seq,
-                        f"{type(error).__name__}: {error}",
-                        now=now,
-                        retry_at=now + min(self.retry_base * 2**attempts, self.retry_cap),
-                        usage=asdict(earlier + failed),
-                    )
-                    return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
+                    if not gives_up(error, attempts + 1):
+                        failed = getattr(error, "usage", None) or Usage()
+                        spent += failed
+                        hold = self.store.hold(
+                            ticket_id,
+                            event.seq,
+                            f"{type(error).__name__}: {error}",
+                            now=now,
+                            retry_at=now + min(self.retry_base * 2**attempts, self.retry_cap),
+                            usage=asdict(earlier + failed),
+                        )
+                        return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
+                    # ...until the message itself is shown to be unreadable.
+                    extraction = unread(event, error)
 
                 spent += extraction.total_usage
                 self.store.record(
@@ -231,13 +228,6 @@ class Pipeline:
 
             waiting = card.last_seq + 1 if self.store.backlog(ticket_id) else None
         return Handled(ticket_id, card, new, tuple(applied), waiting_for=waiting, usage=spent)
-
-    def _can_batch(self, card: Card, event: Event, now: datetime) -> bool:
-        if (not self.batching or not isinstance(event, MessagePosted) or not event.text.strip()
-            or not getattr(self.extractor, "extract_batch", None)):
-            return False
-        wakeup = next_wakeup(card, now, self.store.policy)
-        return wakeup is None or wakeup > now + BATCH_TIMEOUT
 
 
 def _usage(raw: dict | None) -> Usage:

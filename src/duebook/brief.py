@@ -9,6 +9,7 @@ moment always gives the same text.
 
 It is ordered by what hurts most if missed:
 
+0. messages nobody could read automatically (decision 0002);
 1. promises already broken or about to be;
 2. promises that changed hands or have nobody answerable;
 3. the remaining unresolved promises;
@@ -281,6 +282,10 @@ def _sections(w: _Writer) -> list[Section]:
     questions = [q for q in card.questions if q.open]
 
     return [
+        Section("unread", "Не прочитано автоматически",
+                tuple(Line(f"Сообщение №{u.source.seq} не удалось прочитать — проверьте его "
+                           f"вручную {w.ref(u.source)}", (u.source,))
+                      for u in card.unread)),
         Section("urgent", "Просрочено и на подходе",
                 tuple(w.commitment(c, s) for c, s in urgent)),
         Section("moved", "Обещания, перешедшие по наследству или оставшиеся без ответственного",

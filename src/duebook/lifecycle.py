@@ -39,6 +39,8 @@ class Status(StrEnum):
 class NoticeKind(StrEnum):
     DUE_SOON = "due_soon"
     BREACHED = "breached"
+    #: A message no attempt could read (decision 0002).
+    UNREADABLE = "unreadable"
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,7 +61,8 @@ class AlertPolicy:
     #: queue a breach alert for every promise broken long ago, a flood that
     #: buries the alerts that can still be acted on. The commitment itself is
     #: unaffected — it is still breached on the card and in the brief; only
-    #: the alert is withheld. None alerts on every deadline.
+    #: the alert is withheld. The same holds for a message posted before it
+    #: that could not be read. None alerts on every deadline.
     alerts_since: datetime | None = None
 
 
@@ -68,9 +71,13 @@ class Notice:
     key: str
     kind: NoticeKind
     ticket_id: str
-    commitment_id: str
+    #: None for an alert about a message rather than a promise.
+    commitment_id: str | None
+    #: The deadline; for an unreadable message, when it was posted.
     due_at: datetime
     recipient: str | None
+    #: The message an unreadable alert is about.
+    seq: int | None = None
 
 
 def status_at(c: Commitment, now: datetime, policy: AlertPolicy | None = None) -> Status:
@@ -125,6 +132,11 @@ def notices(card: Card, now: datetime, policy: AlertPolicy | None = None) -> lis
                 recipient=card.assignee if c.owner is Party.CUSTOMER else c.responsible,
             )
         )
+    for u in card.unread:
+        if policy.alerts_since is None or u.at >= policy.alerts_since:
+            result.append(Notice(f"{card.ticket_id}:{u.id}:{NoticeKind.UNREADABLE.value}",
+                                 NoticeKind.UNREADABLE, card.ticket_id, None, u.at,
+                                 card.assignee, u.source.seq))  # fmt: skip
     return result
 
 

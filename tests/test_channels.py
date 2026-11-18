@@ -38,7 +38,7 @@ def test_the_log_channel_writes_one_json_line_per_alert_with_its_key():
     alert = json.loads(lines[0])["alert"]
     assert alert == {
         "key": NOTICE.key, "kind": "breached", "ticket_id": "T-1", "commitment_id": "C1",
-        "due_at": START.isoformat(), "recipient": IVAN.id,
+        "due_at": START.isoformat(), "recipient": IVAN.id, "seq": None,
     }  # fmt: skip
 
 
