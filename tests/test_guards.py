@@ -509,6 +509,36 @@ def test_a_context_excerpt_cannot_hide_a_rival_in_the_same_question():
     assert all(c.unresolved for c in t.card.commitments)
 
 
+def assembly_refund_asked(question: str, context: str) -> tuple[Ticket, str, object]:
+    """One refund on the card, a question about it or its twin, and "Ага, вижу.\""""
+    t = Ticket()
+    t.assign(None, IVAN.id)
+    words = "Возместим стоимость сборки до пятницы"
+    assembly = promise(t, f"{words}.", words, "возместить стоимость сборки",
+                       due=WeekdayRef(4), due_quote="до пятницы")  # fmt: skip
+    t.say(IVAN, question)
+    close = ResolveCommitment(assembly, "Ага, вижу", words, said("yes", "Ага, вижу"), context)
+    return t, assembly, t.say(ANNA, "Ага, вижу.", close)
+
+
+def test_a_reply_to_a_question_about_another_thing_does_not_close_the_twin():
+    question = "Проверьте, пожалуйста, поступило ли возмещение стоимости монтажа."
+    t, assembly, out = assembly_refund_asked(question, question)
+    assert reasons(out) == [Reason.CONTEXT_NAMES_OTHER]
+    c = t.card.commitment(assembly)
+    assert c.unresolved and c.suggestions[0].reason == Reason.CONTEXT_NAMES_OTHER
+    text = compose(t.card, t.now, cal=CAL, names={ANNA.id: "Анна"}).text
+    assert "подтверждение в сообщении №4 относится, похоже, к тому, чего нет в карточке" in text
+
+
+def test_a_remark_beside_the_question_does_not_stop_its_confirmation():
+    question = ("Проверьте, пожалуйста, поступило ли возмещение стоимости сборки. "
+                "По другой позиции ещё уточняем.")  # fmt: skip
+    t, assembly, out = assembly_refund_asked(question, question)
+    assert reasons(out) == []
+    assert t.card.commitment(assembly).state is CommitmentState.FULFILLED
+
+
 def test_a_verifier_yes_cannot_let_the_debtor_cancel_their_own_promise():
     t = Ticket()
     refund, call = callback_and_refund(t)

@@ -190,12 +190,19 @@ def test_a_verifiers_verdict_is_stored_with_the_close_and_replay_needs_no_model(
     assert store.replay("T-1") == ticket.card
 
 
-def test_old_closes_replay_under_their_original_rule(store, conn):
+@pytest.mark.parametrize("rules", [1, 2])
+def test_old_closes_replay_under_their_original_rule(store, conn, rules):
     ticket = promise("T-1")
-    persist(store, ticket)
     call = ticket.card.commitments[0]
-    quote = "Деньги пришли"
-    close = ResolveCommitment(call.id, quote, "Перезвоню вам", Verification(Verdict.NO))
+    if rules == 1:  # before the veto: a "no" did not stop a close
+        quote = "Деньги пришли"
+        close = ResolveCommitment(call.id, quote, "Перезвоню вам", Verification(Verdict.NO))
+    else:  # before decision 0001's amendment: the question could name another thing
+        ticket.say(IVAN, "Проверьте, был ли звонок насчёт монтажа?")
+        quote = "Да, на месте"
+        yes = Verification(Verdict.YES, quote)
+        close = ResolveCommitment(call.id, quote, "Перезвоню вам", yes, "звонок насчёт монтажа")
+    persist(store, ticket)
     ticket.say(ANNA, quote, close)
     event, _ = ticket.log[-1]
     assert ticket.card.commitments[0].unresolved
@@ -203,7 +210,7 @@ def test_old_closes_replay_under_their_original_rule(store, conn):
     conn.execute(
         "insert into event_proposals"
         " (ticket_id, seq, proposals, rejections, applied_at, close_rules)"
-        " values (%s, %s, %s, '[]', %s, 1)",
-        (ticket.card.ticket_id, event.seq, Jsonb(encode([close])), START),
+        " values (%s, %s, %s, '[]', %s, %s)",
+        (ticket.card.ticket_id, event.seq, Jsonb(encode([close])), START, rules),
     )
     assert not store.replay("T-1").commitments[0].unresolved

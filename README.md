@@ -43,7 +43,8 @@ model — and `duebook.closing` decides, deterministically, whether to admit it:
 
 * the span must be in the target's original wording;
 * the closing words must identify the target. For a brief confirmation, a
-  verified quote from the preceding public turn can supply the subject;
+  verified quote from the preceding public turn can supply the subject, if
+  the question names nothing the target does not;
 * no other open promise of that side may fit the closing words as well;
 * a renegotiation may add or drop detail, but not name a different thing.
 
