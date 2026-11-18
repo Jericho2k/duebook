@@ -13,11 +13,12 @@ It is ordered by what hurts most if missed:
 1. promises already broken or about to be;
 2. promises that changed hands or have nobody answerable;
 3. the remaining unresolved promises;
-4. open contradictions between the two sides;
-5. current facts;
-6. what changed ("was X, now Y");
-7. steps that failed, so they are not suggested again;
-8. open questions.
+4. offers owed only if a condition comes true (decision 0004);
+5. open contradictions between the two sides;
+6. current facts;
+7. what changed ("was X, now Y");
+8. steps that failed, so they are not suggested again;
+9. open questions.
 
 A promise the extractor proposed to close, but whose close the reducer did
 not admit, is still listed as owed, with "возможно, выполнено по сообщению
@@ -45,6 +46,7 @@ from .card import (
     Closure,
     Commitment,
     CommitmentState,
+    Conditional,
     Confidence,
     Fact,
     Party,
@@ -63,6 +65,8 @@ _MAYBE = {
     Closure.RESOLVED: "возможно, выполнено",
     Closure.CANCELLED: "возможно, отменено",
     Closure.SUPERSEDED: "возможно, заменено новым обещанием",
+    Closure.ACTIVATED: "возможно, условие наступило",
+    Closure.LAPSED: "возможно, условие не наступило",
 }
 
 
@@ -169,6 +173,9 @@ class _Writer:
         else:
             parts.append("срок не назван")
 
+        if c.activated_by is not None:
+            parts.append(f"обещано при условии, условие наступило {self.ref(c.activated_by)}")
+            sources.append(c.activated_by)
         if c.state is CommitmentState.CLAIMED and c.resolution is not None:
             parts.append(f"заявлено как выполненное, не подтверждено {self.ref(c.resolution)}")
             sources.append(c.resolution)
@@ -189,6 +196,22 @@ class _Writer:
             if c.inherited_from:
                 parts.append(f"раньше отвечал: {self.who(c.inherited_from)}")
         return Line("; ".join(parts) + " " + self.ref(c.source), tuple(sources))
+
+    def conditional(self, k: Conditional) -> Line:
+        parts = [f"{_OWNER[k.owner]}: {k.action} — при условии «{k.condition}»"]
+        if k.due is not None:
+            due_at, precision = k.due.deadline.due_at, k.due.deadline.precision
+            if self.now >= due_at:
+                parts.append(f"срок условия прошёл ({self.moment(due_at, precision)}) — "
+                             "проверьте, наступило ли оно")  # fmt: skip
+            else:
+                parts.append(f"условие проверить после {self.moment(due_at, precision)}")
+        sources = [k.source]
+        for hint in k.suggestions:
+            parts.append(f"{_MAYBE[hint.kind]} по сообщению №{hint.source.seq} — подтвердите "
+                         f"{self.ref(hint.source)}")  # fmt: skip
+            sources.append(hint.source)
+        return Line("; ".join(parts) + " " + self.ref(k.source), tuple(sources))
 
     # ---------------------------------------------------------------- facts ----
 
@@ -292,6 +315,8 @@ def _sections(w: _Writer) -> list[Section]:
                 tuple(w.commitment(c, s) for c, s in moved)),
         Section("open", "Остальные невыполненные обещания",
                 tuple(w.commitment(c, s) for c, s in other)),
+        Section("conditional", "Обещано при условии",
+                tuple(w.conditional(k) for k in card.conditionals if k.pending)),
         Section("contradictions", "Открытые противоречия",
                 tuple(w.contradiction(*d) for d in disputes)),
         # A disputed value is not a fact yet; it is shown once, as a dispute.

@@ -33,7 +33,13 @@ from ..extract.client import ModelError
 from ..extract.cost import Usage
 from ..extract.extractor import ATTEMPTS, Extraction, Reader, gives_up, read_event, unread
 from ..lifecycle import AlertPolicy
-from ..proposals import CancelCommitment, MakeCommitment, Proposal, ResolveCommitment
+from ..proposals import (
+    CancelCommitment,
+    MakeCommitment,
+    Proposal,
+    ResolveCommitment,
+    SettleConditional,
+)
 from ..reducer import GUARDED, Guards, apply
 from ..temporal import WorkCalendar
 from .generate import CloseCase, SimTicket
@@ -225,6 +231,10 @@ def _refused(card: Card, seq: int, proposal: Proposal, reason) -> Refused:
             kind, target = "cancelled", proposal.commitment_id
         case MakeCommitment():
             kind, target = "superseded", proposal.supersedes
+        case SettleConditional():
+            kind = "activated" if proposal.holds else "lapsed"
+            found = next((k for k in card.conditionals if k.id == proposal.conditional_id), None)
+            return Refused(seq, reason.value, kind, found.source.seq if found else 0)
     found = card.commitment(target)
     return Refused(seq, reason.value, kind, found.source.seq if found else 0)
 

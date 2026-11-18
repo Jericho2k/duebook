@@ -104,11 +104,14 @@ class Confidence(IntEnum):
 
 
 class Closure(StrEnum):
-    """The ways a commitment can stop being owed."""
+    """The ways a commitment, or a conditional offer, can stop being pending."""
 
     RESOLVED = "resolved"
     CANCELLED = "cancelled"
     SUPERSEDED = "superseded"
+    #: A conditional offer whose condition came true, or did not (decision 0004).
+    ACTIVATED = "activated"
+    LAPSED = "lapsed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +163,9 @@ class Commitment:
     #: still open; these are for a person to confirm.
     suggestions: tuple[Suggestion, ...] = ()
     resolution_context: Source | None = None
+    #: For a conditional offer that came true: the message that said so. The
+    #: offer itself is ``source`` (decision 0004).
+    activated_by: Source | None = None
 
     @property
     def unresolved(self) -> bool:
@@ -168,6 +174,45 @@ class Commitment:
     @property
     def orphaned(self) -> bool:
         return self.unresolved and self.owner is not Party.CUSTOMER and self.responsible is None
+
+
+class ConditionalState(StrEnum):
+    PENDING = "pending"
+    #: The condition came true: the offer is now a commitment.
+    ACTIVATED = "activated"
+    #: The condition failed: nothing is owed.
+    LAPSED = "lapsed"
+
+
+@dataclass(frozen=True, slots=True)
+class Conditional:
+    """An offer owed only if its condition comes true (decision 0004).
+
+    Pending, it raises no alert; when the condition's deadline passes with
+    nothing recorded, ``lifecycle`` asks the assignee to check it.
+    """
+
+    id: str
+    owner: Party
+    action: str
+    #: The offer, condition included.
+    source: Source
+    #: The words that state the condition.
+    condition: str
+    created_at: datetime
+    #: The condition's deadline.
+    due: Due | None = None
+    state: ConditionalState = ConditionalState.PENDING
+    #: The message that activated or lapsed it.
+    settled: Source | None = None
+    #: The commitment its activation created.
+    commitment_id: str | None = None
+    #: Refused activations and lapses, for a person to confirm.
+    suggestions: tuple[Suggestion, ...] = ()
+
+    @property
+    def pending(self) -> bool:
+        return self.state is ConditionalState.PENDING
 
 
 # ------------------------------------------------- steps and questions ----
@@ -230,6 +275,7 @@ class Card:
     facts: tuple[Fact, ...] = ()
     contradictions: tuple[Contradiction, ...] = ()
     commitments: tuple[Commitment, ...] = ()
+    conditionals: tuple[Conditional, ...] = ()
     steps: tuple[Step, ...] = ()
     questions: tuple[Question, ...] = ()
     unread: tuple[Unread, ...] = ()

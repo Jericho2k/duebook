@@ -247,6 +247,14 @@ def _added(mine: list[Stem], theirs: list[Stem]) -> list[Stem]:
     return [s for s in mine if not any(s.meets(t) for t in theirs)]
 
 
+#: Words that negate a statement, for telling "пришла" from "так и не пришла".
+_NEGATIONS = frozenset({"не", "нет", "ни", "not", "no", "never"})
+
+
+def negated(text: str) -> bool:
+    return bool(_NEGATIONS & set(words(text)))
+
+
 def confirms(text: str) -> bool:
     """Does the text say that something was done (not merely thank)?"""
     return any(w.startswith(c) for w in words(text) for c in CONFIRMING)

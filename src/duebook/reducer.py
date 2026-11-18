@@ -45,6 +45,8 @@ from .card import (
     Closure,
     Commitment,
     CommitmentState,
+    Conditional,
+    ConditionalState,
     Confidence,
     Contradiction,
     Due,
@@ -64,6 +66,7 @@ from .closing import (
     confirms_reply,
     names_beyond,
     names_other,
+    negated,
     overlap,
     quote_identifies,
     restates,
@@ -85,17 +88,19 @@ from .proposals import (
     AssertFact,
     CancelCommitment,
     MakeCommitment,
+    MakeConditional,
     Proposal,
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    SettleConditional,
     Unreadable,
     Verdict,
     Verification,
 )
 from .slots import DEFAULT as DEFAULT_VOCABULARY
 from .slots import Vocabulary
-from .temporal import WorkCalendar, parse_due, resolve
+from .temporal import DueExpr, WorkCalendar, parse_due, resolve
 
 
 class Reason(StrEnum):
@@ -126,12 +131,15 @@ class Reason(StrEnum):
     #: The question a reply confirms names something the target does not:
     #: what was confirmed is probably not on the card.
     CONTEXT_NAMES_OTHER = "context_names_other"
+    #: A lapse in words that agree with the condition ("так и не пришла").
+    SAYS_CONDITION_HOLDS = "says_condition_holds"
 
 
 PARTIAL = frozenset({Reason.DEADLINE_UNGROUNDED, Reason.DEADLINE_INVALID, Reason.DEADLINE_IN_PAST})
 #: Refusals of a close that leave a suggestion behind.
 GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMBIGUOUS_TARGET,
-                     Reason.VERIFIER_REJECTED, Reason.CONTEXT_NAMES_OTHER})  # fmt: skip
+                     Reason.VERIFIER_REJECTED, Reason.CONTEXT_NAMES_OTHER,
+                     Reason.SAYS_CONDITION_HOLDS})  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,6 +320,10 @@ def _admit(
             return _resolve_commitment(card, event, proposal, source, guards, previous)
         case CancelCommitment():
             return _cancel_commitment(card, event, proposal, source, guards)
+        case MakeConditional():
+            return _make_conditional(card, event, proposal, source, new_id, text, cal)
+        case SettleConditional():
+            return _settle_conditional(card, event, proposal, source, new_id, cal, guards)
         case RecordStep():
             return _record_step(card, proposal, source, new_id)
         case SetStepOutcome():
@@ -438,7 +450,7 @@ def _make_commitment(
         # "You promised me a refund" is a customer's claim about the company,
         # not a promise by the company.
         return card, [Reason.OWNER_AUTHOR_MISMATCH]
-    due, reasons = _due(event, p, text, cal)
+    due, reasons = _due(event, p.due, p.due_quote, p.quote, text, cal)
     if any(_same_promise(c, p, due, guards) for c in card.commitments):
         return card, [Reason.DUPLICATE]
 
@@ -504,7 +516,8 @@ def _same_promise(c: Commitment, p: MakeCommitment, due: Due | None, guards: Gua
 
 
 def _due(
-    event: MessagePosted, p: MakeCommitment, text: str, cal: WorkCalendar
+    event: MessagePosted, expr: DueExpr | None, due_quote: str, said: str, text: str,
+    cal: WorkCalendar,
 ) -> tuple[Due | None, list[Reason]]:
     """Resolve the deadline and say how far it can be trusted.
 
@@ -513,11 +526,11 @@ def _due(
     that cannot read the phrase leaves MEDIUM, and disagreement is LOW: the
     deadline is kept for the operator to see and withheld from alerting.
     """
-    if p.due_quote and _norm(p.due_quote) not in text:
+    if due_quote and _norm(due_quote) not in text:
         return None, [Reason.DEADLINE_UNGROUNDED]
 
-    parsed = parse_due(p.due_quote or p.quote)
-    expr = p.due if p.due is not None else parsed
+    parsed = parse_due(due_quote or said)
+    model, expr = expr, expr if expr is not None else parsed
     if expr is None:
         return None, []
 
@@ -529,13 +542,13 @@ def _due(
         return None, [Reason.DEADLINE_IN_PAST]
 
     confidence = Confidence.MEDIUM
-    if p.due is not None and parsed is not None:
+    if model is not None and parsed is not None:
         try:
             agrees = resolve(parsed, event.at, cal) == deadline
         except ValueError:
             agrees = False
         confidence = Confidence.HIGH if agrees else Confidence.LOW
-    return Due(deadline, expr, confidence, p.due_quote), []
+    return Due(deadline, expr, confidence, due_quote), []
 
 
 def _resolve_commitment(
@@ -609,6 +622,96 @@ def _cancel_commitment(
     return _put_commitment(card, updated), []
 
 
+def _make_conditional(
+    card: Card, event: MessagePosted, p: MakeConditional, source: Source, new_id: str, text: str,
+    cal: WorkCalendar,
+) -> tuple[Card, list[Reason]]:
+    if not p.action.strip() or not _norm(p.condition):
+        return card, [Reason.EMPTY]
+    if _norm(p.condition) not in text:
+        return card, [Reason.UNGROUNDED]
+    if event.author.side is not p.owner.side:
+        return card, [Reason.OWNER_AUTHOR_MISMATCH]
+    if any(k.pending and k.owner is p.owner and restates((p.quote, p.action), _wording(k))
+           for k in card.conditionals):  # fmt: skip
+        return card, [Reason.DUPLICATE]
+    due, reasons = _due(event, p.due, p.due_quote, p.condition, text, cal)
+    offer = Conditional(new_id, p.owner, p.action.strip(), source, p.condition.strip(),
+                        event.at, due)  # fmt: skip
+    return replace(card, conditionals=(*card.conditionals, offer)), reasons
+
+
+def _settle_conditional(
+    card: Card, event: MessagePosted, p: SettleConditional, source: Source, new_id: str,
+    cal: WorkCalendar, guards: Guards,
+) -> tuple[Card, list[Reason]]:
+    """Activate an offer, or lapse it, on evidence that names it.
+
+    A wrong lapse is silent, as a wrong close is, so a lapse must pass the same
+    checks, may not come from the side that owes the offer, and may not be
+    worded as the condition itself is ("так и не пришла" does not say it failed).
+    """
+    k = next((k for k in card.conditionals if k.id == p.conditional_id), None)
+    if k is None:
+        return card, [Reason.UNKNOWN_TARGET]
+    if not k.pending:
+        return card, [Reason.ALREADY_RESOLVED]
+    rivals = [r for r in card.conditionals if r.pending and r.id != k.id]
+    refused = _evidence(k, rivals, (p.quote,), p.target_quote, guards)
+    if refused is None and not p.holds:
+        if event.author.side is k.owner.side:
+            refused = Reason.DEBTOR_CANNOT_CANCEL
+        elif negated(p.quote) is negated(k.condition):
+            refused = Reason.SAYS_CONDITION_HOLDS
+    kind = Closure.ACTIVATED if p.holds else Closure.LAPSED
+    if refused is not None:
+        hint = Suggestion(kind, source, refused.value)
+        return _put_conditional(card, replace(k, suggestions=(*k.suggestions, hint))), [refused]
+    if not p.holds:
+        return _put_conditional(card, replace(k, state=ConditionalState.LAPSED, settled=source)), []
+
+    owed = Commitment(
+        id=new_id, owner=k.owner, action=k.action, source=k.source, created_at=event.at,
+        due=_offered_due(k, event, cal),
+        responsible=None if k.owner is Party.CUSTOMER else card.assignee, activated_by=source,
+    )  # fmt: skip
+    activated = replace(k, state=ConditionalState.ACTIVATED, settled=source, commitment_id=new_id)
+    card = replace(card, commitments=(*card.commitments, owed))
+    return _put_conditional(card, activated), []
+
+
+def _offered_due(k: Conditional, event: MessagePosted, cal: WorkCalendar) -> Due | None:
+    """The deadline the offer gave its action, outside the condition, counted from activation."""
+    expr = parse_due(_norm(k.source.quote).replace(_norm(k.condition), " "))
+    if expr is None:
+        return None
+    try:
+        deadline = resolve(expr, event.at, cal)
+    except ValueError:
+        return None
+    return Due(deadline, expr, Confidence.MEDIUM) if deadline.due_at > event.at else None
+
+
+def _evidence(
+    target, rivals: Sequence, said: Sequence[str], target_quote: str, guards: Guards
+) -> Reason | None:
+    """The deterministic checks of a close: the target is named twice, and only it fits."""
+    if guards.target and not quote_identifies(target_quote, target.source.quote):
+        return Reason.TARGET_MISMATCH
+    text = " ".join(said)
+    fit = overlap(text, _wording(target))
+    if guards.relevance and fit == 0:
+        return Reason.NOT_ABOUT_TARGET
+    if guards.ambiguity and any(overlap(text, _wording(r)) >= max(fit, 1) for r in rivals):
+        return Reason.AMBIGUOUS_TARGET
+    return None
+
+
+def _put_conditional(card: Card, updated: Conditional) -> Card:
+    return replace(card, conditionals=tuple(updated if k.id == updated.id else k
+                                            for k in card.conditionals))  # fmt: skip
+
+
 def _check_close(
     card: Card,
     target: Commitment,
@@ -644,7 +747,7 @@ def _check_close(
     return None
 
 
-def _wording(c: Commitment) -> tuple[str, str]:
+def _wording(c: Commitment | Conditional) -> tuple[str, str]:
     """What a commitment is known by: the words it was made in, and its action."""
     return c.source.quote, c.action
 

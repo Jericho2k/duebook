@@ -24,10 +24,12 @@ from ..proposals import (
     AssertFact,
     CancelCommitment,
     MakeCommitment,
+    MakeConditional,
     Proposal,
     RecordStep,
     ResolveCommitment,
     SetStepOutcome,
+    SettleConditional,
 )
 from ..temporal import DateRef, DayRef, DueExpr, Offset, Period, PeriodEnd, Unit, WeekdayRef
 
@@ -87,9 +89,21 @@ OUTPUT_SCHEMA: dict[str, Any] = _obj(
                 "target_quote": _OPT_STR,
             }
         ),
+        "conditionals": _list(
+            {
+                "owner": _enum([p.value for p in Party]),
+                "action": _STR,
+                "quote": _STR,
+                "condition": _STR,
+                "due_quote": _OPT_STR,
+                "due": _DUE,
+            }
+        ),
         "resolved": _list({"id": _STR, "target_quote": _STR, "quote": _STR,
                            "context_quote": _OPT_STR}),  # fmt: skip
         "cancelled": _list({"id": _STR, "target_quote": _STR, "quote": _STR}),
+        "condition_outcomes": _list({"id": _STR, "outcome": _enum(["holds", "failed"]),
+                                     "target_quote": _STR, "quote": _STR}),  # fmt: skip
         "steps": _list(
             {"action": _STR, "quote": _STR, "outcome": _enum([o.value for o in StepOutcome])}
         ),
@@ -153,6 +167,18 @@ def parse_output(
             target_quote=_text(i.get("target_quote") or ""),
         ),
         "questions": lambda i: AskQuestion(_text(i["text"]), _text(i["quote"])),
+        "conditionals": lambda i: MakeConditional(
+            owner=Party(i["owner"]),
+            action=_text(i["action"]),
+            quote=_text(i["quote"]),
+            condition=_text(i["condition"]),
+            due=parse_due_expr(i.get("due")),
+            due_quote=_text(i.get("due_quote") or ""),
+        ),
+        "condition_outcomes": lambda i: SettleConditional(
+            ref(i["id"]), _outcome(i["outcome"]), _text(i["quote"]),
+            _text(i.get("target_quote") or ""),
+        ),
     }
 
     proposals: list[Proposal] = []
@@ -192,6 +218,12 @@ def parse_due_expr(raw: Any) -> DueExpr | None:
         case "period_end":
             return PeriodEnd(Period(raw["period"]))
     raise ValueError(f"unknown due kind: {kind!r}")
+
+
+def _outcome(value: Any) -> bool:
+    if value not in ("holds", "failed"):
+        raise ValueError(f"unknown condition outcome: {value!r}")
+    return value == "holds"
 
 
 def _int(raw: Mapping[str, Any], key: str) -> int:
