@@ -510,7 +510,7 @@ def test_round_two_generated_tickets_match_the_hashes_captured_before_main2(name
 def test_the_round_three_splits_use_main2_at_fresh_distinct_seeds():
     assert len({split.seed for split in SPLITS.values()}) == len(SPLITS)
     assert (SPLITS["dev3"].count, SPLITS["test3"].count, SPLITS["test3"].seed) == (4, 20, 4343)
-    for name in ("dev3", "test3"):
+    for name in ("dev3", "test3", "dev4"):
         assert SPLITS[name].profile is MAIN2
         for ticket in SPLITS[name].tickets():
             assert 150 <= ticket.messages <= 200 and 3 <= len(ticket.gold.handoffs) <= 4

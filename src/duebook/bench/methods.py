@@ -150,6 +150,8 @@ class EventMemory:
             "proposals": [encode(list(p)) for p in folded.proposals],
             # Closes the guards refused: (seq, reason, kind, target's seq).
             "refused": [[r.seq, r.reason, r.kind, r.target_seq] for r in folded.refused],
+            # Messages no attempt could read (decision 0002): (seq, error).
+            "unread": [[u.source.seq, u.error] for u in folded.card.unread],
             "cache_hits": tally.cache_hits,
             "providers": tally.providers,
             "extraction_usage": asdict(extraction),

@@ -295,6 +295,8 @@ SPLITS = {
         Split("test2", seed=4242, count=20, profile=MAIN),
         Split("dev3", seed=4444, count=4, profile=MAIN2),
         Split("test3", seed=4343, count=20, profile=MAIN2),
+        # Round 7: a larger development split, rewritten like test3.
+        Split("dev4", seed=4747, count=8, profile=MAIN2),
     )
 }
 

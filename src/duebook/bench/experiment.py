@@ -93,6 +93,7 @@ WRITER = "~z-ai/glm-flash-latest"
 RESULTS = Path("results")
 ROUND2 = RESULTS / "round2"
 ROUND4 = RESULTS / "round4"
+ROUND7 = RESULTS / "round7"
 CACHE = Path(".cache/responses")
 #: Finished (method, ticket) runs of a run in progress, to resume from.
 JOURNAL = Path(".cache/runs")
@@ -119,6 +120,8 @@ REFOLDS = {"event_memory_no_verifier": Guards(verifier=False),
 
 def results_directory(split: Split) -> Path:
     """The round that defined the split: its rewritten tickets are kept there."""
+    if split.name == "dev4":
+        return ROUND7
     return {MAIN: ROUND2, MAIN2: ROUND4}.get(split.profile, RESULTS)
 
 
