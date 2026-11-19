@@ -20,6 +20,7 @@ from duebook.bench.baselines import (
     parse_due_at,
     render_event,
 )
+from duebook.bench.baselines.full_context import moments
 from duebook.bench.baselines.graphiti_memory import cacheable, listing_of
 from duebook.bench.baselines.mem0_memory import _line, usage_of
 from duebook.bench.meter import Ledger, Meter, OverBudget
@@ -98,7 +99,7 @@ class Scripted:
             return Completion({"summary": f"summary after {len(self.requests)} calls"}, CALL)
         assert schema is ANSWER_SCHEMA
         now = messages[1]["content"]
-        cp = next(c for c in checkpoints(self.ticket) if f"up to #{c.seq} have" in now)
+        cp = next(c for c in moments(self.ticket) if f"up to #{c.seq} have" in now)
         return Completion(self.answer(self.ticket, cp), CALL)
 
 
@@ -170,6 +171,19 @@ def test_full_context_shows_every_event_up_to_the_checkpoint_and_nothing_after()
         assert f"\n#{cp.seq} · " in shown and f"\n#{cp.seq + 1} · " not in shown
         assert "TRANSCRIPT" in shown
     assert run.ingest_usage == Usage() and run.answer_usage.calls == len(checkpoints(t))
+
+
+def test_full_context_asked_live_answers_after_every_message_and_each_question_extends_the_last():
+    t = TICKETS[0]
+    model = Scripted(t)
+    run = FullContext(model, Ledger(), live=True).run(t)
+    assert len(model.requests) == len(moments(t)) == len(run.detail["live"])
+    assert len(moments(t)) > sum(1 for e in t.events if getattr(e, "text", None))
+    shown = [messages[1]["content"] for _, messages in model.requests]
+    for before, after in zip(shown, shown[1:], strict=False):
+        assert after.startswith(before.split("\n\nNOW: ")[0])
+    assert [s.checkpoint for s in run.snapshots] == list(checkpoints(t))
+    assert score_ticket(t, run.snapshots).all.commitments.f1 == 1.0
 
 
 def test_the_rolling_summary_reads_each_event_once_and_answers_from_the_summary_alone():

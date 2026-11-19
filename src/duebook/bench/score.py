@@ -63,6 +63,20 @@ offer still pending past its condition's deadline must raise one, and no
 other may. A commitment an activated offer became is judged here, not among
 the promises.
 
+**When a method knows** (``timeliness``, ``stability``) — a method's answers
+form a timeline: each holds from its moment until the next answer, the last
+until the ticket ends. *Promise delay* is the time from the message that makes
+a planted promise to the first answer that holds it. *Alert delay* is the time
+from the planted deadline of a promise broken by the label to the breach
+alert: the first moment an answer holds the promise open past a deadline it
+trusts, with a scheduler on top of every answer. Either is "never" (None) when
+it does not happen before the ticket ends. *Stability* counts what changes
+between consecutive answers of one method: a promise held and then dropped,
+or held again after it was dropped; one closed and then open again; a
+deadline changed; a planted value still current, presented and then not; an
+open dispute reported and then not. A false close or false alert that no
+checkpoint answer shows exists only between checkpoints.
+
 **Where a promise was lost** (``attribute``) — every gold promise at the end
 of a ticket is in one stage: *right*; *missed by the model* (no commitment of
 its side proposed at its message); *dropped by the reducer* (proposed, never
@@ -608,3 +622,156 @@ def _correction(ticket: SimTicket, end: Snapshot, seq: int) -> str:
     if (new.slot, new.value) not in shown:
         return "new_missing"
     return "both_current" if (old.slot, old.value) in shown else "replaced"
+
+
+# ------------------------------------------------------ when a method knows ----
+
+
+@dataclass(frozen=True, slots=True)
+class Timeliness:
+    """Per planted promise, and per one broken by the label: the delay, or None for never."""
+
+    promise_delays: tuple[timedelta | None, ...]
+    alert_delays: tuple[timedelta | None, ...]
+
+
+def timeliness(ticket: SimTicket, timeline: Sequence[Snapshot]) -> Timeliness:
+    """When the answers in ``timeline`` first hold each promise, and alert on each broken one."""
+    held = [_held(ticket, snap) for snap in timeline]
+    until = [s.checkpoint.at for s in timeline[1:]] + [ticket.end]
+    promise_delays, alert_delays = [], []
+    for g in ticket.gold.commitments:
+        said = ticket.events[g.seq - 1].at
+        first = next((s.checkpoint.at for s, h in zip(timeline, held, strict=True)
+                      if id(g) in h), None)  # fmt: skip
+        promise_delays.append(first - said if first else None)
+        if _broken(ticket, g):
+            alert_delays.append(_alert(g, timeline, held, until))
+    return Timeliness(tuple(promise_delays), tuple(alert_delays))
+
+
+def _held(ticket: SimTicket, snap: Snapshot) -> dict[int, Promise]:
+    planted = [c for c in ticket.gold.commitments if c.seq <= snap.checkpoint.seq]
+    pairs, _, _ = match(planted, _unconditional(snap))
+    return {id(g): f for g, f in pairs}
+
+
+def _broken(ticket: SimTicket, g: GoldCommitment) -> bool:
+    """A company promise still owed when its deadline passed within the ticket."""
+    if g.owner.side is not Side.COMPANY or g.due_at is None or g.due_at > ticket.end:
+        return False
+    seq = max((e.seq for e in ticket.events if e.at <= g.due_at), default=0)
+    return not g.closed(seq)
+
+
+def _alert(g: GoldCommitment, timeline, held, until) -> timedelta | None:
+    for snap, h, end in zip(timeline, held, until, strict=True):
+        f = h.get(id(g))
+        if f is None or f.due_at is None:
+            continue
+        fires = max(snap.checkpoint.at, f.due_at)
+        if fires <= end and alerted_at(f, Checkpoint(snap.checkpoint.seq, fires, Moment.END)):
+            return fires - g.due_at
+    return None
+
+
+@dataclass(frozen=True, slots=True)
+class Stability:
+    answers: int = 0
+    promise_drops: int = 0
+    promise_returns: int = 0
+    reopened: int = 0
+    due_changes: int = 0
+    fact_drops: int = 0
+    dispute_drops: int = 0
+    #: (answer, promise) pairs closed while owed, or alerted on while not breached.
+    false_closes: int = 0
+    false_alerts: int = 0
+    #: Stretches of consecutive answers with one false close or false alert, and
+    #: of those, the ones no checkpoint answer shows.
+    false_close_stretches: int = 0
+    false_close_stretches_between: int = 0
+    false_alert_stretches: int = 0
+    false_alert_stretches_between: int = 0
+
+    def __add__(self, other: Stability) -> Stability:
+        return Stability(*(getattr(self, f.name) + getattr(other, f.name) for f in fields(self)))
+
+
+def stability(ticket: SimTicket, timeline: Sequence[Snapshot]) -> Stability:
+    """What changes between consecutive answers of ``timeline``, against the labels."""
+    counts: Counter[str] = Counter(answers=len(timeline))
+    seen: set = set()
+    previous: _Answer | None = None
+    stretches: dict[str, dict[tuple, bool]] = {"false_close": {}, "false_alert": {}}
+    for snap in timeline:
+        now = _Answer.of(ticket, snap)
+        if previous is not None:
+            dropped = previous.promises.keys() - now.promises.keys()
+            counts["promise_drops"] += len(dropped)
+            counts["promise_returns"] += len((now.promises.keys() - previous.promises.keys())
+                                             & seen)  # fmt: skip
+            for key in previous.promises.keys() & now.promises.keys():
+                before, after = previous.promises[key], now.promises[key]
+                counts["reopened"] += (before.status is not PromiseStatus.OPEN
+                                       and after.status is PromiseStatus.OPEN)  # fmt: skip
+                counts["due_changes"] += not same_deadline(before.due_at, after.due_at)
+            counts["fact_drops"] += len((previous.facts - now.facts) & now.current)
+            counts["dispute_drops"] += len((previous.disputes - now.disputes) & now.open)
+        seen |= now.promises.keys()
+        for kind, wrong in (("false_close", now.false_closes), ("false_alert", now.false_alerts)):
+            counts[f"{kind}s"] += len(wrong)
+            open_ = stretches[kind]
+            for key in list(open_):
+                if key not in wrong:
+                    counts[f"{kind}_stretches_between"] += not open_.pop(key)
+            for key in wrong:
+                shown = open_.get(key, False) or snap.checkpoint.kind is not Moment.MESSAGE
+                counts[f"{kind}_stretches"] += key not in open_
+                open_[key] = shown
+        previous = now
+    for kind, open_ in stretches.items():
+        counts[f"{kind}_stretches_between"] += sum(not shown for shown in open_.values())
+    return Stability(**counts)
+
+
+@dataclass(frozen=True, slots=True)
+class _Answer:
+    """One answer, keyed for comparison with the next: promises by (side, message)."""
+
+    promises: dict[tuple, Promise]
+    facts: frozenset[tuple[str, str]]
+    current: frozenset[tuple[str, str]]
+    disputes: frozenset[int]
+    open: frozenset[int]
+    false_closes: frozenset[tuple]
+    false_alerts: frozenset[tuple]
+
+    @classmethod
+    def of(cls, ticket: SimTicket, snap: Snapshot) -> _Answer:
+        cp, gold = snap.checkpoint, ticket.gold
+        promises = {(f.side, f.seq): f for f in snap.promises}
+        pairs, spurious, _ = match([c for c in gold.commitments if c.seq <= cp.seq],
+                                   _unconditional(snap))  # fmt: skip
+        closed = {(f.side, f.seq) for g, f in pairs
+                  if f.status is not PromiseStatus.OPEN and not g.closed(cp.seq)}  # fmt: skip
+        alerts = {(f.side, f.seq) for g, f in pairs if alerted_at(f, cp) and not _breached(g, cp)}
+        alerts |= {(f.side, f.seq) for f in spurious if alerted_at(f, cp)}
+        facts = {(g.slot, g.value) for item in snap.facts
+                 for g in presented(ticket, item.text, cp.seq).values()}  # fmt: skip
+        current = {(g.slot, g.value) for g in gold.facts
+                   if fact_status(ticket, g, cp.seq) == "current"}  # fmt: skip
+        return cls(promises, frozenset(facts), frozenset(current),
+                   frozenset(_reported_disputes(ticket, snap)),
+                   frozenset(i for i, d in enumerate(gold.contradictions) if d.open_at(cp.seq)),
+                   frozenset(closed), frozenset(alerts))  # fmt: skip
+
+
+def _reported_disputes(ticket: SimTicket, snap: Snapshot) -> set[int]:
+    """The planted disputes, by index, that the snapshot reports."""
+    out = set()
+    for i, d in enumerate(ticket.gold.contradictions):
+        keys = [_key(ticket, d.slot, v) for v in d.values]
+        if any(all(mentions(x.text, k) for k in keys) for x in snap.disputes):
+            out.add(i)
+    return out

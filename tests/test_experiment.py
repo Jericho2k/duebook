@@ -8,6 +8,7 @@ from test_baselines import Scripted
 
 from duebook.bench import MAIN, Fate, Oracle, generate
 from duebook.bench.baselines import FullContext, RollingSummary
+from duebook.bench.baselines.full_context import moments
 from duebook.bench.experiment import (
     GROWTH,
     METRICS,
@@ -20,6 +21,7 @@ from duebook.bench.experiment import (
     record,
     recorded_proposals,
     refolded,
+    regimes,
     reread_changes,
     rewritten,
     run_all,
@@ -432,3 +434,32 @@ def test_an_interrupted_run_resumes_from_its_journal_and_reruns_only_what_failed
     assert sorted(method.calls) == [TICKETS[1].ticket_id, TICKETS[2].ticket_id]
     assert runs[0].snapshots == finished.snapshots
     assert len(load_runs(journal)) == 4
+
+
+def test_live_cost_is_measured_where_asked_live_and_otherwise_projected_per_answer():
+    t = TICKETS[0]
+    live = FullContext(Scripted(t), Ledger(), name="full_context_live", live=True).run(t)
+    asked = FullContext(Scripted(t), Ledger()).run(t)
+    memory = replace(asked, method="mem0", ingest_usage=Usage(1, 10, 1, 0, 0.01),
+                     answer_usage=Usage(2, 10, 1, 0, 0.004))  # fmt: skip
+    rows = regimes([t], [live, asked, memory], WorkCalendar())
+    assert rows["full_context_live"]["live_usd"]["per_ticket"] == live.usage.usd()
+    assert rows["full_context"]["live_usd"]["per_ticket"] == pytest.approx(live.usage.usd())
+    assert rows["full_context"]["checkpoints_usd"]["per_ticket"] == asked.usage.usd()
+    assert rows["mem0"]["live_usd"]["per_ticket"] == pytest.approx(0.01 + 0.002 * len(moments(t)))
+
+
+def test_a_frozen_run_is_scored_from_the_first_record_holding_it_and_not_written_again(tmp_path):
+    t = SPLITS["dev"].tickets()[0]
+    first, second = (FullContext(Scripted(t), Ledger()).run(t) for _ in range(2))
+    second = replace(second, snapshots=second.snapshots[:-1] + (replace(
+        second.snapshots[-1], promises=()),))  # fmt: skip
+    for path, run in ((tmp_path / "a.json", first), (tmp_path / "b.json", second)):
+        path.write_text(json.dumps({"runs": [record(run, score_ticket(t, run.snapshots))]}))
+    out = tmp_path / "out.json"
+    main(["--split", "dev", "--template", "--tickets", "1", "--methods", "", "--max-usd", "0",
+          "--frozen", str(tmp_path / "a.json"), "--frozen", str(tmp_path / "b.json"),
+          "--results", str(tmp_path), "--out", str(out)])  # fmt: skip
+    result = json.loads(out.read_text())
+    assert result["runs"] == []
+    assert result["summary"]["methods"]["full_context"]["commitment_recall"]["value"] == 1.0

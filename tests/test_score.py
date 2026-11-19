@@ -20,11 +20,14 @@ from duebook.bench.result import (
 from duebook.bench.run import fold, refold, snapshots
 from duebook.bench.score import (
     Counts,
+    Stability,
     Stage,
     alerted_at,
     attribute,
     fact_status,
     score_snapshot,
+    stability,
+    timeliness,
 )
 from duebook.lifecycle import NoticeKind
 from duebook.proposals import MakeCommitment
@@ -393,3 +396,54 @@ def test_a_claim_check_is_right_on_a_promise_still_owed_and_noise_on_one_settled
     assert score_snapshot(t, checked).claim_checks == Counts(1, 1, 0)
     silent = claimed({broken}, lambda p: None)
     assert score_snapshot(t, silent).claim_checks == Counts(0, 0, 1)
+
+
+# ------------------------------------------------------ when a method knows ----
+
+
+def every_event(ticket):
+    """The oracle's card after every event, each at the event's time."""
+    folded = fold(ticket, Oracle.of([ticket]), [e.seq for e in ticket.events])
+    return [from_card(folded.cards[e.seq], replace(checkpoints(ticket)[0], seq=e.seq, at=e.at,
+                                                   kind=Moment.MESSAGE))
+            for e in ticket.events]  # fmt: skip
+
+
+def test_a_promise_is_known_from_the_first_answer_that_holds_it():
+    t = TICKETS[0]
+    live, at_checkpoints = timeliness(t, every_event(t)), timeliness(t, oracle_snapshots(t))
+    assert set(live.promise_delays) == {timedelta(0)}
+    for g, delay in zip(t.gold.commitments, at_checkpoints.promise_delays, strict=True):
+        cp = next(c for c in checkpoints(t) if c.seq >= g.seq)
+        assert delay == cp.at - t.events[g.seq - 1].at
+
+
+def test_a_breach_alert_fires_when_the_deadline_held_passes_and_never_without_the_promise():
+    t = next(t for t in TICKETS if any(c.fate is Fate.BROKEN for c in t.gold.commitments))
+    live = every_event(t)
+    assert set(timeliness(t, live).alert_delays) == {timedelta(0)}
+    forgetful = [replace(s, promises=()) for s in live]
+    assert set(timeliness(t, forgetful).alert_delays) == {None}
+
+
+def test_a_dropped_promise_and_a_false_close_no_checkpoint_shows_are_counted():
+    t = TICKETS[0]
+    live = every_event(t)
+    assert stability(t, live) == Stability(answers=len(live))
+
+    def owed_throughout(i):
+        window = live[i - 1 : i + 3]
+        if any(s.checkpoint.kind is not Moment.MESSAGE for s in window):
+            return None
+        gold = {(g.owner.side, g.seq): g for g in t.gold.commitments}
+        return next((f for f in window[0].promises if all(f in s.promises for s in window)
+                     and not gold[f.side, f.seq].closed(window[-1].checkpoint.seq)), None)
+
+    i, f = next((i, f) for i in range(1, len(live) - 2) if (f := owed_throughout(i)))
+    rest = lambda s: tuple(p for p in s.promises if p != f)  # noqa: E731
+    changed = [*live[:i], replace(live[i], promises=rest(live[i])),
+               replace(live[i + 1], promises=(replace(f, status=PromiseStatus.FULFILLED),
+                                              *rest(live[i + 1]))), *live[i + 2:]]  # fmt: skip
+    found = stability(t, changed)
+    assert (found.promise_drops, found.promise_returns, found.reopened) == (1, 1, 1)
+    assert (found.false_closes, found.false_close_stretches_between) == (1, 1)

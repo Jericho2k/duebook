@@ -157,12 +157,18 @@ def render_event(event: Event, cal: WorkCalendar) -> str:
     return f"{head} · [{type(event).__name__}]"
 
 
-def question(material_title: str, material: str, cp: Checkpoint, cal: WorkCalendar) -> list:
-    """The messages for one checkpoint question, given what the method remembers."""
-    user = (
-        f"NOW: {moment(cp.at, cal)} ({cal.tz.key}). Events up to #{cp.seq} have happened.\n\n"
-        f"{material_title}\n{material}"
-    )
+def question(
+    material_title: str, material: str, cp: Checkpoint, cal: WorkCalendar, now_last: bool = False
+) -> list:
+    """The messages for one checkpoint question, given what the method remembers.
+
+    ``now_last`` puts the moment after the material, so that a question asked
+    after every message shares its prefix with the one before and hits the
+    provider's prompt cache; the checkpoint questions of Round 4 put it first.
+    """
+    now = f"NOW: {moment(cp.at, cal)} ({cal.tz.key}). Events up to #{cp.seq} have happened."
+    material = f"{material_title}\n{material}"
+    user = f"{material}\n\n{now}" if now_last else f"{now}\n\n{material}"
     return [{"role": "system", "content": instructions(cal)}, {"role": "user", "content": user}]
 
 

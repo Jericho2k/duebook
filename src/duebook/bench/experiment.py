@@ -44,7 +44,13 @@ Records stand in for model calls. ``--replay`` folds the proposals a recorded
 ``event_memory`` run made (or, given ``oracle``, the planted ones), so a later
 reducer is measured on frozen model output; ``--reread`` reads the messages it
 lists again, live, against the card the replay rebuilds. ``--frozen`` takes
-every method not run now from a record and scores its snapshots again.
+every method not run now from a record (or several, the first holding a run
+wins) and scores its snapshots again; a frozen run is not written again.
+``full_context_live`` is the full-context baseline asked after every message.
+Every record says, per method, when it knew each promise and alerted on each
+broken one, how its answers changed from one to the next (``timeliness``), and
+what a ticket costs answering only at checkpoints and with an answer current
+after every message (``regimes``).
 Finished runs are journalled under ``.cache/runs/``; an interrupted run
 resumes from the journal and the response cache, and never pays twice.
 """
@@ -53,6 +59,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import random
 import sys
@@ -79,20 +86,24 @@ from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
+from .baselines.full_context import moments
 from .generate import SPLITS, CloseCase, SimTicket, Split
 from .meter import Ledger, Meter
 from .methods import EventMemory, Method, MethodRun, Recorded
-from .result import Snapshot, checkpoints, snapshot_of
+from .result import Checkpoint, Moment, Snapshot, checkpoints, from_card, snapshot_of
 from .rewrite import Rewriter, require_different_models, with_rewritten_text
-from .run import refold, snapshots
+from .run import Replayed, fold, refold, snapshots
 from .score import (
     Score,
+    Stability,
     TicketScore,
     attribute,
     beat_outcomes,
     match,
     same_deadline,
     score_ticket,
+    stability,
+    timeliness,
 )
 
 #: Rewrites the tickets of round 2: of the cheap models tried on the same dev
@@ -203,10 +214,11 @@ def make_methods(
             methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
                                        recorded=recorded if name == "event_memory" else None,
                                        escalation=escalation, reread=reread))
-        elif name == "full_context":
+        elif name in ("full_context", "full_context_live"):
             from .baselines import FullContext
 
-            methods.append(FullContext(answerer, ledger, cal))
+            live = name == "full_context_live"
+            methods.append(FullContext(answerer, ledger, cal, name=name, live=live))
         elif name == "rolling_summary":
             from .baselines import RollingSummary
 
@@ -301,7 +313,7 @@ def sample_of(ticket: SimTicket, events: int) -> SimTicket:
 #: four tickets ran into the cap), Mem0 2.4. Graphiti, on two dev2 tickets
 #: against a 30-event sample: 1.1.
 GROWTH = {"event_memory": 1.6, "full_context": 1.5, "rolling_summary": 3.5, "mem0": 2.5,
-          "graphiti": 1.2}  # fmt: skip
+          "graphiti": 1.2, "full_context_live": 1.5}  # fmt: skip
 
 
 def project(
@@ -325,8 +337,9 @@ def project(
         made = charged + (ledger.reused.usd() or 0.0) - reused
         chosen = tickets[: subsets.get(method.name, len(tickets))]
         if method.name.startswith("full_context"):
-            per = len(_transcript(sample, sample.events[-1].seq, cal))
-            units = sum(len(_transcript(t, cp.seq, cal)) for t in chosen for cp in checkpoints(t))
+            asked = moments if method.name == "full_context_live" else checkpoints
+            per = sum(transcript_chars(sample, cal, asked))
+            units = sum(sum(transcript_chars(t, cal, asked)) for t in chosen)
         else:
             per, units = len(sample.events), sum(len(t.events) for t in chosen)
         scale = GROWTH.get(method.name, 2.0) * units / per
@@ -420,8 +433,13 @@ def _lost(old: list[str], new: list[str], kind: str) -> list[str]:
     return [i for i in old if i.split(":")[0] in missing]
 
 
-def _transcript(ticket: SimTicket, seq: int, cal: WorkCalendar) -> str:
-    return "\n".join(render_event(e, cal) for e in ticket.events[:seq])
+def transcript_chars(ticket: SimTicket, cal: WorkCalendar, asked=checkpoints) -> list[int]:
+    """The length of the transcript a full-context answer reads, at each moment it is asked."""
+    ends, total = {}, -1
+    for e in ticket.events:
+        total += len(render_event(e, cal)) + 1
+        ends[e.seq] = total
+    return [ends[cp.seq] for cp in asked(ticket)]
 
 
 # ------------------------------------------------- the proposals replayed ----
@@ -760,6 +778,121 @@ def deadline_errors(tickets: Sequence[SimTicket], runs: Sequence[MethodRun]) -> 
     return {"kinds": kinds, "examples": examples}
 
 
+# ------------------------------------------------------- when it knows ----
+
+
+def timeline(run: MethodRun, ticket: SimTicket, cal: WorkCalendar) -> tuple[Snapshot, ...]:
+    """A method's answers in time: the event memory's card after every event, a live
+    method's every answer it gave, otherwise its answer at each checkpoint."""
+    if "proposals" in run.detail:
+        answers = {e.id: tuple(decode_proposals(p))
+                   for e, p in zip(ticket.events, run.detail["proposals"], strict=False)}
+        folded = fold(ticket, Replayed(answers), [e.seq for e in ticket.events], cal)
+        kinds = {cp.seq: cp.kind for cp in checkpoints(ticket)}
+        return tuple(from_card(folded.cards[e.seq],
+                               Checkpoint(e.seq, e.at, kinds.get(e.seq, Moment.MESSAGE)))
+                     for e in ticket.events)  # fmt: skip
+    if "live" in run.detail:
+        live = (s if isinstance(s, Snapshot) else snapshot_of(s) for s in run.detail["live"])
+        return tuple(s for s in live if s.error is None)
+    return run.snapshots
+
+
+def when_known(
+    tickets: Sequence[SimTicket], runs: Sequence[MethodRun], cal: WorkCalendar
+) -> dict[str, Any]:
+    """Per method: promise and alert delays in hours, and how its answers changed."""
+    by_id = {t.ticket_id: t for t in tickets}
+    out: dict[str, Any] = {}
+    for name in dict.fromkeys(r.method for r in runs):
+        promise, alert, steady, n = [], [], Stability(), 0
+        for r in (r for r in runs if r.method == name):
+            ticket = by_id[r.ticket_id]
+            line = timeline(r, ticket, cal)
+            found = timeliness(ticket, line)
+            promise += found.promise_delays
+            alert += found.alert_delays
+            steady += stability(ticket, line)
+            n += 1
+        out[name] = {"tickets": n, "promise_delay_hours": _spread(promise),
+                     "alert_delay_hours": _spread(alert), "stability": asdict(steady)}  # fmt: skip
+    return out
+
+
+def _spread(delays: Sequence[timedelta | None]) -> dict[str, Any]:
+    """Median and p90 in hours, "never" counted as the longest; None where it falls on never."""
+    hours = sorted(float("inf") if d is None else d.total_seconds() / 3600 for d in delays)
+
+    def rank(q: float) -> float | None:
+        x = hours[max(math.ceil(q * len(hours)) - 1, 0)] if hours else float("inf")
+        return None if x == float("inf") else round(x, 3)
+
+    never = sum(d is None for d in delays)
+    return {"n": len(hours), "median": rank(0.5), "p90": rank(0.9), "never": never,
+            "never_share": never / len(hours) if hours else 0.0,
+            "early": sum(1 for h in hours if h < 0)}  # fmt: skip
+
+
+def regimes(
+    tickets: Sequence[SimTicket], runs: Sequence[MethodRun], cal: WorkCalendar
+) -> dict[str, Any]:
+    """Per method, dollars per ticket answering only at checkpoints and answering live.
+
+    Live is measured for the event memory (it reads every message anyway) and
+    for ``full_context_live``. Full context on other tickets is projected from
+    the live tickets' dollars per character of transcript read; a memory that
+    ingests every message, by its ingest cost and one answer per message at its
+    recorded cost per answer.
+    """
+    by_id = {t.ticket_id: t for t in tickets}
+    live_fc = [r for r in runs if r.method == "full_context_live"]
+    units = {t.ticket_id: sum(transcript_chars(t, cal, moments)) for t in tickets}
+    rate = (sum(r.usage.usd() or 0.0 for r in live_fc) / sum(units[r.ticket_id] for r in live_fc)
+            if live_fc else None)  # fmt: skip
+    measured = {r.ticket_id: r.usage.usd() or 0.0 for r in live_fc}
+    out: dict[str, Any] = {}
+    for name in dict.fromkeys(r.method for r in runs):
+        own = [r for r in runs if r.method == name]
+        messages = sum(by_id[r.ticket_id].messages for r in own)
+        recorded = [r.usage.usd() or 0.0 for r in own]
+        row: dict[str, Any] = {"tickets": len(own), "messages": messages}
+        if name.startswith("event_memory"):
+            row |= {"checkpoints_usd": recorded, "live_usd": recorded, "live": "measured"}
+        elif name == "full_context_live":
+            row |= {"live_usd": recorded, "live": "measured"} | _calls(own)
+        elif name == "full_context":
+            row |= {"checkpoints_usd": recorded, "live": "measured where run live, else projected",
+                    "live_usd": [measured.get(r.ticket_id, rate * units[r.ticket_id])
+                                 if rate else None for r in own]}  # fmt: skip
+        else:
+            row |= {"checkpoints_usd": recorded, "live": "projected",
+                    "live_usd": [(r.ingest_usage.usd() or 0.0) + len(moments(by_id[r.ticket_id]))
+                                 * (r.answer_usage.usd() or 0.0) / max(r.answer_usage.calls, 1)
+                                 for r in own]}  # fmt: skip
+        for key in ("checkpoints_usd", "live_usd"):
+            if key in row and None not in row[key]:
+                total = sum(row[key])
+                row[key] = {"per_ticket": total / len(own), "per_message": total / messages}
+            elif key in row:
+                row[key] = None
+        out[name] = row
+    return out
+
+
+def _calls(runs: Sequence[MethodRun]) -> dict[str, Any]:
+    """What a live method's calls took: tokens, cache share and seconds per call."""
+    calls = [c for r in runs for c in r.detail.get("calls", ())]
+    seconds = sorted(c[4] for c in calls)
+    usage = sum((r.usage for r in runs), Usage())
+    return {"calls_per_ticket": len(calls) / len(runs),
+            "prompt_tokens_per_call": usage.prompt_tokens / max(usage.calls, 1),
+            "completion_tokens_per_call": usage.completion_tokens / max(usage.calls, 1),
+            "cache_share": usage.cache_share,
+            "seconds_per_call": {"median": seconds[len(seconds) // 2] if seconds else None,
+                                 "p90": seconds[int(0.9 * (len(seconds) - 1))] if seconds
+                                 else None}}  # fmt: skip
+
+
 def _interval(draws: list[float]) -> list[float]:
     ordered = sorted(draws)
     lo = ordered[int(0.025 * (len(ordered) - 1))]
@@ -902,8 +1035,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--reread", type=Path,
                         help="with --replay: a JSON file {ticket: [seq, ...]} of messages read "
                              "again live, against the card the replay rebuilds")
-    parser.add_argument("--frozen", type=Path,
-                        help="a result whose runs of the methods not run now are scored again")
+    parser.add_argument("--frozen", type=Path, action="append", default=[],
+                        help="a result whose runs of the methods not run now are scored again; "
+                             "may be given more than once, the first holding a run wins")
     parser.add_argument("--sample-events", type=int, default=30,
                         help="events of the first ticket read to project the cost")
     parser.add_argument("--projection-from", type=Path,
@@ -1012,10 +1146,15 @@ def main(argv: Sequence[str] | None = None) -> None:
     finally:
         spend("run")
     by_id = {t.ticket_id: t for t in tickets}
-    frozen = [r for r in load_runs(args.frozen) if r.method not in names and r.ticket_id in by_id]
+    held: dict[tuple[str, str], MethodRun] = {}
+    for path in args.frozen:
+        for r in load_runs(path):
+            if r.ticket_id in by_id:
+                held.setdefault((r.method, r.ticket_id), r)
+    frozen = [r for (m, _), r in held.items() if m not in names]
     if args.compare_frozen_event_memory:
-        frozen += [replace(r, method="event_memory_previous") for r in load_runs(args.frozen)
-                   if r.method == "event_memory" and r.ticket_id in by_id]
+        frozen += [replace(r, method="event_memory_previous") for (m, _), r in held.items()
+                   if m == "event_memory"]
     runs += frozen
     reference = [r for r in runs if r.method == "event_memory"]
     replays = [refolded(r, by_id[r.ticket_id], cal, name) for name in REFOLDS for r in reference]
@@ -1036,7 +1175,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "template": args.template,
         "methods": {m: EVENT_MEMORY.get(m) for m in names},
         "replayed_from": str(args.replay) if args.replay else None,
-        "frozen_from": str(args.frozen) if args.frozen else None,
+        "frozen_from": [str(p) for p in args.frozen] or None,
         "started": started.isoformat(),
         "finished": datetime.now().astimezone().isoformat(),
         "subsets": {m: n for m, n in subsets.items() if m in names}
@@ -1061,7 +1200,11 @@ def main(argv: Sequence[str] | None = None) -> None:
         "verifier": verdict_table(verified) | {"rows": verified},
         "reread": reread_changes(tickets, reference) if reread is not None else None,
         "summary": summary,
-        "runs": [record(r, score_ticket(by_id[r.ticket_id], r.snapshots)) for r in runs],
+        "timeliness": when_known(tickets, runs, cal),
+        "regimes": regimes(tickets, runs, cal),
+        # A frozen run stays in the record it came from.
+        "runs": [record(r, score_ticket(by_id[r.ticket_id], r.snapshots)) for r in runs
+                 if id(r) not in {id(f) for f in frozen}],
     }  # fmt: skip
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(compact(to_json(result)))
