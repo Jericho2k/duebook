@@ -120,6 +120,8 @@ class Dispute:
 class Moment(StrEnum):
     HANDOFF = "handoff"
     END = "end"
+    #: After a message that is not a checkpoint: a method asked live.
+    MESSAGE = "message"
 
 
 @dataclass(frozen=True, slots=True)

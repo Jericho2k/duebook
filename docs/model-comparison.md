@@ -15,23 +15,28 @@ methods within their split. The table also gives the original Round 10
 `test5` result for reference. [Round 10 results](results.md#round-10-the-final-method) ·
 [Frozen baseline scores](../results/round10/test3-compare.json)
 
-| Solution | Split | Tickets | Promises right at end | Commitment F1 | False closes / ticket | False breach alerts / ticket | Freshness error | Dispute recall | USD / ticket |
-|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Duebook R10, DeepSeek V4.1 Flash | `dev-portability` | 12 | 267/267 | 1.000 | 0.00 | 0.00 | 0.000 | 1.000 | $0.0154 |
-| Duebook R10, GLM 5.3 Flash | `dev-portability` | 12 | 261/267 | 0.996 | 0.00 | 0.42 | 0.000 | 1.000 | $0.0202 |
-| Duebook R10, DeepSeek V4.1 Flash | `test5` | 20 | 461/463 | 0.999 | 0.15 | 0.00 | 0.000 | 1.000 | $0.0170 |
-| Duebook R10, DeepSeek V4.1 Flash | `test3` | 20 | 367/367 | 0.995 | 0.00 | 0.00 | 0.000 | 1.000 | $0.0154 |
-| Full context | `test3` | 20 | 348/367 | 0.997 | 0.30 | 0.45 | 0.291 | 0.560 | $0.0043 |
-| Rolling summary | `test3` | 4 | 43/71 | 0.797 | 0.50 | 0.75 | 0.333 | 0.667 | $0.0956 |
-| Mem0 2.2.1 | `test3` | 20 | 341/367 | 0.990 | 0.65 | 0.40 | 0.310 | 0.604 | $0.0530 |
-| Graphiti 0.31.2 (Zep's engine) | `test3` | 10 | 147/180 | 0.942 | 1.90 | 0.40 | 0.278 | 0.192 | $0.1602 |
+| Solution | Split | Tickets | Promises right at end | Commitment F1 | False closes / ticket | False breach alerts / ticket | Freshness error | Dispute recall | USD / ticket, handoffs only | USD / ticket, live |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Duebook R10, DeepSeek V4.1 Flash | `dev-portability` | 12 | 267/267 | 1.000 | 0.00 | 0.00 | 0.000 | 1.000 | $0.0154 | $0.0154 m |
+| Duebook R10, GLM 5.3 Flash | `dev-portability` | 12 | 261/267 | 0.996 | 0.00 | 0.42 | 0.000 | 1.000 | $0.0202 | $0.0202 m |
+| Duebook R10, DeepSeek V4.1 Flash | `test5` | 20 | 461/463 | 0.999 | 0.15 | 0.00 | 0.000 | 1.000 | $0.0170 | $0.0170 m |
+| Duebook R10, DeepSeek V4.1 Flash | `test3` | 20 | 367/367 | 0.995 | 0.00 | 0.00 | 0.000 | 1.000 | $0.0154 | $0.0154 m |
+| Full context | `test3` | 20 | 348/367 | 0.997 | 0.30 | 0.45 | 0.291 | 0.560 | $0.0043 | $0.0651 m+p |
+| Rolling summary | `test3` | 4 | 43/71 | 0.797 | 0.50 | 0.75 | 0.333 | 0.667 | $0.0956 | $0.210 p |
+| Mem0 2.2.1 | `test3` | 20 | 341/367 | 0.990 | 0.65 | 0.40 | 0.310 | 0.604 | $0.0530 | $0.304 p |
+| Graphiti 0.31.2 (Zep's engine) | `test3` | 10 | 147/180 | 0.942 | 1.90 | 0.40 | 0.278 | 0.192 | $0.1602 | $0.325 p |
 
 False closes, freshness error, and dispute recall use all checkpoints.
 Commitment F1 and false breach alerts use ticket end. Full context reads the
 transcript at each checkpoint, and rolling summary updates a bounded summary
 after each event. Graphiti and rolling summary ran on the first 10 and 4
 tickets respectively. One Graphiti ticket stopped early, and one rolling-summary
-ticket completed. The broader survey compares additional memory systems by
+ticket completed. "Handoffs only" is the cost of answering at each handoff
+and the end; "live" is the cost of an answer current after every message, as
+Duebook's card is (m: measured; p: projected; m+p: full context measured on
+three `test3` tickets, $0.0714 a ticket, and projected on the other 17).
+Duebook reads every message in both regimes
+([Round 10c](results.md#round-10c-a-fair-comparison--live-versus-checkpoint-only)). The broader survey compares additional memory systems by
 storage and handling of time and contradictions. [Round 4 run details](results.md#round-4-final-comparison-on-test3) ·
 [Competitor survey](competitors.md#summary)
 
