@@ -1,91 +1,23 @@
 {
- "what": "dev6: each conditional offer and the message saying whether its condition held, read live against the card the planted proposals build",
- "tickets": {
-  "SIM-6174-M0000": [
-   39,
-   81
-  ],
-  "SIM-6174-M0001": [
-   113,
-   178
-  ],
-  "SIM-6174-M0002": [
-   45,
-   90
-  ],
-  "SIM-6174-M0003": [
-   141
-  ],
-  "SIM-6174-M0004": [
-   78
-  ],
-  "SIM-6174-M0005": [
-   84,
-   116
-  ],
-  "SIM-6174-M0006": [
-   26
-  ],
-  "SIM-6174-M0007": [
-   97,
-   131
-  ]
- },
- "why": {
-  "SIM-6174-M0000": {
-   "39": [
-    "conditional offer"
-   ],
-   "81": [
-    "condition failed"
-   ]
-  },
-  "SIM-6174-M0001": {
-   "113": [
-    "conditional offer"
-   ],
-   "178": [
-    "condition held"
-   ]
-  },
-  "SIM-6174-M0002": {
-   "45": [
-    "conditional offer"
-   ],
-   "90": [
-    "condition held"
-   ]
-  },
-  "SIM-6174-M0003": {
-   "141": [
-    "conditional offer"
-   ]
-  },
-  "SIM-6174-M0004": {
-   "78": [
-    "conditional offer"
-   ]
-  },
-  "SIM-6174-M0005": {
-   "84": [
-    "conditional offer"
-   ],
-   "116": [
-    "condition failed"
-   ]
-  },
-  "SIM-6174-M0006": {
-   "26": [
-    "conditional offer"
-   ]
-  },
-  "SIM-6174-M0007": {
-   "97": [
-    "conditional offer"
-   ],
-   "131": [
-    "condition failed"
-   ]
-  }
- }
+"what":"dev6: each conditional offer and the message saying whether its condition held, read live against the card the planted proposals build",
+"tickets":{
+"SIM-6174-M0000":[39,81],
+"SIM-6174-M0001":[113,178],
+"SIM-6174-M0002":[45,90],
+"SIM-6174-M0003":[141],
+"SIM-6174-M0004":[78],
+"SIM-6174-M0005":[84,116],
+"SIM-6174-M0006":[26],
+"SIM-6174-M0007":[97,131]
+},
+"why":{
+"SIM-6174-M0000":{"39":["conditional offer"],"81":["condition failed"]},
+"SIM-6174-M0001":{"113":["conditional offer"],"178":["condition held"]},
+"SIM-6174-M0002":{"45":["conditional offer"],"90":["condition held"]},
+"SIM-6174-M0003":{"141":["conditional offer"]},
+"SIM-6174-M0004":{"78":["conditional offer"]},
+"SIM-6174-M0005":{"84":["conditional offer"],"116":["condition failed"]},
+"SIM-6174-M0006":{"26":["conditional offer"]},
+"SIM-6174-M0007":{"97":["conditional offer"],"131":["condition failed"]}
+}
 }

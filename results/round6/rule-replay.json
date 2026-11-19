@@ -1,98 +1,11 @@
 {
- "what": "Round 5's frozen proposals and verdicts folded again under the contextual-close amendment of decision 0001; no model call",
- "command": "python -m duebook.bench.experiment --split test3 --methods event_memory --max-usd 0.01 --results <dir> --replay results/round5/test3.json --frozen results/round4/test3.json --compare-frozen-event-memory (dev3: --split dev3 --template --replay results/round5/dev3.json)",
- "test3": {
-  "round5_rules": {
-   "false_closes_per_ticket": 0.05,
-   "false_closes_any_checkpoint": 0.15,
-   "wrong_target_closes_per_ticket": 0.0,
-   "false_alerts_per_ticket": 0.45,
-   "rescue_close_correct": 0.85,
-   "ambiguous_close_refrained": 0.95,
-   "wrong_thing_not_closed": 0.95,
-   "status_accuracy": 0.9573863636363636,
-   "breach_alert_precision": 0.9323308270676691,
-   "breach_alert_recall": 0.9612403100775194,
-   "commitment_f1": 0.9750692520775622,
-   "missed_close_rate": 0.09210526315789473,
-   "suggestions_per_ticket": 1.45,
-   "context_names_other_refusals": [],
-   "verifier": {
-    "rescued": {
-     "true": 17,
-     "false": 1
-    }
-   },
-   "guards": {
-    "false_close_prevented": 29,
-    "true_close_blocked": 0,
-    "wrong_target_prevented": 0,
-    "not_a_planted_promise": 1
-   }
-  },
-  "amended_rules": {
-   "false_closes_per_ticket": 0.0,
-   "false_closes_any_checkpoint": 0.0,
-   "wrong_target_closes_per_ticket": 0.0,
-   "false_alerts_per_ticket": 0.45,
-   "rescue_close_correct": 0.85,
-   "ambiguous_close_refrained": 0.95,
-   "wrong_thing_not_closed": 0.95,
-   "status_accuracy": 0.9602272727272727,
-   "breach_alert_precision": 0.9328358208955224,
-   "breach_alert_recall": 0.9689922480620154,
-   "commitment_f1": 0.9750692520775622,
-   "missed_close_rate": 0.09210526315789473,
-   "suggestions_per_ticket": 1.5,
-   "context_names_other_refusals": [
-    [
-     "SIM-4343-M0012",
-     54,
-     "context_names_other",
-     "resolved",
-     52
-    ]
-   ],
-   "verifier": {
-    "rescued": {
-     "true": 17
-    }
-   },
-   "guards": {
-    "false_close_prevented": 30,
-    "true_close_blocked": 0,
-    "wrong_target_prevented": 0,
-    "not_a_planted_promise": 1
-   }
-  }
- },
- "dev3": {
-  "amended_rules": {
-   "false_closes_per_ticket": 0.0,
-   "false_closes_any_checkpoint": 0.0,
-   "wrong_target_closes_per_ticket": 0.0,
-   "false_alerts_per_ticket": 0.25,
-   "rescue_close_correct": 1.0,
-   "ambiguous_close_refrained": 1.0,
-   "wrong_thing_not_closed": 1.0,
-   "status_accuracy": 0.9871794871794872,
-   "breach_alert_precision": 0.96,
-   "breach_alert_recall": 1.0,
-   "commitment_f1": 0.9873417721518988,
-   "missed_close_rate": 0.02564102564102564,
-   "suggestions_per_ticket": 1.25,
-   "context_names_other_refusals": [],
-   "verifier": {
-    "rescued": {
-     "true": 4
-    }
-   },
-   "guards": {
-    "false_close_prevented": 5,
-    "true_close_blocked": 0,
-    "wrong_target_prevented": 0,
-    "not_a_planted_promise": 0
-   }
-  }
- }
+"what":"Round 5's frozen proposals and verdicts folded again under the contextual-close amendment of decision 0001; no model call",
+"command":"python -m duebook.bench.experiment --split test3 --methods event_memory --max-usd 0.01 --results <dir> --replay results/round5/test3.json --frozen results/round4/test3.json --compare-frozen-event-memory (dev3: --split dev3 --template --replay results/round5/dev3.json)",
+"test3":{
+"round5_rules":{"false_closes_per_ticket":0.05,"false_closes_any_checkpoint":0.15,"wrong_target_closes_per_ticket":0.0,"false_alerts_per_ticket":0.45,"rescue_close_correct":0.85,"ambiguous_close_refrained":0.95,"wrong_thing_not_closed":0.95,"status_accuracy":0.9573863636363636,"breach_alert_precision":0.9323308270676691,"breach_alert_recall":0.9612403100775194,"commitment_f1":0.9750692520775622,"missed_close_rate":0.09210526315789473,"suggestions_per_ticket":1.45,"context_names_other_refusals":[],"verifier":{"rescued":{"true":17,"false":1}},"guards":{"false_close_prevented":29,"true_close_blocked":0,"wrong_target_prevented":0,"not_a_planted_promise":1}},
+"amended_rules":{"false_closes_per_ticket":0.0,"false_closes_any_checkpoint":0.0,"wrong_target_closes_per_ticket":0.0,"false_alerts_per_ticket":0.45,"rescue_close_correct":0.85,"ambiguous_close_refrained":0.95,"wrong_thing_not_closed":0.95,"status_accuracy":0.9602272727272727,"breach_alert_precision":0.9328358208955224,"breach_alert_recall":0.9689922480620154,"commitment_f1":0.9750692520775622,"missed_close_rate":0.09210526315789473,"suggestions_per_ticket":1.5,"context_names_other_refusals":[["SIM-4343-M0012",54,"context_names_other","resolved",52]],"verifier":{"rescued":{"true":17}},"guards":{"false_close_prevented":30,"true_close_blocked":0,"wrong_target_prevented":0,"not_a_planted_promise":1}}
+},
+"dev3":{
+"amended_rules":{"false_closes_per_ticket":0.0,"false_closes_any_checkpoint":0.0,"wrong_target_closes_per_ticket":0.0,"false_alerts_per_ticket":0.25,"rescue_close_correct":1.0,"ambiguous_close_refrained":1.0,"wrong_thing_not_closed":1.0,"status_accuracy":0.9871794871794872,"breach_alert_precision":0.96,"breach_alert_recall":1.0,"commitment_f1":0.9873417721518988,"missed_close_rate":0.02564102564102564,"suggestions_per_ticket":1.25,"context_names_other_refusals":[],"verifier":{"rescued":{"true":4}},"guards":{"false_close_prevented":5,"true_close_blocked":0,"wrong_target_prevented":0,"not_a_planted_promise":0}}
+}
 }

@@ -12,6 +12,7 @@ from duebook.bench.experiment import (
     GROWTH,
     METRICS,
     audit,
+    compact,
     guard_effects,
     load_runs,
     main,
@@ -126,6 +127,15 @@ def test_a_saved_run_reads_back_and_scores_as_it_did(tmp_path):
     again = load_runs(path)
     assert [r.snapshots for r in again] == [r.snapshots for r in runs]
     assert [r.usage for r in again] == [r.usage for r in runs]
+
+
+def test_a_record_is_written_one_run_per_line_and_reads_back_unchanged():
+    runs = [FullContext(Scripted(t), Ledger()).run(t) for t in TICKETS[:2]]
+    rec = to_json({"split": "dev", "runs": [record(r, score_ticket(TICKETS[i], r.snapshots))
+                                            for i, r in enumerate(runs)]})  # fmt: skip
+    text = compact(rec)
+    assert json.loads(text) == rec
+    assert len(text.splitlines()) == 7  # {, split, runs: [, a line per run, ], }
 
 
 def test_tickets_are_rewritten_once_and_then_read_from_the_cache(tmp_path):
