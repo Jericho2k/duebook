@@ -14,7 +14,12 @@
    reads of Rounds 9 and 10) folded under rule versions 5 and 6 (decision 0006)
    must give exactly the metrics, and the tickets that changed, saved in
    ``round10/replay``.
-4. Every full record of rounds 4-10 is scored again through the experiment runner,
+4. Round 10c: the live full-context record is scored again from its saved
+   answers, beside Round 10's proposals and Round 4's frozen baselines, and must
+   give the summary, timeliness and cost regimes it saved; every method's
+   timeliness and regimes on ``test3`` and Round 10's on ``test5`` must equal
+   ``round10c/timeliness``.
+5. Every full record of rounds 4-10 is scored again through the experiment runner,
    its saved snapshots (``--frozen``) and its proposals folded under today's
    rules (``--replay``). These summaries differ from the saved ones where a
    later round changed the rules or the scorer, so with ``--against`` they
@@ -210,6 +215,33 @@ def round10b(tmp: Path) -> dict:
     return out
 
 
+#: Round 10c: the runner's arguments that score each split from its records alone.
+R10C = {"test3": ["--split", "test3", "--methods", "event_memory",
+                  "--replay", "results/round10/test3.json",
+                  "--frozen", "results/round10c/test3-live.json",
+                  "--frozen", "results/round4/test3.json"],
+        "test5": ["--split", "test5", "--methods", "event_memory",
+                  "--replay", "results/round10/test5.json"]}  # fmt: skip
+TIMED = ("timeliness", "regimes")
+
+
+def round10c(tmp: Path) -> list[str]:
+    """The live record and the timeliness of every method, rebuilt from the records."""
+    live = load("round10c/test3-live")
+    out = tmp / "r10c-live.json"
+    experiment.main([*R10C["test3"], "--tickets", str(len(live["tickets"])), "--max-usd", "0",
+                     "--results", str(tmp), "--out", str(out)])  # fmt: skip
+    now = json.loads(out.read_text())
+    differ = metrics_differ("round10c/test3-live", {k: live[k] for k in ("summary", *TIMED)}, now)
+    saved = load("round10c/timeliness")
+    for split, argv in R10C.items():
+        out = tmp / f"r10c-{split}.json"
+        experiment.main([*argv, "--max-usd", "0", "--results", str(tmp), "--out", str(out)])
+        differ += metrics_differ(f"round10c/timeliness {split}", saved[split],
+                                 json.loads(out.read_text()))  # fmt: skip
+    return differ
+
+
 def proposals_of(message: dict) -> list:
     """The proposals a round's live read made: ``round9_proposals``, ``round10_proposals``."""
     return next(v for k, v in message.items() if k.endswith("_proposals"))
@@ -241,6 +273,7 @@ def main(argv: list[str] | None = None) -> int:
         saved = load("round10/replay")["records"]
         differ += [d for name, now in round10b(Path(tmp)).items()
                    for d in metrics_differ(f"round10/replay {name}", saved[name], now)]
+        differ += round10c(Path(tmp))
         scored = scored_again(Path(tmp))
     if args.write:
         args.write.write_text(json.dumps(scored, ensure_ascii=False, indent=1, sort_keys=True))
