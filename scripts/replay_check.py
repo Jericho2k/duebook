@@ -7,8 +7,9 @@
    closing rules of its round, must give exactly the snapshots it saved; a
    run that stopped on a message stops there again.
 2. Round 9: Round 8's proposals folded under rule versions 4 and 5, and the
-   targeted re-extractions (the messages read again are served from Round 9's
-   records), must give exactly the metrics it saved.
+   targeted re-extractions of Rounds 9 and 10 (the messages read again are
+   served from their records, a later round's over an earlier one's), must
+   give exactly the metrics they saved.
 3. Every record of rounds 4-8 is scored again through the experiment runner,
    its saved snapshots (``--frozen``) and its proposals folded under today's
    rules (``--replay``). These summaries differ from the saved ones where a
@@ -45,10 +46,16 @@ R = Path("results")
 FULL = {"round4/test3": 1, "round5/test3": 2, "round5/dev3": 2, "round6/test3": 3,
         "round7/test3": 3, "round7/dev3": 3, "round7/dev4": 3, "round8/test4": 4,
         "round8/dev5": 4}  # fmt: skip
-#: Round 9's re-extractions: (record, split, what was replayed, the messages read again).
-REREAD = [("round9/test4", "test4", "results/round8/test4.json", "results/round9/reread.json"),
-          ("round9/dev5", "dev5", "results/round8/dev5.json", "results/round9/reread.json"),
-          ("round9/dev6", "dev6", "oracle", "results/round9/reread-dev6.json")]  # fmt: skip
+#: Targeted re-extractions: (record, split, what was replayed, the messages read
+#: again, in the order the rounds read them, and the records that hold those reads).
+R9_TEST4 = (["results/round9/reread.json"], ["round9/test4"])
+REREAD = [("round9/test4", "test4", "results/round8/test4.json", *R9_TEST4),
+          ("round9/dev5", "dev5", "results/round8/dev5.json", ["results/round9/reread.json"],
+           ["round9/dev5"]),
+          ("round9/dev6", "dev6", "oracle", ["results/round9/reread-dev6.json"], ["round9/dev6"]),
+          ("round10/test4-reread", "test4", "results/round8/test4.json",
+           [*R9_TEST4[0], "results/round10/reread-test4.json"],
+           [*R9_TEST4[1], "round10/test4-reread"])]  # fmt: skip
 
 
 def no_model(self, body):
@@ -141,20 +148,31 @@ def round9(tmp: Path) -> list[str]:
                 run.apply = apply
             differ += metrics_differ(f"round9/replay {split} {version}", saved,
                                      rounded(now["summary"]["event_memory"]))  # fmt: skip
-    answers = {(m["ticket"], m["seq"]): decode_proposals(m["round9_proposals"])
-               for name, *_ in REREAD for m in load(name)["messages"]}  # fmt: skip
-    methods.read_event = lambda reader, card, event, previous: Extraction(
-        answers[event.ticket_id, event.seq])
     # Served from the records, the reads cost nothing to project.
     experiment.project_reread = lambda path, calls: {"event_memory": dict.fromkeys(
         ("upper", "expected", "sample_usd", "sample_charged", "reused"), 0.0)}
-    for name, split, replay, reread in REREAD:
+    for name, split, replay, selections, records in REREAD:
+        answers = {(m["ticket"], m["seq"]): decode_proposals(proposals_of(m))
+                   for r in records for m in load(r)["messages"]}  # fmt: skip
+        methods.read_event = lambda reader, card, event, previous, answers=answers: Extraction(
+            answers[event.ticket_id, event.seq])
+        listed: dict[str, set[int]] = {}
+        for path in selections:
+            for ticket, seqs in json.loads(Path(path).read_text())["tickets"].items():
+                listed.setdefault(ticket, set()).update(seqs)
+        reread = tmp / f"{name.replace('/', '-')}.reread.json"
+        reread.write_text(json.dumps({"tickets": {t: sorted(s) for t, s in listed.items()}}))
         argv = ["--split", split, "--methods", "event_memory", "--replay", replay,
-                "--reread", reread, *(["--template"] if replay == "oracle" else [])]  # fmt: skip
+                "--reread", str(reread), *(["--template"] if replay == "oracle" else [])]
         now = summary(argv, tmp / f"{name.replace('/', '-')}.json")
         differ += metrics_differ(name, load(name)["event_memory"],
                                  rounded(now["summary"]["event_memory"]))  # fmt: skip
     return differ
+
+
+def proposals_of(message: dict) -> list:
+    """The proposals a round's live read made: ``round9_proposals``, ``round10_proposals``."""
+    return next(v for k, v in message.items() if k.endswith("_proposals"))
 
 
 def scored_again(tmp: Path) -> dict:

@@ -1,0 +1,2 @@
+{"at": "2026-11-19T00:30:44.769848+00:00", "split": "test4", "what": "cost projection only", "methods": "event_memory", "label": "A1 projection", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-19T00:30:49.415237+00:00", "split": "test4", "what": "run", "methods": "event_memory", "label": "A1: test4 device-model statements + control", "usd": 0.0239029, "reused_usd": 0.0}

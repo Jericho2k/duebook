@@ -42,6 +42,9 @@ a status report as a fact.
 the same thing, use exactly that slot. Otherwise use one from this list when \
 it fits: {slots}. Only when none fits, make a short lowercase English key in \
 the same "object.attribute" form. Never use two slots for one thing.
+- "value" holds only what its slot is about. A value reported under one slot \
+is never repeated inside another fact's value: "мне привезли чайник модели \
+KT-12" is device.model "KT-12", not also a delivery fact naming the model.
 - When the message gives a different value for something the record already \
 holds — even from the other side, or "according to our records" — use the \
 record's slot for it. A disagreement is only visible if both values share a \
