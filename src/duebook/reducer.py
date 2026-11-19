@@ -574,7 +574,7 @@ def _resolve_commitment(
     c = card.commitment(p.commitment_id)
     if c is None or not c.unresolved:
         refused = Reason.UNKNOWN_TARGET if c is None else Reason.ALREADY_RESOLVED
-        if guards.claims:
+        if guards.claims and guards.relevance:  # a suggestion is the guards' evidence
             card = _suggest_fitting(card, event, p, source, guards, refused)
         return card, [refused]
     context = _resolution_context(event, p, c, previous, guards)

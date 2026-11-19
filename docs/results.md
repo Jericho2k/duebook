@@ -1,7 +1,8 @@
 # Results: event memory against the baselines
 
 Ten rounds, run from 2026-11-17 to 19. Round 10 runs the final method on a
-new, unseen split (`test5`) and on `test3` beside the frozen baselines.
+new, unseen split (`test5`) and on `test3` beside the frozen baselines;
+Round 10b replays its records under decision 0006 at $0.
 Rounds 5 to 7 reuse the frozen Round 4 comparison. Round 4 contains the
 original run on a fresh test split. Round 8 runs our method on a new, unseen
 split (`test4`). Round 9 is not a run: it replays Round 8's record and reads
@@ -164,11 +165,13 @@ Every beat at the end of the ticket:
     close at 3 checkpoints and the one missed breach alert.
   - A claim by the side that owes the promise silences the alert. If it is
     false, only the other side's protest brings the promise back.
+    [Decision 0006](decisions/0006-unconfirmed-claims.md) now raises a
+    notice for it (Round 10b).
 - **The missed close (M0015, seq 143).** "Бонусы вижу, спасибо!" confirmed
   "Начислим вам компенсацию бонусами". The model pointed the close at the
   pending offer "начислим вам бонусы взамен", and the reducer refused it as
   not a commitment. The promise stays open, so this fails safe. No suggestion
-  was left for a person.
+  was left for a person; under decision 0006 one is (Round 10b).
 - **The one spurious promise** is also the writer's: it turned "Новой
   информации пока нет" into "…Как только что-то появится, мы сразу вас
   проинформируем", a vague promise that no label holds.
@@ -310,6 +313,51 @@ python -m duebook.bench.experiment --split test3 --methods event_memory \
     --frozen results/round4/test3.json --compare-frozen-event-memory \
     --max-usd 0.327 --session-cap 0.75 --results results/round10 --out results/round10/test3.json
 python scripts/replay_check.py   # every record, Round 10's included, at $0
+```
+
+### Round 10b (replay, $0)
+
+[Decision 0006](decisions/0006-unconfirmed-claims.md), rule version 6, adds
+two things. A claim the other side has not confirmed by the deadline raises
+one `claim_unconfirmed` notice. A confirmation aimed at something that is not
+an open promise leaves a suggestion on the one open promise it fits. No
+model was called: each record's proposals were folded under rule versions 5
+and 6 and scored by the same scorer, which now counts a claim check as right
+(the label says the promise is still owed), noise (the label says it was
+settled) or missed. [Record](../results/round10/replay.json)
+
+| Record | Claims at any point | Claim notices: right / noise | New suggestions | Other changes |
+|---|---:|---:|---:|---|
+| `test5` (Round 10) | 1 | **1 / 0** (M0006) | 1, right (M0015) | none |
+| `test3` (Round 10) | 0 | 0 / 0 | 0 | none |
+| `test4` (Round 8) | 0 | 0 / 0 | 0 | none |
+| `test4` spliced with Rounds 9–10's reads | 0 | 0 / 0 | 0 | none |
+
+- **M0006.** The company's "Пришлём вам накладную до конца недели" (seq 54)
+  was read as claimed at seq 56. The notice fires at its deadline, the end
+  of Friday 22 January, while the label says it is still owed. It is right
+  at the handoff after the deadline and at the end. The promise is still
+  claimed, so its false close and its missed breach alert stand: the notice
+  is a request to check, not a breach.
+- **M0015.** "Бонусы вижу, спасибо!" (seq 143) now leaves «возможно,
+  выполнено по сообщению №143 — подтвердите» on "Начислим вам компенсацию
+  бонусами" (seq 91), the message that settled it by the label. The promise
+  stays open. Suggestions per ticket go from 1.90 to 1.95.
+- **Nothing else changed.** Every other ticket of all four records scores
+  the same under both versions: every metric, promise stage and beat.
+- **Every other record.** `replay_check` also folds the eleven full records
+  of Rounds 4–10 under today's rules. M0006 is the only claim notice in any
+  of them. The only other change is in Round 5's `test3` record (an older
+  prompt): 5 more suggestions at the end, each naming the message that
+  settled its promise. The fold with the guards off is left without such
+  suggestions, since they are the guards' evidence.
+- **What this cannot show.** The model claimed a promise once in 3,520
+  `test5` messages and never in `test3` or `test4`, so the noise rate rests
+  on no cases. A true claim the customer never confirms would cost one
+  notice; `main5` plants no such claim.
+
+```bash
+python scripts/replay_check.py   # folds the four records under rules 5 and 6 and checks them
 ```
 
 ## Round 9 — conditional offers, several orders, issue-summary noise

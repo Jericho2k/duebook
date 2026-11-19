@@ -721,12 +721,13 @@ def test_a_misaimed_confirmation_that_fits_no_promise_or_two_is_not_suggested():
     assert all(not c.suggestions for c in t.card.commitments)
 
 
-def test_a_misaimed_confirmation_decided_before_0006_is_not_suggested():
+def test_a_misaimed_confirmation_is_not_suggested_before_0006_or_without_guards():
     t = Ticket()
     _, offer = bonuses(t)
     said = "Бонусы вижу"
     event = MessagePosted(id="e9", ticket_id="T-1", seq=t.card.last_seq + 1, at=t.now,
                           author=ANNA, text=said)
-    card = apply(t.card, event, [ResolveCommitment(offer, said, "начислим вам бонусы взамен")],
-                 CAL, guards=Guards(rules=5)).card  # fmt: skip
-    assert all(not c.suggestions for c in card.commitments)
+    for guards in (Guards(rules=5), UNGUARDED):
+        card = apply(t.card, event, [ResolveCommitment(offer, said, "начислим вам бонусы взамен")],
+                     CAL, guards=guards).card  # fmt: skip
+        assert all(not c.suggestions for c in card.commitments)

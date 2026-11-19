@@ -619,6 +619,9 @@ METRICS: dict[str, tuple[str, Callable[[Score, int], float]]] = {
                              lambda s, n: s.offer_states_right / max(s.offer_states_judged, 1)),
     "condition_alert_recall": ("all", lambda s, n: s.condition_alerts.recall),
     "false_condition_alerts_per_ticket": ("all", lambda s, n: s.condition_alerts.fp / n),
+    # Unconfirmed claims (decision 0006), at the end of each ticket.
+    "claim_check_precision": ("end", lambda s, n: s.claim_checks.precision),
+    "claim_check_recall": ("end", lambda s, n: s.claim_checks.recall),
 }
 #: name -> value per ticket; averaged over tickets.
 COSTS: dict[str, Callable[[MethodRun, SimTicket], float]] = {

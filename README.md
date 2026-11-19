@@ -422,8 +422,8 @@ memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
 (`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
 bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 9); the raw record is under
-`results/` and `results/round2/` to `results/round9/`.
+[docs/results.md](docs/results.md) (rounds 1 to 10); the raw record is under
+`results/` and `results/round2/` to `results/round10/`, one run or ticket per line.
 
 ## Running the service
 
