@@ -27,7 +27,7 @@
 </head>
 <body>
   <div class="prototype-layout">
-    <label for="prototype-layout">Рабочий сценарий</label>
+    <label for="prototype-layout">Сценарий прототипа</label>
     <select id="prototype-layout">
       <option value="Ticket workspace">Карточка тикета</option>
       <option value="Handoff first">Передача смены</option>
@@ -40,12 +40,11 @@
         <div class="db-lockup">
           <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
         </div>
-        <small>Рабочее пространство</small>
       </header>
       <div class="db-ticket">
-        <div class="db-context"><span>Тикет #1042</span> Zammad · Демо</div>
+        <div class="db-context">Тикет #1042</div>
         <h2>Возврат за установку</h2>
-        <p class="db-ticket-meta" aria-live="polite">Ольга Миронова · Открыт · 19 нояб., 14:12 МСК</p>
+        <p class="db-ticket-meta" aria-live="polite">Ответственная: Ольга Миронова</p>
       </div>
       <div class="db-nav" role="group" aria-label="Представление тикета">
         <button type="button" data-view="card" aria-pressed="true">Карточка</button>
@@ -63,12 +62,11 @@
         <div class="db-lockup">
           <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
         </div>
-        <small>Передача смены</small>
       </header>
       <div class="db-ticket">
-        <div class="db-context"><span>Тикет #1042</span> Zammad · Демо</div>
+        <div class="db-context">Тикет #1042</div>
         <h2>Возврат за установку</h2>
-        <p class="db-ticket-meta" aria-live="polite">Иван Соколов → Ольга Миронова · Открыт · 19 нояб., 14:12 МСК</p>
+        <p class="db-ticket-meta" aria-live="polite">Иван Соколов → Ольга Миронова</p>
       </div>
       <div class="db-nav" role="group" aria-label="Представление тикета">
         <button type="button" data-view="brief" aria-pressed="true">Передача смены</button>
@@ -84,7 +82,7 @@
     <div class="db-work-head">
       <h3></h3>
       <label class="db-snapshot">
-        <span>Срез карточки</span>
+        <span>Версия карточки</span>
         <select>
           <option value="current">Сейчас</option>
           <option value="before-handoff">До передачи</option>
@@ -157,11 +155,6 @@
   }
 
   #duebook-operator .db-brand {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px 24px;
     padding-block: 12px;
     border-bottom: 1px solid var(--db-hairline);
   }
@@ -206,8 +199,6 @@
     letter-spacing: -.055em;
   }
 
-  #duebook-operator .db-brand small,
-  #duebook-operator .db-context,
   #duebook-operator .db-ticket p,
   #duebook-operator .db-meta,
   #duebook-operator .db-source-byline {
@@ -221,16 +212,6 @@
   }
 
   #duebook-operator .db-context {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 11px;
-    line-height: 1.3;
-  }
-
-  #duebook-operator .db-context span {
-    padding-inline-end: 11px;
-    border-inline-end: 1px solid var(--db-divider);
     color: var(--db-index);
     font: 600 11px/1.3 var(--db-meta-font);
     letter-spacing: .015em;
@@ -362,20 +343,9 @@
   }
 
   #duebook-operator .db-status {
-    display: inline-flex;
-    align-items: baseline;
-    gap: 6px;
     color: var(--db-muted);
     font-size: 11px;
     font-weight: 500;
-  }
-
-  #duebook-operator .db-status::before {
-    align-self: center;
-    width: 8px;
-    height: 1px;
-    background: currentColor;
-    content: "";
   }
 
   #duebook-operator .db-status[data-attention] {
@@ -383,13 +353,8 @@
     font-weight: 650;
   }
 
-  #duebook-operator .db-status[data-attention]::before {
-    width: 5px;
-    height: 5px;
-    background: currentColor;
-  }
-
   #duebook-operator .db-meta { margin: 4px 0 8px; }
+  #duebook-operator .db-row-head + .db-citations { margin-top: 8px; }
 
   #duebook-operator .db-row[data-unread] {
     padding: 10px;
@@ -637,8 +602,8 @@
   };
 
   const refund = {
-    title: "Возврат стоимости установки", status: "Проверить исполнение", attention: true,
-    meta: "Ольга Миронова · Срок 19 нояб., 14:00 МСК · Получение не подтверждено", sources: [11, 17, 19]
+    title: "Возврат стоимости установки", status: "Проверить получение", attention: true,
+    meta: "Ольга Миронова · Срок 19 нояб., 14:00 МСК", sources: [11, 17, 19]
   };
   const proof = {
     title: "Прислать скриншот оплаты", status: "Просрочено", attention: true,
@@ -649,12 +614,10 @@
     meta: "Ольга Миронова, ранее Иван Соколов · Срок 19 нояб., 16:00 МСК", sources: [14]
   };
   const unread = {
-    title: "Сообщение нужно прочитать вручную", status: "Не разобрано", attention: true, unread: true,
-    meta: "Автоматический разбор не удался · 19 нояб., 14:12 МСК", sources: [23]
+    title: "Прочитать сообщение", status: "Ошибка разбора", attention: true, unread: true, sources: [23]
   };
   const orders = {
-    title: "Заказы №4827 и №4831", status: "Со слов клиента",
-    meta: "В обращении указано два заказа", sources: [5]
+    title: "Заказы №4827 и №4831", status: "Со слов клиента", sources: [5]
   };
   const receipt = {
     title: "Запросить копию квитанции у банка", status: "Открыто",
@@ -665,8 +628,7 @@
     meta: "В журнале банка платёж не найден", sources: [16]
   };
   const closed = {
-    title: "Отправить акт об отмене установки", status: "Подтверждено",
-    meta: "Клиент подтвердил получение · 18 нояб., 10:01 МСК", sources: [7, 9]
+    title: "Отправить акт об отмене установки", status: "Получено клиентом", sources: [7, 9]
   };
   const sections = [
     { title: "Условные обещания", rows: [{
@@ -674,7 +636,7 @@
       meta: "Ольга Миронова · Если банк отклонит возврат", sources: [22]
     }] },
     { title: "Открытые противоречия", rows: [{
-      title: "Выполнена ли установка по заказу №4827?", status: "Открыто",
+      title: "Установка по заказу №4827", status: "Открыто",
       meta: "Клиент: мастер не приехал · Компания: установка выполнена", sources: [12, 20]
     }] },
     { title: "Что известно сейчас", rows: [
@@ -687,8 +649,7 @@
     }] },
     { title: "Что уже пробовали", rows: [tried] },
     { title: "Открытые вопросы", rows: [{
-      title: "Нужно ли подписать акт об отмене установки?", status: "Ждём ответа",
-      meta: "Ответ ожидается от компании", sources: [24]
+      title: "Подписывать акт об отмене?", status: "Ждём ответа компании", sources: [24]
     }] }
   ];
   const views = {
@@ -698,7 +659,7 @@
       sections: [...sections, { title: "Другие обязательства", rows: [receipt, closed] }]
     },
     brief: {
-      heading: "Что принять на смене",
+      heading: "Сводка по тикету",
       rows: [unread, proof, refund, callback],
       sections: [...sections, { title: "Другие открытые обязательства", rows: [receipt] }]
     }
@@ -707,7 +668,7 @@
   const beforeHandoff = {
     heading: views.card.heading,
     rows: [
-      { ...refund, attention: false, status: "Заявлено исполнение", meta: "Иван Соколов · Срок 19 нояб., 14:00 МСК · Получение не подтверждено", sources: [11, 17] },
+      { ...refund, attention: false, status: "Оператор сообщил об отправке", meta: "Иван Соколов · Срок 19 нояб., 14:00 МСК", sources: [11, 17] },
       proof,
       { ...callback, status: "Открыто", meta: "Иван Соколов · Срок 19 нояб., 16:00 МСК" }
     ],
@@ -780,7 +741,9 @@
         const status = fragment.querySelector(".db-status");
         status.textContent = row.status;
         status.toggleAttribute("data-attention", Boolean(row.attention));
-        fragment.querySelector(".db-meta").textContent = row.meta;
+        const meta = fragment.querySelector(".db-meta");
+        if (row.meta) meta.textContent = row.meta;
+        else meta.remove();
         const citations = fragment.querySelector(".db-citations");
         for (const number of row.sources) {
           const button = document.createElement("button");
@@ -805,7 +768,7 @@
       heading.textContent = view.heading;
       snapshot.hidden = !isCard;
       ticketMeta.textContent = historical
-        ? "Иван Соколов · Открыт · Срез на 19 нояб., 13:48 МСК (событие №17)"
+        ? "Иван Соколов · 19 нояб., 13:48 МСК, событие №17"
         : currentMeta;
 
       const list = document.createElement("ul");
@@ -836,7 +799,7 @@
         container: app,
         onChange: () => app.toggleAttribute("data-compact", settings.compact)
       });
-      tweak.addToggle(settings, "compact", { label: "Compact rows" });
+      tweak.addToggle(settings, "compact", { label: "Компактные строки" });
     }
   }
 })();
