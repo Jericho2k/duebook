@@ -1,0 +1,2245 @@
+{
+ "what": "test3: Round 10's event memory (one live run) beside the frozen baselines of results/round4/test3.json and the event memory of Rounds 4-7, scored by today's code. Intervals: 95% bootstrap over tickets (2,000 resamples); differences are paired with Round 10 on the tickets both ran.",
+ "reference": "event_memory (Round 10)",
+ "methods": {
+  "event_memory": {
+   "tickets": 20,
+   "failures": 0,
+   "promise_stages": {
+    "right": 367
+   },
+   "false_closes_per_ticket": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "dispute_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "failed_step_precision": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "fact_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9892183,
+    "ci95": [
+     0.9786096,
+     0.9973046
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.9945799,
+    "ci95": [
+     0.9891892,
+     0.9986505
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "status_accuracy": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0153679,
+    "ci95": [
+     0.0147899,
+     0.0159397
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "usd_per_message": {
+    "value": 8.84e-05,
+    "ci95": [
+     8.66e-05,
+     9.01e-05
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   }
+  },
+  "graphiti": {
+   "tickets": 10,
+   "failures": 1,
+   "promise_stages": {
+    "right": 147,
+    "mishandled_later": 14,
+    "missing": 19
+   },
+   "false_closes_per_ticket": {
+    "value": 0.8,
+    "ci95": [
+     0.3,
+     1.3
+    ],
+    "diff_vs_reference": 0.8,
+    "diff_ci95": [
+     0.3,
+     1.3
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 1.9,
+    "ci95": [
+     0.8,
+     3.0
+    ],
+    "diff_vs_reference": 1.9,
+    "diff_ci95": [
+     0.8,
+     3.0
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.4,
+    "ci95": [
+     0.0,
+     0.8
+    ],
+    "diff_vs_reference": 0.4,
+    "diff_ci95": [
+     0.0,
+     0.8
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 0.1,
+    "ci95": [
+     0.0,
+     0.3
+    ],
+    "diff_vs_reference": 0.1,
+    "diff_ci95": [
+     0.0,
+     0.3
+    ]
+   },
+   "dispute_recall": {
+    "value": 0.1923077,
+    "ci95": [
+     0.04,
+     0.3877551
+    ],
+    "diff_vs_reference": -0.8076923,
+    "diff_ci95": [
+     -0.96,
+     -0.6122449
+    ]
+   },
+   "failed_step_precision": {
+    "value": 0.7708333,
+    "ci95": [
+     0.675,
+     0.8875
+    ],
+    "diff_vs_reference": -0.2291667,
+    "diff_ci95": [
+     -0.325,
+     -0.1125
+    ]
+   },
+   "fact_recall": {
+    "value": 0.9558824,
+    "ci95": [
+     0.8671875,
+     1.0
+    ],
+    "diff_vs_reference": -0.0441176,
+    "diff_ci95": [
+     -0.1328125,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.2777778,
+    "ci95": [
+     0.2251656,
+     0.3238095
+    ],
+    "diff_vs_reference": 0.2777778,
+    "diff_ci95": [
+     0.2251656,
+     0.3238095
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.6,
+    "ci95": [
+     0.3,
+     0.9
+    ],
+    "diff_vs_reference": -0.4,
+    "diff_ci95": [
+     -0.7,
+     -0.1
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 0.6,
+    "ci95": [
+     0.3,
+     0.9
+    ],
+    "diff_vs_reference": -0.4,
+    "diff_ci95": [
+     -0.7,
+     -0.1
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9938272,
+    "ci95": [
+     0.9803922,
+     1.0
+    ],
+    "diff_vs_reference": 0.0048162,
+    "diff_ci95": [
+     -0.0146837,
+     0.0224719
+    ]
+   },
+   "commitment_recall": {
+    "value": 0.8944444,
+    "ci95": [
+     0.7062147,
+     0.9943182
+    ],
+    "diff_vs_reference": -0.1055556,
+    "diff_ci95": [
+     -0.2937853,
+     -0.0056818
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.9415205,
+    "ci95": [
+     0.8255034,
+     0.9943503
+    ],
+    "diff_vs_reference": -0.0529547,
+    "diff_ci95": [
+     -0.1705686,
+     0.0025082
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 0.931677,
+    "ci95": [
+     0.8796992,
+     0.9689441
+    ],
+    "diff_vs_reference": -0.068323,
+    "diff_ci95": [
+     -0.1203008,
+     -0.0310559
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9130435,
+    "ci95": [
+     0.8742138,
+     0.9548023
+    ],
+    "diff_vs_reference": -0.0869565,
+    "diff_ci95": [
+     -0.1257862,
+     -0.0451977
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.9333333,
+    "ci95": [
+     0.8666667,
+     1.0
+    ],
+    "diff_vs_reference": -0.0666667,
+    "diff_ci95": [
+     -0.1333333,
+     0.0
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 0.8615385,
+    "ci95": [
+     0.6666667,
+     0.9846154
+    ],
+    "diff_vs_reference": -0.1384615,
+    "diff_ci95": [
+     -0.3333333,
+     -0.0153846
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.1602408,
+    "ci95": [
+     0.1411467,
+     0.1732557
+    ],
+    "diff_vs_reference": 0.1448657,
+    "diff_ci95": [
+     0.1258716,
+     0.1575405
+    ]
+   },
+   "usd_per_message": {
+    "value": 0.0009082,
+    "ci95": [
+     0.0008143,
+     0.000959
+    ],
+    "diff_vs_reference": 0.0008211,
+    "diff_ci95": [
+     0.0007277,
+     0.0008712
+    ]
+   }
+  },
+  "rolling_summary": {
+   "tickets": 4,
+   "failures": 3,
+   "promise_stages": {
+    "right": 43,
+    "mishandled_later": 4,
+    "missing": 24
+   },
+   "false_closes_per_ticket": {
+    "value": 0.25,
+    "ci95": [
+     0.0,
+     0.75
+    ],
+    "diff_vs_reference": 0.25,
+    "diff_ci95": [
+     0.0,
+     0.75
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.5,
+    "ci95": [
+     0.0,
+     1.5
+    ],
+    "diff_vs_reference": 0.5,
+    "diff_ci95": [
+     0.0,
+     1.5
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.75,
+    "ci95": [
+     0.25,
+     1.0
+    ],
+    "diff_vs_reference": 0.75,
+    "diff_ci95": [
+     0.25,
+     1.0
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 2.0,
+    "ci95": [
+     0.0,
+     4.0
+    ],
+    "diff_vs_reference": 2.0,
+    "diff_ci95": [
+     0.0,
+     4.0
+    ]
+   },
+   "dispute_recall": {
+    "value": 0.6666667,
+    "ci95": [
+     0.5384615,
+     0.8571429
+    ],
+    "diff_vs_reference": -0.3333333,
+    "diff_ci95": [
+     -0.4615385,
+     -0.1428571
+    ]
+   },
+   "failed_step_precision": {
+    "value": 0.962963,
+    "ci95": [
+     0.88,
+     1.0
+    ],
+    "diff_vs_reference": -0.037037,
+    "diff_ci95": [
+     -0.12,
+     0.0
+    ]
+   },
+   "fact_recall": {
+    "value": 0.8148148,
+    "ci95": [
+     0.6557377,
+     1.0
+    ],
+    "diff_vs_reference": -0.1851852,
+    "diff_ci95": [
+     -0.3442623,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.3333333,
+    "ci95": [
+     0.16,
+     0.4444444
+    ],
+    "diff_vs_reference": 0.3333333,
+    "diff_ci95": [
+     0.16,
+     0.4444444
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.5,
+    "ci95": [
+     0.0,
+     1.0
+    ],
+    "diff_vs_reference": -0.5,
+    "diff_ci95": [
+     -1.0,
+     0.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 0.5,
+    "ci95": [
+     0.0,
+     1.0
+    ],
+    "diff_vs_reference": -0.5,
+    "diff_ci95": [
+     -1.0,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0138889,
+    "diff_ci95": [
+     0.0,
+     0.0428571
+    ]
+   },
+   "commitment_recall": {
+    "value": 0.6619718,
+    "ci95": [
+     0.3552632,
+     0.9142857
+    ],
+    "diff_vs_reference": -0.3380282,
+    "diff_ci95": [
+     -0.6447368,
+     -0.0857143
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.7966102,
+    "ci95": [
+     0.5242718,
+     0.9552239
+    ],
+    "diff_vs_reference": -0.1963968,
+    "diff_ci95": [
+     -0.4757282,
+     -0.0447761
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 0.9148936,
+    "ci95": [
+     0.7916667,
+     1.0
+    ],
+    "diff_vs_reference": -0.0851064,
+    "diff_ci95": [
+     -0.2083333,
+     0.0
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9148936,
+    "ci95": [
+     0.8518519,
+     0.9375
+    ],
+    "diff_vs_reference": -0.0851064,
+    "diff_ci95": [
+     -0.1481481,
+     -0.0625
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.8636364,
+    "ci95": [
+     0.7272727,
+     0.952381
+    ],
+    "diff_vs_reference": -0.1363636,
+    "diff_ci95": [
+     -0.2727273,
+     -0.047619
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 0.76,
+    "ci95": [
+     0.3478261,
+     1.0
+    ],
+    "diff_vs_reference": -0.24,
+    "diff_ci95": [
+     -0.6521739,
+     0.0
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0956309,
+    "ci95": [
+     0.0506862,
+     0.1220474
+    ],
+    "diff_vs_reference": 0.0803424,
+    "diff_ci95": [
+     0.035403,
+     0.1063852
+    ]
+   },
+   "usd_per_message": {
+    "value": 0.0005319,
+    "ci95": [
+     0.0002972,
+     0.0006872
+    ],
+    "diff_vs_reference": 0.0004461,
+    "diff_ci95": [
+     0.0002074,
+     0.0006016
+    ]
+   }
+  },
+  "mem0": {
+   "tickets": 20,
+   "failures": 0,
+   "promise_stages": {
+    "right": 341,
+    "mishandled_later": 20,
+    "missing": 6
+   },
+   "false_closes_per_ticket": {
+    "value": 0.15,
+    "ci95": [
+     0.0,
+     0.35
+    ],
+    "diff_vs_reference": 0.15,
+    "diff_ci95": [
+     0.0,
+     0.35
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.65,
+    "ci95": [
+     0.1,
+     1.35
+    ],
+    "diff_vs_reference": 0.65,
+    "diff_ci95": [
+     0.1,
+     1.35
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.4,
+    "ci95": [
+     0.15,
+     0.65
+    ],
+    "diff_vs_reference": 0.4,
+    "diff_ci95": [
+     0.15,
+     0.65
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 0.1,
+    "ci95": [
+     0.0,
+     0.3
+    ],
+    "diff_vs_reference": 0.1,
+    "diff_ci95": [
+     0.0,
+     0.3
+    ]
+   },
+   "dispute_recall": {
+    "value": 0.6043956,
+    "ci95": [
+     0.4489796,
+     0.7380952
+    ],
+    "diff_vs_reference": -0.3956044,
+    "diff_ci95": [
+     -0.5510204,
+     -0.2619048
+    ]
+   },
+   "failed_step_precision": {
+    "value": 0.7706422,
+    "ci95": [
+     0.7115385,
+     0.8309859
+    ],
+    "diff_vs_reference": -0.2293578,
+    "diff_ci95": [
+     -0.2884615,
+     -0.1690141
+    ]
+   },
+   "fact_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.3097826,
+    "ci95": [
+     0.2363112,
+     0.3820513
+    ],
+    "diff_vs_reference": 0.3097826,
+    "diff_ci95": [
+     0.2363112,
+     0.3820513
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.9,
+    "ci95": [
+     0.75,
+     1.0
+    ],
+    "diff_vs_reference": -0.1,
+    "diff_ci95": [
+     -0.25,
+     0.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 0.85,
+    "ci95": [
+     0.65,
+     1.0
+    ],
+    "diff_vs_reference": -0.15,
+    "diff_ci95": [
+     -0.35,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9972376,
+    "ci95": [
+     0.9916435,
+     1.0
+    ],
+    "diff_vs_reference": 0.0080192,
+    "diff_ci95": [
+     0.0,
+     0.0164835
+    ]
+   },
+   "commitment_recall": {
+    "value": 0.9836512,
+    "ci95": [
+     0.9669421,
+     0.9972973
+    ],
+    "diff_vs_reference": -0.0163488,
+    "diff_ci95": [
+     -0.0330579,
+     -0.0027027
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.9903978,
+    "ci95": [
+     0.9817159,
+     0.9972973
+    ],
+    "diff_vs_reference": -0.0041821,
+    "diff_ci95": [
+     -0.0127809,
+     0.0026656
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 0.9085873,
+    "ci95": [
+     0.8776596,
+     0.9376771
+    ],
+    "diff_vs_reference": -0.0914127,
+    "diff_ci95": [
+     -0.1223404,
+     -0.0623229
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9445983,
+    "ci95": [
+     0.9186992,
+     0.9673025
+    ],
+    "diff_vs_reference": -0.0554017,
+    "diff_ci95": [
+     -0.0813008,
+     -0.0326975
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.9407407,
+    "ci95": [
+     0.9057971,
+     0.9754098
+    ],
+    "diff_vs_reference": -0.0592593,
+    "diff_ci95": [
+     -0.0942029,
+     -0.0245902
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 0.9844961,
+    "ci95": [
+     0.9609375,
+     1.0
+    ],
+    "diff_vs_reference": -0.0155039,
+    "diff_ci95": [
+     -0.0390625,
+     0.0
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0529933,
+    "ci95": [
+     0.0502716,
+     0.0555656
+    ],
+    "diff_vs_reference": 0.0376255,
+    "diff_ci95": [
+     0.0353589,
+     0.0397262
+    ]
+   },
+   "usd_per_message": {
+    "value": 0.0003039,
+    "ci95": [
+     0.000297,
+     0.0003101
+    ],
+    "diff_vs_reference": 0.0002156,
+    "diff_ci95": [
+     0.0002087,
+     0.0002218
+    ]
+   }
+  },
+  "full_context": {
+   "tickets": 20,
+   "failures": 0,
+   "promise_stages": {
+    "right": 348,
+    "mishandled_later": 19
+   },
+   "false_closes_per_ticket": {
+    "value": 0.1,
+    "ci95": [
+     0.0,
+     0.25
+    ],
+    "diff_vs_reference": 0.1,
+    "diff_ci95": [
+     0.0,
+     0.25
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.3,
+    "ci95": [
+     0.05,
+     0.65
+    ],
+    "diff_vs_reference": 0.3,
+    "diff_ci95": [
+     0.05,
+     0.65
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.45,
+    "ci95": [
+     0.15,
+     0.8
+    ],
+    "diff_vs_reference": 0.45,
+    "diff_ci95": [
+     0.15,
+     0.8
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "dispute_recall": {
+    "value": 0.5604396,
+    "ci95": [
+     0.4698795,
+     0.6506024
+    ],
+    "diff_vs_reference": -0.4395604,
+    "diff_ci95": [
+     -0.5301205,
+     -0.3493976
+    ]
+   },
+   "failed_step_precision": {
+    "value": 0.7924528,
+    "ci95": [
+     0.7336449,
+     0.855615
+    ],
+    "diff_vs_reference": -0.2075472,
+    "diff_ci95": [
+     -0.2663551,
+     -0.144385
+    ]
+   },
+   "fact_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.2905028,
+    "ci95": [
+     0.2391931,
+     0.3342246
+    ],
+    "diff_vs_reference": 0.2905028,
+    "diff_ci95": [
+     0.2391931,
+     0.3342246
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.85,
+    "ci95": [
+     0.7,
+     1.0
+    ],
+    "diff_vs_reference": -0.15,
+    "diff_ci95": [
+     -0.3,
+     0.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 0.95,
+    "ci95": [
+     0.85,
+     1.0
+    ],
+    "diff_vs_reference": -0.05,
+    "diff_ci95": [
+     -0.15,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9945799,
+    "ci95": [
+     0.9867021,
+     1.0
+    ],
+    "diff_vs_reference": 0.0053616,
+    "diff_ci95": [
+     -0.0078529,
+     0.01842
+    ]
+   },
+   "commitment_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.9972826,
+    "ci95": [
+     0.9933066,
+     1.0
+    ],
+    "diff_vs_reference": 0.0027027,
+    "diff_ci95": [
+     -0.0039629,
+     0.0092961
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 0.9346049,
+    "ci95": [
+     0.9068493,
+     0.9576271
+    ],
+    "diff_vs_reference": -0.0653951,
+    "diff_ci95": [
+     -0.0931507,
+     -0.0423729
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9482289,
+    "ci95": [
+     0.9266304,
+     0.9693593
+    ],
+    "diff_vs_reference": -0.0517711,
+    "diff_ci95": [
+     -0.0733696,
+     -0.0306407
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.9343066,
+    "ci95": [
+     0.8888889,
+     0.9767442
+    ],
+    "diff_vs_reference": -0.0656934,
+    "diff_ci95": [
+     -0.1111111,
+     -0.0232558
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 0.9922481,
+    "ci95": [
+     0.976378,
+     1.0
+    ],
+    "diff_vs_reference": -0.0077519,
+    "diff_ci95": [
+     -0.023622,
+     0.0
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0043393,
+    "ci95": [
+     0.004101,
+     0.0045723
+    ],
+    "diff_vs_reference": -0.0110286,
+    "diff_ci95": [
+     -0.0115435,
+     -0.0105218
+    ]
+   },
+   "usd_per_message": {
+    "value": 2.49e-05,
+    "ci95": [
+     2.39e-05,
+     2.6e-05
+    ],
+    "diff_vs_reference": -6.34e-05,
+    "diff_ci95": [
+     -6.56e-05,
+     -6.12e-05
+    ]
+   }
+  },
+  "round4": {
+   "tickets": 20,
+   "failures": 0,
+   "promise_stages": {
+    "mishandled_later": 27,
+    "right": 338,
+    "missed_by_model": 2
+   },
+   "false_closes_per_ticket": {
+    "value": 0.2,
+    "ci95": [
+     0.05,
+     0.4
+    ],
+    "diff_vs_reference": 0.2,
+    "diff_ci95": [
+     0.05,
+     0.4
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.9,
+    "ci95": [
+     0.2,
+     1.8
+    ],
+    "diff_vs_reference": 0.9,
+    "diff_ci95": [
+     0.2,
+     1.8
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 1.1,
+    "ci95": [
+     1.0,
+     1.25
+    ],
+    "diff_vs_reference": 1.1,
+    "diff_ci95": [
+     1.0,
+     1.25
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 0.3,
+    "ci95": [
+     0.0,
+     0.8
+    ],
+    "diff_vs_reference": 0.3,
+    "diff_ci95": [
+     0.0,
+     0.8
+    ]
+   },
+   "dispute_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "failed_step_precision": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "fact_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": -1.0,
+    "diff_ci95": [
+     -1.0,
+     -1.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 0.8,
+    "ci95": [
+     0.6,
+     0.95
+    ],
+    "diff_vs_reference": -0.2,
+    "diff_ci95": [
+     -0.4,
+     -0.05
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9838275,
+    "ci95": [
+     0.9728997,
+     0.9945055
+    ],
+    "diff_vs_reference": -0.0053908,
+    "diff_ci95": [
+     -0.0134472,
+     0.0
+    ]
+   },
+   "commitment_recall": {
+    "value": 0.9945504,
+    "ci95": [
+     0.986413,
+     1.0
+    ],
+    "diff_vs_reference": -0.0054496,
+    "diff_ci95": [
+     -0.013587,
+     0.0
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.9891599,
+    "ci95": [
+     0.9815789,
+     0.994709
+    ],
+    "diff_vs_reference": -0.0054201,
+    "diff_ci95": [
+     -0.0122338,
+     0.0
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9260274,
+    "ci95": [
+     0.907563,
+     0.9403794
+    ],
+    "diff_vs_reference": -0.0739726,
+    "diff_ci95": [
+     -0.092437,
+     -0.0596206
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.8503401,
+    "ci95": [
+     0.8300654,
+     0.8666667
+    ],
+    "diff_vs_reference": -0.1496599,
+    "diff_ci95": [
+     -0.1699346,
+     -0.1333333
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 0.9689922,
+    "ci95": [
+     0.9375,
+     0.9924812
+    ],
+    "diff_vs_reference": -0.0310078,
+    "diff_ci95": [
+     -0.0625,
+     -0.0075188
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0133653,
+    "ci95": [
+     0.01284,
+     0.0138993
+    ],
+    "diff_vs_reference": -0.0020025,
+    "diff_ci95": [
+     -0.0022134,
+     -0.0018086
+    ]
+   },
+   "usd_per_message": {
+    "value": 7.69e-05,
+    "ci95": [
+     7.49e-05,
+     7.89e-05
+    ],
+    "diff_vs_reference": -1.15e-05,
+    "diff_ci95": [
+     -1.26e-05,
+     -1.04e-05
+    ]
+   }
+  },
+  "round5": {
+   "tickets": 20,
+   "failures": 0,
+   "promise_stages": {
+    "right": 337,
+    "mishandled_later": 15,
+    "dropped_by_reducer": 1,
+    "missed_by_model": 14
+   },
+   "false_closes_per_ticket": {
+    "value": 0.05,
+    "ci95": [
+     0.0,
+     0.15
+    ],
+    "diff_vs_reference": 0.05,
+    "diff_ci95": [
+     0.0,
+     0.15
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.15,
+    "ci95": [
+     0.0,
+     0.45
+    ],
+    "diff_vs_reference": 0.15,
+    "diff_ci95": [
+     0.0,
+     0.45
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.45,
+    "ci95": [
+     0.25,
+     0.65
+    ],
+    "diff_vs_reference": 0.45,
+    "diff_ci95": [
+     0.25,
+     0.65
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 0.4,
+    "ci95": [
+     0.0,
+     0.9
+    ],
+    "diff_vs_reference": 0.4,
+    "diff_ci95": [
+     0.0,
+     0.9
+    ]
+   },
+   "dispute_recall": {
+    "value": 0.8791209,
+    "ci95": [
+     0.7586207,
+     0.9724771
+    ],
+    "diff_vs_reference": -0.1208791,
+    "diff_ci95": [
+     -0.2413793,
+     -0.0275229
+    ]
+   },
+   "failed_step_precision": {
+    "value": 0.7763975,
+    "ci95": [
+     0.6993865,
+     0.8604651
+    ],
+    "diff_vs_reference": -0.2236025,
+    "diff_ci95": [
+     -0.3006135,
+     -0.1395349
+    ]
+   },
+   "fact_recall": {
+    "value": 0.9724409,
+    "ci95": [
+     0.9413919,
+     1.0
+    ],
+    "diff_vs_reference": -0.0275591,
+    "diff_ci95": [
+     -0.0586081,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.0643939,
+    "ci95": [
+     0.018315,
+     0.1168385
+    ],
+    "diff_vs_reference": 0.0643939,
+    "diff_ci95": [
+     0.018315,
+     0.1168385
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.85,
+    "ci95": [
+     0.7,
+     1.0
+    ],
+    "diff_vs_reference": -0.15,
+    "diff_ci95": [
+     -0.3,
+     0.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 0.95,
+    "ci95": [
+     0.85,
+     1.0
+    ],
+    "diff_vs_reference": -0.05,
+    "diff_ci95": [
+     -0.15,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 0.95,
+    "ci95": [
+     0.85,
+     1.0
+    ],
+    "diff_vs_reference": -0.05,
+    "diff_ci95": [
+     -0.15,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9915493,
+    "ci95": [
+     0.9823009,
+     1.0
+    ],
+    "diff_vs_reference": 0.002331,
+    "diff_ci95": [
+     -0.0059269,
+     0.0107586
+    ]
+   },
+   "commitment_recall": {
+    "value": 0.9591281,
+    "ci95": [
+     0.9347826,
+     0.9810811
+    ],
+    "diff_vs_reference": -0.0408719,
+    "diff_ci95": [
+     -0.0652174,
+     -0.0189189
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.9750693,
+    "ci95": [
+     0.9619182,
+     0.9864865
+    ],
+    "diff_vs_reference": -0.0195107,
+    "diff_ci95": [
+     -0.031418,
+     -0.0094027
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9573864,
+    "ci95": [
+     0.9428571,
+     0.9715909
+    ],
+    "diff_vs_reference": -0.0426136,
+    "diff_ci95": [
+     -0.0571429,
+     -0.0284091
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.9323308,
+    "ci95": [
+     0.8992806,
+     0.9626866
+    ],
+    "diff_vs_reference": -0.0676692,
+    "diff_ci95": [
+     -0.1007194,
+     -0.0373134
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 0.9612403,
+    "ci95": [
+     0.9212598,
+     0.9923664
+    ],
+    "diff_vs_reference": -0.0387597,
+    "diff_ci95": [
+     -0.0787402,
+     -0.0076336
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0110208,
+    "ci95": [
+     0.0104073,
+     0.0117035
+    ],
+    "diff_vs_reference": -0.004347,
+    "diff_ci95": [
+     -0.0049906,
+     -0.0035927
+    ]
+   },
+   "usd_per_message": {
+    "value": 6.35e-05,
+    "ci95": [
+     6.02e-05,
+     6.76e-05
+    ],
+    "diff_vs_reference": -2.49e-05,
+    "diff_ci95": [
+     -2.85e-05,
+     -2.06e-05
+    ]
+   }
+  },
+  "round6": {
+   "tickets": 20,
+   "failures": 2,
+   "promise_stages": {
+    "right": 351,
+    "mishandled_later": 4,
+    "missed_by_model": 12
+   },
+   "false_closes_per_ticket": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.2,
+    "ci95": [
+     0.05,
+     0.4
+    ],
+    "diff_vs_reference": 0.2,
+    "diff_ci95": [
+     0.05,
+     0.4
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 2.55,
+    "ci95": [
+     1.6,
+     3.45
+    ],
+    "diff_vs_reference": 2.55,
+    "diff_ci95": [
+     1.6,
+     3.45
+    ]
+   },
+   "dispute_recall": {
+    "value": 0.978022,
+    "ci95": [
+     0.9210526,
+     1.0
+    ],
+    "diff_vs_reference": -0.021978,
+    "diff_ci95": [
+     -0.0789474,
+     0.0
+    ]
+   },
+   "failed_step_precision": {
+    "value": 0.7772512,
+    "ci95": [
+     0.7128713,
+     0.8434343
+    ],
+    "diff_vs_reference": -0.2227488,
+    "diff_ci95": [
+     -0.2871287,
+     -0.1565657
+    ]
+   },
+   "fact_recall": {
+    "value": 0.984252,
+    "ci95": [
+     0.9595142,
+     1.0
+    ],
+    "diff_vs_reference": -0.015748,
+    "diff_ci95": [
+     -0.0404858,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.0155039,
+    "ci95": [
+     0.0,
+     0.0398406
+    ],
+    "diff_vs_reference": 0.0155039,
+    "diff_ci95": [
+     0.0,
+     0.0398406
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.9,
+    "ci95": [
+     0.75,
+     1.0
+    ],
+    "diff_vs_reference": -0.1,
+    "diff_ci95": [
+     -0.25,
+     0.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9726027,
+    "ci95": [
+     0.9527559,
+     0.9891008
+    ],
+    "diff_vs_reference": -0.0166156,
+    "diff_ci95": [
+     -0.0299355,
+     -0.0054952
+    ]
+   },
+   "commitment_recall": {
+    "value": 0.9673025,
+    "ci95": [
+     0.9216216,
+     1.0
+    ],
+    "diff_vs_reference": -0.0326975,
+    "diff_ci95": [
+     -0.0783784,
+     0.0
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.9699454,
+    "ci95": [
+     0.9457995,
+     0.9876204
+    ],
+    "diff_vs_reference": -0.0246346,
+    "diff_ci95": [
+     -0.0482156,
+     -0.007968
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9887324,
+    "ci95": [
+     0.9765396,
+     0.9973118
+    ],
+    "diff_vs_reference": -0.0112676,
+    "diff_ci95": [
+     -0.0234604,
+     -0.0026882
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.9692308,
+    "ci95": [
+     0.9393939,
+     0.9923664
+    ],
+    "diff_vs_reference": -0.0307692,
+    "diff_ci95": [
+     -0.0606061,
+     -0.0076336
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 0.9767442,
+    "ci95": [
+     0.9407407,
+     1.0
+    ],
+    "diff_vs_reference": -0.0232558,
+    "diff_ci95": [
+     -0.0592593,
+     0.0
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0140097,
+    "ci95": [
+     0.0131481,
+     0.0148235
+    ],
+    "diff_vs_reference": -0.0013582,
+    "diff_ci95": [
+     -0.0020851,
+     -0.0006788
+    ]
+   },
+   "usd_per_message": {
+    "value": 8.07e-05,
+    "ci95": [
+     7.61e-05,
+     8.49e-05
+    ],
+    "diff_vs_reference": -7.7e-06,
+    "diff_ci95": [
+     -1.19e-05,
+     -3.9e-06
+    ]
+   }
+  },
+  "round7": {
+   "tickets": 20,
+   "failures": 0,
+   "promise_stages": {
+    "right": 364,
+    "mishandled_later": 1,
+    "missed_by_model": 2
+   },
+   "false_closes_per_ticket": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "false_closes_any_checkpoint": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "false_alerts_per_ticket": {
+    "value": 0.05,
+    "ci95": [
+     0.0,
+     0.15
+    ],
+    "diff_vs_reference": 0.05,
+    "diff_ci95": [
+     0.0,
+     0.15
+    ]
+   },
+   "false_disputes_per_ticket": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "dispute_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "failed_step_precision": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "fact_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "freshness_error": {
+    "value": 0.0,
+    "ci95": [
+     0.0,
+     0.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "rescue_close_correct": {
+    "value": 0.95,
+    "ci95": [
+     0.85,
+     1.0
+    ],
+    "diff_vs_reference": -0.05,
+    "diff_ci95": [
+     -0.15,
+     0.0
+    ]
+   },
+   "ambiguous_close_refrained": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "wrong_thing_not_closed": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "commitment_precision": {
+    "value": 0.9864865,
+    "ci95": [
+     0.9757412,
+     0.994695
+    ],
+    "diff_vs_reference": -0.0027318,
+    "diff_ci95": [
+     -0.0081892,
+     0.0
+    ]
+   },
+   "commitment_recall": {
+    "value": 0.9945504,
+    "ci95": [
+     0.986413,
+     1.0
+    ],
+    "diff_vs_reference": -0.0054496,
+    "diff_ci95": [
+     -0.013587,
+     0.0
+    ]
+   },
+   "commitment_f1": {
+    "value": 0.990502,
+    "ci95": [
+     0.9848693,
+     0.9959072
+    ],
+    "diff_vs_reference": -0.0040779,
+    "diff_ci95": [
+     -0.0082759,
+     0.0
+    ]
+   },
+   "deadline_accuracy": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "status_accuracy": {
+    "value": 0.9972603,
+    "ci95": [
+     0.9915254,
+     1.0
+    ],
+    "diff_vs_reference": -0.0027397,
+    "diff_ci95": [
+     -0.0084746,
+     0.0
+    ]
+   },
+   "breach_alert_precision": {
+    "value": 0.9923077,
+    "ci95": [
+     0.976378,
+     1.0
+    ],
+    "diff_vs_reference": -0.0076923,
+    "diff_ci95": [
+     -0.023622,
+     0.0
+    ]
+   },
+   "breach_alert_recall": {
+    "value": 1.0,
+    "ci95": [
+     1.0,
+     1.0
+    ],
+    "diff_vs_reference": 0.0,
+    "diff_ci95": [
+     0.0,
+     0.0
+    ]
+   },
+   "usd_per_ticket": {
+    "value": 0.0140209,
+    "ci95": [
+     0.0135193,
+     0.0145239
+    ],
+    "diff_vs_reference": -0.001347,
+    "diff_ci95": [
+     -0.001545,
+     -0.0011318
+    ]
+   },
+   "usd_per_message": {
+    "value": 8.07e-05,
+    "ci95": [
+     7.87e-05,
+     8.26e-05
+    ],
+    "diff_vs_reference": -7.7e-06,
+    "diff_ci95": [
+     -8.8e-06,
+     -6.5e-06
+    ]
+   }
+  }
+ }
+}

@@ -1,0 +1,605 @@
+{
+ "what": "Round 10, Part A on dev7 (template words): the listed messages were read live with the Round 10 prompt against the card the planted proposals build (--replay oracle); every other message keeps its planted proposals. Not a full run.",
+ "messages_read": 15,
+ "by_reason": {
+  "conditional offer": 4,
+  "condition failed": 1,
+  "invoice number given": 4,
+  "correction own": 2,
+  "correction other": 2,
+  "condition held": 2
+ },
+ "charged_usd": 0.0024,
+ "event_memory": {
+  "metrics": {
+   "commitment_precision": 1.0,
+   "commitment_recall": 1.0,
+   "commitment_f1": 1.0,
+   "deadline_accuracy": 1.0,
+   "status_accuracy": 1.0,
+   "breach_alert_precision": 1.0,
+   "breach_alert_recall": 1.0,
+   "false_alerts_per_ticket": 0.0,
+   "freshness_error": 0.0,
+   "freshness_error_at_handoffs": 0.0,
+   "fact_recall": 1.0,
+   "fact_change_accuracy": 1.0,
+   "dispute_precision": 1.0,
+   "dispute_recall": 1.0,
+   "false_disputes_per_ticket": 0.0,
+   "failed_step_precision": 1.0,
+   "failed_step_recall": 1.0,
+   "unanswered_checkpoints": 0.0,
+   "false_closes_per_ticket": 0.0,
+   "wrong_target_closes_per_ticket": 0.0,
+   "missed_close_rate": 0.0,
+   "close_precision": 1.0,
+   "suggestions_per_ticket": 0.0,
+   "false_closes_any_checkpoint": 0.0,
+   "offer_recall": 1.0,
+   "offer_precision": 1.0,
+   "offer_state_accuracy": 1.0,
+   "condition_alert_recall": 1.0,
+   "false_condition_alerts_per_ticket": 0.0,
+   "rescue_close_correct": 1.0,
+   "ambiguous_close_refrained": 1.0,
+   "wrong_thing_not_closed": 1.0
+  },
+  "counts_all_checkpoints": {
+   "commitments": [
+    290,
+    0,
+    0
+   ],
+   "deadlines_right": 290,
+   "deadlines_judged": 290,
+   "statuses_right": 290,
+   "statuses_judged": 290,
+   "alerts": [
+    77,
+    0,
+    0
+   ],
+   "closes_right": 112,
+   "closes_false": 0,
+   "closes_wrong_target": 0,
+   "closes_missed": 0,
+   "suggestions_right": 0,
+   "suggestions_wrong": 0,
+   "facts_judged": 51,
+   "facts_stale": 0,
+   "facts_contested": 0,
+   "facts_unjudged": 0,
+   "changes_right": 26,
+   "changes_judged": 26,
+   "disputes": [
+    32,
+    0,
+    0
+   ],
+   "failed_steps": [
+    30,
+    0,
+    0
+   ],
+   "checkpoints": 18,
+   "errors": 0,
+   "facts_current": 51,
+   "facts_recalled": 51,
+   "rescue_close_correct": [
+    14,
+    0,
+    0
+   ],
+   "ambiguous_close_refrained": [
+    10,
+    0,
+    0
+   ],
+   "wrong_thing_not_closed": [
+    18,
+    0,
+    0
+   ],
+   "offers": [
+    12,
+    0,
+    0
+   ],
+   "offer_states_right": 12,
+   "offer_states_judged": 12,
+   "condition_alerts": [
+    1,
+    0,
+    0
+   ]
+  },
+  "promise_stages": {
+   "right": 90
+  },
+  "beats": {
+   "delegated_dated": {
+    "right": 5
+   },
+   "conditional": {
+    "no_promise": 4,
+    "offer_recorded": 4,
+    "lapsed_right": 1,
+    "activated_right": 2,
+    "pending_right": 1
+   },
+   "prediction": {
+    "no_promise": 4
+   },
+   "delegated_undated": {
+    "right": 3
+   },
+   "same_action": {
+    "right": 8
+   },
+   "correction_own": {
+    "replaced": 2
+   },
+   "status_report": {
+    "no_promise": 4
+   },
+   "correction_other": {
+    "disputed": 2
+   }
+  }
+ },
+ "messages": [
+  {
+   "ticket": "SIM-7221-M0000",
+   "seq": 33,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если промокод не сработает до 22 января, начислим вам бонусы взамен.",
+   "gold": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 22 января"
+   ],
+   "planted": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 22 января"
+   ],
+   "round10": [
+    "offer company: начислить бонусы взамен промокода | Если промокод не сработает до 22 января"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "начислить бонусы взамен промокода",
+     "quote": "Если промокод не сработает до 22 января, начислим вам бонусы взамен.",
+     "condition": "Если промокод не сработает до 22 января",
+     "due": {
+      "type": "DateRef",
+      "day": 22,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 22 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0000",
+   "seq": 67,
+   "why": [
+    "condition failed"
+   ],
+   "text": "Промокод сработал, спасибо.",
+   "gold": [
+    "condition failed: Промокод сработал"
+   ],
+   "planted": [
+    "condition failed: Промокод сработал"
+   ],
+   "round10": [
+    "condition failed: Промокод сработал"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "SettleConditional",
+     "conditional_id": "e33#0",
+     "holds": false,
+     "quote": "Промокод сработал",
+     "target_quote": "Если промокод не сработает до 22 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0000",
+   "seq": 103,
+   "why": [
+    "invoice number given"
+   ],
+   "text": "Оплачивала по счёту 954559.",
+   "gold": [
+    "fact invoice.number: 954559"
+   ],
+   "planted": [
+    "fact invoice.number: 954559"
+   ],
+   "round10": [
+    "fact invoice.number: 954559"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "954559",
+     "quote": "по счёту 954559",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0000",
+   "seq": 113,
+   "why": [
+    "correction own"
+   ],
+   "text": "Ой, ошиблась: номер счёта не 954559, а 954595.",
+   "gold": [
+    "fact invoice.number: 954595"
+   ],
+   "planted": [
+    "fact invoice.number: 954595"
+   ],
+   "round10": [
+    "fact invoice.number: 954595"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "954595",
+     "quote": "номер счёта не 954559, а 954595",
+     "change": true
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0001",
+   "seq": 17,
+   "why": [
+    "invoice number given"
+   ],
+   "text": "Выставили вам счёт № 672942.",
+   "gold": [
+    "fact invoice.number: 672942"
+   ],
+   "planted": [
+    "fact invoice.number: 672942"
+   ],
+   "round10": [
+    "fact invoice.number: 672942"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "672942",
+     "quote": "счёт № 672942",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0001",
+   "seq": 22,
+   "why": [
+    "correction other"
+   ],
+   "text": "У вас ошибка, номер счёта не 672942, а 762942.",
+   "gold": [
+    "fact invoice.number: 762942"
+   ],
+   "planted": [
+    "fact invoice.number: 762942"
+   ],
+   "round10": [
+    "fact invoice.number: 762942"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "762942",
+     "quote": "номер счёта не 672942, а 762942",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0001",
+   "seq": 81,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если посылка не придёт до 21 января, оформим повторную отправку бесплатно.",
+   "gold": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 21 января"
+   ],
+   "planted": [
+    "offer company: оформить повторную отправку | Если посылка не придёт до 21 января"
+   ],
+   "round10": [
+    "offer company: оформить повторную отправку бесплатно | Если посылка не придёт до 21 января"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "оформить повторную отправку бесплатно",
+     "quote": "Если посылка не придёт до 21 января, оформим повторную отправку бесплатно.",
+     "condition": "Если посылка не придёт до 21 января",
+     "due": {
+      "type": "DateRef",
+      "day": 21,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 21 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0001",
+   "seq": 164,
+   "why": [
+    "condition held"
+   ],
+   "text": "Посылка так и не пришла.",
+   "gold": [
+    "condition holds: Посылка так и не пришла"
+   ],
+   "planted": [
+    "condition holds: Посылка так и не пришла"
+   ],
+   "round10": [
+    "condition holds: Посылка так и не пришла."
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "SettleConditional",
+     "conditional_id": "e81#0",
+     "holds": true,
+     "quote": "Посылка так и не пришла.",
+     "target_quote": "Если посылка не придёт до 21 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0002",
+   "seq": 108,
+   "why": [
+    "invoice number given"
+   ],
+   "text": "Оплачивала по счёту 347837.",
+   "gold": [
+    "fact invoice.number: 347837"
+   ],
+   "planted": [
+    "fact invoice.number: 347837"
+   ],
+   "round10": [
+    "fact invoice.number: 347837"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "347837",
+     "quote": "по счёту 347837",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0002",
+   "seq": 109,
+   "why": [
+    "correction other"
+   ],
+   "text": "Проверили по системе: номер счёта не 347837, а 348737.",
+   "gold": [
+    "fact invoice.number: 348737"
+   ],
+   "planted": [
+    "fact invoice.number: 348737"
+   ],
+   "round10": [
+    "fact invoice.number: 348737"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "348737",
+     "quote": "номер счёта не 347837, а 348737",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0002",
+   "seq": 116,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если ремонт не закончат до 25 января, выдадим вам подменный аппарат.",
+   "gold": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 25 января"
+   ],
+   "planted": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 25 января"
+   ],
+   "round10": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 25 января"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "выдать подменный аппарат",
+     "quote": "Если ремонт не закончат до 25 января, выдадим вам подменный аппарат.",
+     "condition": "Если ремонт не закончат до 25 января",
+     "due": {
+      "type": "DateRef",
+      "day": 25,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 25 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0003",
+   "seq": 81,
+   "why": [
+    "conditional offer"
+   ],
+   "text": "Если ремонт не закончат до 23 января, выдадим вам подменный аппарат.",
+   "gold": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 23 января"
+   ],
+   "planted": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 23 января"
+   ],
+   "round10": [
+    "offer company: выдать подменный аппарат | Если ремонт не закончат до 23 января"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "MakeConditional",
+     "owner": "company",
+     "action": "выдать подменный аппарат",
+     "quote": "Если ремонт не закончат до 23 января, выдадим вам подменный аппарат.",
+     "condition": "Если ремонт не закончат до 23 января",
+     "due": {
+      "type": "DateRef",
+      "day": 23,
+      "month": 1,
+      "year": null,
+      "at": null
+     },
+     "due_quote": "до 23 января"
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0003",
+   "seq": 111,
+   "why": [
+    "invoice number given"
+   ],
+   "text": "Выставили вам счёт № 105540.",
+   "gold": [
+    "fact invoice.number: 105540"
+   ],
+   "planted": [
+    "fact invoice.number: 105540"
+   ],
+   "round10": [
+    "fact invoice.number: 105540"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "105540",
+     "quote": "счёт № 105540",
+     "change": false
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0003",
+   "seq": 112,
+   "why": [
+    "correction own"
+   ],
+   "text": "Прошу прощения, опечатка: номер счёта не 105540, а 015540.",
+   "gold": [
+    "fact invoice.number: 015540"
+   ],
+   "planted": [
+    "fact invoice.number: 015540"
+   ],
+   "round10": [
+    "fact invoice.number: 015540"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "AssertFact",
+     "slot": "invoice.number",
+     "value": "015540",
+     "quote": "номер счёта не 105540, а 015540",
+     "change": true
+    }
+   ]
+  },
+  {
+   "ticket": "SIM-7221-M0003",
+   "seq": 144,
+   "why": [
+    "condition held"
+   ],
+   "text": "Ремонт так и не закончили, аппарат всё ещё в сервисе.",
+   "gold": [
+    "condition holds: Ремонт так и не закончили"
+   ],
+   "planted": [
+    "condition holds: Ремонт так и не закончили"
+   ],
+   "round10": [
+    "condition holds: Ремонт так и не закончили"
+   ],
+   "lost": [],
+   "regressions": [],
+   "round10_proposals": [
+    {
+     "type": "SettleConditional",
+     "conditional_id": "e81#0",
+     "holds": true,
+     "quote": "Ремонт так и не закончили",
+     "target_quote": "Если ремонт не закончат до 23 января"
+    }
+   ]
+  }
+ ]
+}

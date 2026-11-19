@@ -65,7 +65,10 @@ on the card); *mishandled later* (on the card, but closed or open, alerted or
 not, against the label). The first two need the method's proposals, which
 only the event memory has; for another method a promise not on its answer is
 *missing*. Round 8's beats are reported the same way, and a beat that makes no
-promise is judged by whether a promise was put on its message.
+promise is judged by whether a promise was put on its message. A conditional
+offer also counts whether its state at the end (pending, activated, lapsed)
+is right, and a correction (decision 0005) how the old value ended: replaced,
+disputed, both still current, or the new one missing.
 
 Counts add up across checkpoints and tickets, so a result is a micro-average.
 """
@@ -80,7 +83,14 @@ from enum import StrEnum
 
 from ..events import Side
 from ..proposals import MakeCommitment, Proposal
-from .generate import PROMISE_BEATS, Beat, GoldCommitment, GoldFact, SimTicket
+from .generate import (
+    CORRECTION_BEATS,
+    PROMISE_BEATS,
+    Beat,
+    GoldCommitment,
+    GoldFact,
+    SimTicket,
+)
 from .match import mentions, mentions_any
 from .result import (
     Checkpoint,
@@ -547,13 +557,34 @@ def beat_outcomes(
     """Per Round 8 beat: its promise's stage, or whether a promise was wrongly made."""
     out: dict[str, Counter[str]] = {}
     promised = {f.seq for f in _unconditional(end)}
-    offered = {o.seq for o in end.offers}
+    offered = {o.seq: o for o in end.offers}
     for beat in ticket.gold.beats:
         counts = out.setdefault(beat.kind.value, Counter())
         if beat.kind in PROMISE_BEATS:
             counts[stages[beat.seq].value] += 1
             continue
+        if beat.kind in CORRECTION_BEATS:
+            counts[_correction(ticket, end, beat.seq)] += 1
+            continue
         counts["promise_made" if beat.seq in promised else "no_promise"] += 1
         if beat.kind is Beat.CONDITIONAL:
             counts["offer_recorded" if beat.seq in offered else "offer_missing"] += 1
+            state = next(g for g in ticket.gold.conditionals if g.seq == beat.seq).state_at(
+                end.checkpoint.seq)
+            right = beat.seq in offered and offered[beat.seq].state == state
+            counts[f"{state}_{'right' if right else 'wrong'}"] += 1
     return out
+
+
+def _correction(ticket: SimTicket, end: Snapshot, seq: int) -> str:
+    """How a corrected value ended: replaced by the new one, disputed, or neither."""
+    new = next(f for f in ticket.gold.facts if f.seq == seq)
+    old = max((f for f in ticket.gold.facts if f.slot == new.slot and f.seq < seq),
+              key=lambda f: f.seq)  # fmt: skip
+    if any(mentions(d.text, old.key) and mentions(d.text, new.key) for d in end.disputes):
+        return "disputed"
+    shown = {(g.slot, g.value) for item in end.facts
+             for g in presented(ticket, item.text, end.checkpoint.seq).values()}  # fmt: skip
+    if (new.slot, new.value) not in shown:
+        return "new_missing"
+    return "both_current" if (old.slot, old.value) in shown else "replaced"

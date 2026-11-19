@@ -1,10 +1,316 @@
 # Results: event memory against the baselines
 
-Nine rounds, run on 2026-11-17 and 18. Rounds 5 to 7 reuse the frozen
-Round 4 comparison. Round 4 contains the original run on a fresh test split.
-Round 8 runs our method on a new, unseen split (`test4`). Round 9 is not a
-run: it replays Round 8's record and reads 297 chosen messages again. The
-earlier rounds follow in reverse order.
+Ten rounds, run from 2026-11-17 to 19. Round 10 runs the final method on a
+new, unseen split (`test5`) and on `test3` beside the frozen baselines.
+Rounds 5 to 7 reuse the frozen Round 4 comparison. Round 4 contains the
+original run on a fresh test split. Round 8 runs our method on a new, unseen
+split (`test4`). Round 9 is not a run: it replays Round 8's record and reads
+297 chosen messages again. The earlier rounds follow in reverse order.
+
+## Round 10: the final method
+
+Two full runs of the final method, as `main` ships it plus this round's
+prompt fix: once on `test5`, a new split nobody had read, and once on
+`test3`, beside the frozen baselines. No baseline was run.
+
+- **On `test5` the final method lost no gold promise to the model or the
+  reducer.** 461 of 463 were right at the end. It made no false alert or
+  false dispute, recorded all 20 conditional offers and each one's end state
+  (5 activated, 8 lapsed, 7 pending), raised the 12 condition-due alerts and
+  no other, and handled all 20 corrections as decision 0005 says. Its one
+  false close comes from a claim that the benchmark's writer added to a
+  message (below).
+- **On `test3` it is right on every gold promise (367 of 367).** It makes no
+  false close at any checkpoint, no false alert and no false dispute, and it
+  gets all 60 hard close cases. Every baseline makes more false closes and
+  false alerts and misses more disputes. Round 7 was already level on most
+  measures. Full context is level on commitment F1 and costs a quarter as
+  much.
+- **Cost:** $0.0170 a ticket on `test5` and $0.0154 on `test3`, about $0.09
+  per 1,000 messages. The session spent **$0.7281 of the $0.75 cap**.
+
+### What this version is
+
+- **Reader:** `deepseek/deepseek-v4.1-flash` with reasoning off, temperature
+  0, locked to DeepInfra fp8 (all 7,001 extraction calls of the two runs were
+  served there). It reads one message at a time against the card, plus the
+  other side's preceding public turn. An answer is capped at 800 tokens; an
+  unreadable answer is read once more with reasoning "low".
+- **Verifier:** the same model with reasoning "low", asked about every
+  proposal that would close, cancel or replace an open promise.
+- **The deterministic layer, closing rule version 5:**
+  - [0001](decisions/0001-verifier-veto.md): a verifier "no" vetoes a close,
+    and a close resting on the preceding turn may not name another thing.
+  - [0002](decisions/0002-unreadable-message.md): a message still unreadable
+    on the third attempt is recorded as unread and alerted; it does not stall
+    the ticket.
+  - [0003](decisions/0003-promise-identity.md): a promise is a duplicate only
+    when it restates an open one.
+  - [0004](decisions/0004-conditional-commitments.md): a conditional offer
+    is its own item: it can be pending, due, activated or lapsed.
+  - [0005](decisions/0005-identifier-facts.md): identifier slots hold a set,
+    and only "не X, а Y" corrects a value.
+  - The model never computes a date, and slot names are normalised against a
+    controlled vocabulary.
+- **This round's fix** (prompt, one rule): "value" holds only what its slot
+  is about, and a value is never repeated inside another fact.
+
+### Part A: the open bug, and corrections in the benchmark
+
+**The bug.** On `test4`, the model filed "Мне пришёл блендер модели BL-949"
+under `delivery.status` beside `device.model: BL-949` (M0005 seq 21, M0009
+seq 128). When the company contested the model, the code stayed current in
+the delivery fact: 7 checkpoint presentations, freshness error 0.027.
+`delivery.status` is itself a canonical slot, so no alias in `slots.py` can
+map it. The fix is one instruction (above). It was checked live against
+Round 9's records: the 18 device-model statements in `test4` and a control
+sample of 100 other messages (80 where Round 9 or the label had a proposal,
+20 where neither did, none read in Round 9; `random.Random(10)`).
+[Selection](../results/round10/reread-test4.json) ·
+[record](../results/round10/test4-reread.json)
+
+- `test4` freshness error is now **0.000** (from 0.027). All 464 promises
+  are still right. There is still no false close, false alert or false
+  dispute, and the offers and hard close cases stay at 1.000.
+- **No promise or fact the label holds was lost** in the 118 messages. 16
+  answers changed:
+  - Lost: the 2 offending delivery facts; 4 `refund.status` facts that
+    restated a promise ("Возместим стоимость упаковки…"); and one
+    `delivery.status: приехал`, which no label holds.
+  - The rest are 5 question spans worded differently, a shorter
+    cancellation quote, a reworded action, one duplicate close proposal
+    dropped, and one filler line no longer read as a question.
+  - With 0 regressions in the 98 messages where the label or Round 9 had a
+    proposal, the rate could still be up to about 3% (95%, rule of three).
+- `replay_check` rebuilds this record at $0 from Round 8's proposals plus
+  the reads of Rounds 9 and 10, a later read over an earlier one.
+
+**`main5`.** It is `main4` (an offer whose condition is later said to hold,
+said to fail, or never answered) plus a correction beat for decision 0005.
+One side gives an invoice number ("Оплачивала по счёту 954559" or "Выставили
+вам счёт № 954559"). Later the same side or the other side writes "номер
+счёта не 954559, а 954595", which swaps two digits. A correction by the same
+side must replace the value. A correction by the other side must open a
+dispute.
+- The scorer reports each correction's outcome at the end (replaced,
+  disputed, both current, new value missing) and each offer's end state.
+- Every earlier split is byte-identical, and the labels of `dev5`, `test4`
+  and `dev6` are now pinned too.
+- The oracle scores 1.000 on the new splits. `dev7` (4 tickets, seed 7221)
+  and `test5` (20, seed 7373) are the first seeds from 7171 and 7373 whose
+  labels hold each condition outcome and each correction (either side, either
+  side's value) at least once in `dev7` and three times in `test5`. Seed 7373
+  already did.
+- `test5` is rewritten like `test3` and `test4`. `dev7` stays in template
+  words, to save the rewrite's cost.
+- **`dev7` check:** first the planted proposals, at $0: every measure
+  1.000. Then its 4 offers, 3 outcomes, 4 invoice numbers and 4 corrections
+  were read live ($0.0024). All 15 were read right: 2 activations, 1 lapse,
+  2 corrections replaced, 2 disputed, no false dispute. No full `dev7` run.
+  [Record](../results/round10/dev7.json)
+
+### `test5`: fresh and unseen
+
+20 `main5` tickets, 3,520 messages, 87 checkpoints, 463 gold promises. They
+were generated, rewritten once by GLM 5.3 Flash (746 rewrites discarded) and
+run once. Nobody read them before the run. Intervals are 95% bootstrap over
+tickets. [Record](../results/round10/test5.json)
+
+| Measure | `test5` |
+|---|---:|
+| Gold promises right at the end | **461 of 463** |
+| (a) Missed by the model / (b) dropped by the reducer / (c) mishandled later | **0 / 0 / 2** |
+| False closes per ticket, end / across checkpoints | 0.05 [0.00, 0.15] / 0.15 [0.00, 0.45] (one promise) |
+| False alerts per ticket | **0.00** |
+| Breach-alert precision / recall | 1.000 / 0.994 (159 of 160) |
+| False disputes per ticket / dispute recall | **0.00** / 1.000 (106 of 106 judged) |
+| Failed-step precision / recall | 1.000 / 1.000 |
+| Fact recall / freshness error | 1.000 (300 of 300) / **0.000** |
+| Fact changes right | 139 of 139 |
+| Context-dependent / ambiguous / unrelated close | 20/20, 20/20, 20/20 |
+| Commitment precision / recall / F1 | 0.998 / 1.000 / 0.999 |
+| Deadline accuracy / status accuracy | 1.000 (463 of 463) / 0.996 |
+| Suggestions per ticket (all on promises still owed) | 1.90 |
+| Unreadable messages | 0 |
+| Cost per ticket / per 1,000 messages | $0.0170 [0.0164, 0.0177] / $0.097 |
+
+Every beat at the end of the ticket:
+
+| Beat | Cases | Result |
+|---|---:|---|
+| Delegated, with a date / without | 17 / 23 | all right |
+| Two promises with one action, different objects | 40 | all right |
+| Prediction / status report | 20 / 20 | no promise made |
+| Conditional offer | 20 | 20 recorded, none as a promise |
+| ↳ condition held: activated | 5 | 5 right |
+| ↳ condition failed: lapsed | 8 | 8 right |
+| ↳ never answered: still pending | 7 | 7 right |
+| Offer state, every checkpoint | 63 | 63 right |
+| Condition-due alerts (right, false, missed) | 12 | 12, 0, 0 |
+| Correction of one's own number | 12 | 12 replaced, no dispute |
+| Correction of the other side's number | 8 | 8 disputed |
+
+**What went wrong on `test5`:**
+
+- **The false close (M0006, seq 54).** The company promised "Пришлём вам
+  накладную до конца недели". The writer turned the planted "По накладной вам
+  отправлен VC-858" into "Накладная уже у вас — по ней отправлен VC-858". It
+  added a statement that the waybill is already with the customer, and the
+  rewrite filter did not catch it.
+  - The model read this as the company saying its promise was done. The
+    reducer recorded it as the debtor's *claim*: the promise stays on the
+    card as claimed, but no breach alert fires.
+  - By the text this reading is defensible. By the label it is a false
+    close at 3 checkpoints and the one missed breach alert.
+  - A claim by the side that owes the promise silences the alert. If it is
+    false, only the other side's protest brings the promise back.
+- **The missed close (M0015, seq 143).** "Бонусы вижу, спасибо!" confirmed
+  "Начислим вам компенсацию бонусами". The model pointed the close at the
+  pending offer "начислим вам бонусы взамен", and the reducer refused it as
+  not a commitment. The promise stays open, so this fails safe. No suggestion
+  was left for a person.
+- **The one spurious promise** is also the writer's: it turned "Новой
+  информации пока нет" into "…Как только что-то появится, мы сразу вас
+  проинформируем", a vague promise that no label holds.
+- **Suggestions, 1.90 per ticket.** These are the 38 closes the guards
+  refused, every one on a promise still owed. Each stays on its promise as
+  "возможно, выполнено", and a person has to dismiss it.
+
+**Cost.** Extraction $0.3118 (3,520 calls, 89.6% of prompt tokens from the
+cache, 97.5 output tokens a call), verifier $0.0292 (246 calls). That is 7%
+above Round 8's `test4` per ticket ($0.0159). The prompt is longer
+(conditional offers, this round's rule) and `main5` plants about 3 more
+messages a ticket.
+
+### `test3`: beside the frozen baselines
+
+One live run. The baselines are the frozen Round 4 runs in
+`results/round4/test3.json`: full context and Mem0 on all 20 tickets,
+Graphiti on the first 10 and the rolling summary on the first 4. Rounds 4–7
+are our earlier versions, rescored from their records by today's scorer.
+Paired differences are taken over the tickets both methods ran.
+[Record](../results/round10/test3.json) ·
+[comparison with intervals](../results/round10/test3-compare.json)
+
+**`test3` is not unseen.** It informed Rounds 5 to 7, which were checked on
+it four times. Rounds 8–10 were developed on other tickets (`dev5`, `dev6`,
+`dev7` and, for the fix, `test4`), but a method tuned on `test3` once
+carries that tuning. Read these as follow-up numbers on a known set; `test5`
+is the unbiased figure.
+
+| Measure | **Round 10** | Round 4 | Round 5 | Round 6 | Round 7 | Full context | Mem0 | Graphiti (10) | Rolling summary (4) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Gold promises right at the end | **367/367** | 338/367 | 337/367 | 351/367 | 364/367 | 348/367 | 341/367 | 147/180 | 43/71 |
+| (a) missed by the model / (b) dropped by the reducer / (c) mishandled later | **0 / 0 / 0** | 2 / 0 / 27 | 14 / 1 / 15 | 12 / 0 / 4 | 2 / 0 / 1 | 0 not on the answer / 19 | 6 not on the answer / 20 | 19 not on the answer / 14 | 24 not on the answer / 4 |
+| False closes per ticket, end | **0.00** | 0.20 | 0.05 | 0.00 | 0.00 | 0.10 | 0.15 | 0.80 | 0.25 |
+| False closes per ticket, across checkpoints | **0.00** | 0.90 | 0.15 | 0.00 | 0.00 | 0.30 | 0.65 | 1.90 | 0.50 |
+| False alerts per ticket | **0.00** | 1.10 | 0.45 | 0.20 | 0.05 | 0.45 | 0.40 | 0.40 | 0.75 |
+| False disputes per ticket | **0.00** | 0.30 | 0.40 | 2.55 | 0.00 | 0.00 | 0.10 | 0.10 | 2.00 |
+| Dispute recall | **1.000** | 1.000 | 0.879 | 0.978 | 1.000 | 0.560 | 0.604 | 0.192 | 0.667 |
+| Failed-step precision | **1.000** | 1.000 | 0.776 | 0.777 | 1.000 | 0.792 | 0.771 | 0.771 | 0.963 |
+| Fact recall | **1.000** | 1.000 | 0.972 | 0.984 | 1.000 | 1.000 | 1.000 | 0.956 | 0.815 |
+| Freshness error | **0.000** | 0.000 | 0.064 | 0.015 | 0.000 | 0.290 | 0.310 | 0.278 | 0.333 |
+| Context-dependent close recovered | **1.000** | 0.000 | 0.850 | 0.900 | 0.950 | 0.850 | 0.900 | 0.600 | 0.500 |
+| Ambiguous close refrained | **1.000** | 1.000 | 0.950 | 1.000 | 1.000 | 0.950 | 0.850 | 0.600 | 0.500 |
+| Unrelated confirmation handled | **1.000** | 0.800 | 0.950 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| Commitment F1 | **0.995** | 0.989 | 0.975 | 0.970 | 0.991 | 0.997 | 0.990 | 0.942 | 0.797 |
+| Deadline accuracy | **1.000** | 1.000 | 1.000 | 1.000 | 1.000 | 0.935 | 0.909 | 0.932 | 0.915 |
+| Status accuracy | **1.000** | 0.926 | 0.957 | 0.989 | 0.997 | 0.948 | 0.945 | 0.913 | 0.915 |
+| Breach-alert precision | **1.000** | 0.850 | 0.932 | 0.969 | 0.992 | 0.934 | 0.941 | 0.933 | 0.864 |
+| Breach-alert recall | **1.000** | 0.969 | 0.961 | 0.977 | 1.000 | 0.992 | 0.985 | 0.862 | 0.760 |
+| Cost per ticket | **$0.0154** | $0.0134 | $0.0110 | $0.0140 | $0.0140 | $0.0043 | $0.0530 | $0.1602 | $0.0956 |
+| Cost per 1,000 messages | **$0.088** | $0.077 | $0.064 | $0.081 | $0.081 | $0.025 | $0.304 | $0.908 | $0.532 |
+
+Round 10's 95% intervals where they are not a point: commitment F1
+0.989–0.999, cost per ticket $0.0148–0.0159. Every other Round 10 interval
+is a single point. Paired differences, other method minus Round 10:
+
+| Other minus Round 10 | Round 7 | Round 4 | Full context | Mem0 | Graphiti (10) | Rolling summary (4) |
+|---|---:|---:|---:|---:|---:|---:|
+| False closes across checkpoints | +0.00 [+0.00, +0.00] | +0.90 [+0.20, +1.80] | +0.30 [+0.05, +0.65] | +0.65 [+0.10, +1.35] | +1.90 [+0.80, +3.00] | +0.50 [+0.00, +1.50] |
+| False alerts per ticket | +0.05 [+0.00, +0.15] | +1.10 [+1.00, +1.25] | +0.45 [+0.15, +0.80] | +0.40 [+0.15, +0.65] | +0.40 [+0.00, +0.80] | +0.75 [+0.25, +1.00] |
+| Dispute recall | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | -0.440 [-0.530, -0.349] | -0.396 [-0.551, -0.262] | -0.808 [-0.960, -0.612] | -0.333 [-0.462, -0.143] |
+| Failed-step precision | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | -0.208 [-0.266, -0.144] | -0.229 [-0.288, -0.169] | -0.229 [-0.325, -0.113] | -0.037 [-0.120, +0.000] |
+| Freshness error | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | +0.290 [+0.239, +0.334] | +0.310 [+0.236, +0.382] | +0.278 [+0.225, +0.324] | +0.333 [+0.160, +0.444] |
+| Status accuracy | -0.003 [-0.008, +0.000] | -0.074 [-0.092, -0.060] | -0.052 [-0.073, -0.031] | -0.055 [-0.081, -0.033] | -0.087 [-0.126, -0.045] | -0.085 [-0.148, -0.062] |
+| Deadline accuracy | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | -0.065 [-0.093, -0.042] | -0.091 [-0.122, -0.062] | -0.068 [-0.120, -0.031] | -0.085 [-0.208, +0.000] |
+| Breach-alert precision | -0.008 [-0.024, +0.000] | -0.150 [-0.170, -0.133] | -0.066 [-0.111, -0.023] | -0.059 [-0.094, -0.025] | -0.067 [-0.133, +0.000] | -0.136 [-0.273, -0.048] |
+| Commitment F1 | -0.004 [-0.008, +0.000] | -0.005 [-0.012, +0.000] | +0.003 [-0.004, +0.009] | -0.004 [-0.013, +0.003] | -0.053 [-0.171, +0.003] | -0.196 [-0.476, -0.045] |
+| Cost per ticket | -0.0014 [-0.0015, -0.0011] | -0.0020 [-0.0022, -0.0018] | -0.0110 [-0.0115, -0.0105] | +0.0376 [+0.0354, +0.0397] | +0.1449 [+0.1259, +0.1575] | +0.0803 [+0.0354, +0.1064] |
+
+
+- Against every baseline, Round 10 has more dispute recall, a lower
+  freshness error and higher status and deadline accuracy. Every one of
+  these intervals excludes zero, except the rolling summary's deadline
+  accuracy on 4 tickets.
+- It also has fewer false alerts. That interval excludes zero except
+  against Graphiti, whose lower bound is 0.
+- On commitment F1, full context is level (+0.003 [−0.004, +0.009]) and
+  costs $0.011 less a ticket. Mem0 costs 3.4 times as much, Graphiti 10
+  times and the rolling summary 6 times.
+- Against Round 7 every difference is within its interval of zero, except
+  cost: Round 10 costs $0.0014 more a ticket.
+- **Four spurious promises,** all the writer's: "Как только что-то
+  появится, мы сразу вас проинформируем / уведомим" added to a filler line.
+  These are real promises in the text that no label holds. They are all of
+  Round 10's precision loss (0.989).
+
+**Spend.** Of $0.75: $0.0239 for the `test4` check, $0.0024 for `dev7`,
+$0.0572 to rewrite `test5`, $0.3394 for `test5` and $0.3051 for `test3`:
+**$0.7281**.
+- Before `test5`, the runner projected $0.325 expected and $0.577 upper,
+  from Round 8's `test4` rate; $0.666 was left.
+- Before `test3`, $0.327 was left. The runner's upper bound ($0.467) did not
+  fit, so the run was judged on its expected cost, as in Rounds 7 and 8: Round
+  7's actual `test3` cost scaled by how much the per-message rate grew from
+  Round 8's `test4` to `test5`, $0.295. The ledger was capped at the $0.327
+  left.
+[Spend log](../results/round10/spend.jsonl)
+
+### Threats to validity
+
+- **Synthetic tickets.** The events are planted and the text is written
+  around them. Real tickets are messier, longer-tailed and not built to
+  labels.
+- **Label noise from the writer.** The writer added a delivery claim and
+  five vague promises that no label holds (one false close and five
+  spurious promises above). The rewrite filter checks numbers, questions,
+  negations and a list of verb stems. It does not catch everything, and it
+  does not let a rewrite add a negation, which limits how naturally an
+  outcome such as a lapse can be worded.
+- **One team wrote the generator and the method.** The beats are planted
+  in the forms the rules recognise: a correction is always "не X, а Y", and
+  an offer is always "Если …, …". A correction worded without a negation,
+  or an offer worded another way, is not planted.
+- **One reading model**, DeepSeek V4.1 Flash on one host, and one writer,
+  GLM 5.3 Flash. Each split was run once at temperature 0, so run-to-run
+  variance is not measured.
+- **The baselines ran only on `test3`**, once, in Round 4, with Graphiti on
+  10 tickets and the rolling summary on 4. They were not given this round's
+  tickets, offers or corrections, and `test3` informed our Rounds 5–7.
+- **Seeds were chosen on labels** so that each outcome and correction
+  occurs (`test5`'s first candidate already qualified). No model output was
+  looked at to choose them.
+
+```bash
+python -m duebook.bench.experiment --split test4 --methods event_memory \
+    --replay <Round 9's spliced test4 record> --reread results/round10/reread-test4.json \
+    --max-usd 0.04 --session-cap 0.75 --results results/round10 --out /tmp/test4.json
+python -m duebook.bench.experiment --split dev7 --template --methods event_memory \
+    --replay oracle --reread results/round10/reread-dev7.json \
+    --projection-from results/round8/test4.json --max-usd 0.01 --session-cap 0.75 \
+    --results results/round10 --out /tmp/dev7.json
+python -m duebook.bench.experiment --split test5 --methods "" --rewrite-only \
+    --max-usd 0.08 --session-cap 0.75 --results results/round10
+python -m duebook.bench.experiment --split test5 --methods event_memory \
+    --projection-from results/round8/test4.json --max-usd 0.60 --session-cap 0.75 \
+    --results results/round10 --out results/round10/test5.json
+python -m duebook.bench.experiment --split test3 --methods event_memory \
+    --projection-from results/round7/test3.json --expected \
+    --frozen results/round4/test3.json --compare-frozen-event-memory \
+    --max-usd 0.327 --session-cap 0.75 --results results/round10 --out results/round10/test3.json
+python scripts/replay_check.py   # every record, Round 10's included, at $0
+```
 
 ## Round 9 — conditional offers, several orders, issue-summary noise
 

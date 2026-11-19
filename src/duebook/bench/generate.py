@@ -201,10 +201,15 @@ class Beat(StrEnum):
     STATUS_REPORT = "status_report"
     #: Not a commitment: a conditional offer (decision 0004).
     CONDITIONAL = "conditional"
+    #: "Не 538916, а 538961" (decision 0005, ``main5``): a correction of one's own
+    #: value is a change, of the other side's a dispute.
+    CORRECTION_OWN = "correction_own"
+    CORRECTION_OTHER = "correction_other"
 
 
 #: Beats whose message makes a gold commitment; the others make none.
 PROMISE_BEATS = frozenset({Beat.DELEGATED_DATED, Beat.DELEGATED_UNDATED, Beat.SAME_ACTION})
+CORRECTION_BEATS = frozenset({Beat.CORRECTION_OWN, Beat.CORRECTION_OTHER})
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,6 +306,8 @@ class Profile:
     accountability: bool = False
     #: Plant whether the conditional offer's condition held, failed, or went unsaid.
     condition_outcomes: bool = False
+    #: Plant an identifier corrected by the side that gave it, or by the other side.
+    corrections: bool = False
 
 
 STANDARD = Profile(
@@ -320,7 +327,8 @@ MAIN = Profile(
 MAIN2 = replace(MAIN, name="main2", close_cases=True)
 MAIN3 = replace(MAIN2, name="main3", accountability=True)
 MAIN4 = replace(MAIN3, name="main4", condition_outcomes=True)
-PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2, MAIN3, MAIN4)}
+MAIN5 = replace(MAIN4, name="main5", corrections=True)
+PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2, MAIN3, MAIN4, MAIN5)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -359,6 +367,12 @@ SPLITS = {
         # Round 9: what became of each conditional offer, in template words. The
         # first seed from 6161 whose 8 tickets hold each outcome at least twice.
         Split("dev6", seed=6174, count=8, profile=MAIN4, results=Path("results/round9")),
+        # Round 10: main4 rewritten, plus corrections. The first seeds from 7171 and
+        # 7373 whose tickets hold each condition outcome and each correction
+        # (by either side, of either side's value) at least once, and three
+        # times in test5. Chosen on the labels alone; test5 is never used for tuning.
+        Split("dev7", seed=7221, count=4, profile=MAIN5, results=Path("results/round10")),
+        Split("test5", seed=7373, count=20, profile=MAIN5, results=Path("results/round10")),
     )
 }
 
@@ -754,6 +768,8 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
         _close_cases(plan)
     if profile.accountability:
         _accountability(plan, profile.condition_outcomes)
+    if profile.corrections:
+        _correction(plan, order)
 
     # Planned last: by now it is known when the ticket ends, and this promise's
     # deadline must still be ahead then.
@@ -1258,6 +1274,50 @@ def _model_dispute(plan: _Plan) -> None:
         b.contradictions.append(GoldContradiction("device.model", (seqs[0], seq), (got, sent)))
 
     plan.add(second, answer)
+
+
+#: Who first gives the invoice number, and in which words: (text, span).
+INVOICES = {Side.CUSTOMER: ("Оплачивала по счёту {v}.", "по счёту {v}"),
+            Side.COMPANY: ("Выставили вам счёт № {v}.", "счёт № {v}")}
+#: (who corrects, whose value) -> the correction, around the span "номер счёта не X, а Y".
+CORRECTIONS = {(Side.CUSTOMER, True): "Ой, ошиблась: {span}.",
+               (Side.COMPANY, True): "Прошу прощения, опечатка: {span}.",
+               (Side.CUSTOMER, False): "У вас ошибка, {span}.",
+               (Side.COMPANY, False): "Проверили по системе: {span}."}  # fmt: skip
+
+
+def _correction(plan: _Plan, order: str) -> None:
+    """One side gives an invoice number; it or the other side corrects it (decision 0005).
+
+    The new number swaps two digits of the old one, the typo a correction is for.
+    """
+    first, own = plan.rng.choice([Side.CUSTOMER, Side.COMPANY]), plan.rng.random() < 0.5
+    by = first if own else (Side.COMPANY if first is Side.CUSTOMER else Side.CUSTOMER)
+    old = order
+    while old == order:
+        old = str(plan.rng.randint(100_000, 999_999))
+    i = plan.rng.choice([i for i in range(5) if old[i] != old[i + 1]])
+    new = old[:i] + old[i + 1] + old[i] + old[i + 2 :]
+    role = {Side.CUSTOMER: Role.CUSTOMER, Side.COMPANY: Role.AGENT}
+    at = plan.moment(0.05, 0.7)
+    later = plan.within(at + timedelta(minutes=10), at + timedelta(hours=20), role[by])
+    text, span = INVOICES[first]
+    seqs: list[int] = []
+    plan.add(at, lambda b: seqs.append(b.fact(
+        role[first], text.format(v=old), "invoice.number", old, span.format(v=old), (old,))))
+
+    def correct(b: _Builder) -> None:
+        span = f"номер счёта не {old}, а {new}"
+        seq = b.fact(role[by], CORRECTIONS[by, own].format(span=span), "invoice.number", new,
+                     span, (new,))  # fmt: skip
+        if own:
+            b.changes.append(GoldChange("invoice.number", old, new, seq))
+        else:
+            values = (old, new) if first is Side.CUSTOMER else (new, old)
+            b.contradictions.append(GoldContradiction("invoice.number", (seqs[0], seq), values))
+        b.beats.append(GoldBeat(Beat.CORRECTION_OWN if own else Beat.CORRECTION_OTHER, seq))
+
+    plan.add(later, correct)
 
 
 def _repeated_fix(

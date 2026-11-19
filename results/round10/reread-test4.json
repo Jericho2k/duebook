@@ -1,0 +1,562 @@
+{
+ "what": "Round 10, Part A: the test4 messages read again live with the fixed prompt, against the card Round 9's records rebuild (results/round8/test4.json spliced with results/round9/test4.json)",
+ "control": "80 drawn from messages where Round 9's record or the label has a proposal, 20 from the rest, none read in Round 9 and none a device-model statement; random.Random(10)",
+ "tickets": {
+  "SIM-5353-M0000": [
+   24,
+   27,
+   87,
+   160,
+   167
+  ],
+  "SIM-5353-M0001": [
+   3,
+   19,
+   68,
+   74,
+   127
+  ],
+  "SIM-5353-M0002": [
+   20,
+   51,
+   54,
+   63,
+   82,
+   141,
+   148
+  ],
+  "SIM-5353-M0003": [
+   45,
+   62,
+   97,
+   143,
+   180,
+   193
+  ],
+  "SIM-5353-M0004": [
+   3,
+   14,
+   36,
+   40,
+   78,
+   108,
+   131
+  ],
+  "SIM-5353-M0005": [
+   5,
+   21,
+   44,
+   89,
+   118,
+   139,
+   162,
+   183
+  ],
+  "SIM-5353-M0006": [
+   24,
+   43,
+   90,
+   117,
+   178,
+   204
+  ],
+  "SIM-5353-M0007": [
+   11,
+   13,
+   64,
+   67,
+   122
+  ],
+  "SIM-5353-M0008": [
+   40,
+   64,
+   67,
+   156
+  ],
+  "SIM-5353-M0009": [
+   48,
+   49,
+   60,
+   95,
+   128,
+   132,
+   137
+  ],
+  "SIM-5353-M0010": [
+   10,
+   35,
+   87,
+   140,
+   167,
+   194
+  ],
+  "SIM-5353-M0011": [
+   3,
+   18,
+   30,
+   67,
+   71,
+   97,
+   111
+  ],
+  "SIM-5353-M0012": [
+   57,
+   88,
+   138,
+   149,
+   180
+  ],
+  "SIM-5353-M0013": [
+   34,
+   59,
+   69,
+   77,
+   112,
+   113,
+   138,
+   143,
+   177
+  ],
+  "SIM-5353-M0014": [
+   8,
+   46,
+   83,
+   99,
+   134,
+   138
+  ],
+  "SIM-5353-M0015": [
+   14,
+   48,
+   86,
+   115
+  ],
+  "SIM-5353-M0016": [
+   37,
+   39,
+   45,
+   113
+  ],
+  "SIM-5353-M0017": [
+   57,
+   62,
+   72,
+   103,
+   122,
+   142,
+   170
+  ],
+  "SIM-5353-M0018": [
+   51,
+   60,
+   64,
+   79,
+   107,
+   162
+  ],
+  "SIM-5353-M0019": [
+   41,
+   149,
+   150,
+   183
+  ]
+ },
+ "why": {
+  "SIM-5353-M0000": {
+   "24": [
+    "device-model statement"
+   ],
+   "167": [
+    "control"
+   ],
+   "87": [
+    "control"
+   ],
+   "27": [
+    "control"
+   ],
+   "160": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0001": {
+   "127": [
+    "device-model statement"
+   ],
+   "3": [
+    "control"
+   ],
+   "74": [
+    "control"
+   ],
+   "68": [
+    "control"
+   ],
+   "19": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0002": {
+   "51": [
+    "device-model statement"
+   ],
+   "63": [
+    "control"
+   ],
+   "20": [
+    "control"
+   ],
+   "54": [
+    "control"
+   ],
+   "82": [
+    "control"
+   ],
+   "148": [
+    "control"
+   ],
+   "141": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0003": {
+   "45": [
+    "device-model statement"
+   ],
+   "97": [
+    "control"
+   ],
+   "62": [
+    "control"
+   ],
+   "193": [
+    "control"
+   ],
+   "143": [
+    "control"
+   ],
+   "180": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0004": {
+   "36": [
+    "device-model statement"
+   ],
+   "131": [
+    "control"
+   ],
+   "40": [
+    "control"
+   ],
+   "3": [
+    "control"
+   ],
+   "14": [
+    "control"
+   ],
+   "108": [
+    "control"
+   ],
+   "78": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0005": {
+   "21": [
+    "device-model statement",
+    "round 9 freshness error"
+   ],
+   "44": [
+    "control"
+   ],
+   "139": [
+    "control"
+   ],
+   "5": [
+    "control"
+   ],
+   "118": [
+    "control"
+   ],
+   "89": [
+    "control"
+   ],
+   "183": [
+    "control"
+   ],
+   "162": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0006": {
+   "43": [
+    "device-model statement"
+   ],
+   "24": [
+    "control"
+   ],
+   "178": [
+    "control"
+   ],
+   "117": [
+    "control"
+   ],
+   "204": [
+    "control"
+   ],
+   "90": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0007": {
+   "64": [
+    "device-model statement"
+   ],
+   "67": [
+    "control"
+   ],
+   "122": [
+    "control"
+   ],
+   "11": [
+    "control"
+   ],
+   "13": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0008": {
+   "67": [
+    "device-model statement"
+   ],
+   "40": [
+    "control"
+   ],
+   "64": [
+    "control"
+   ],
+   "156": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0009": {
+   "128": [
+    "device-model statement",
+    "round 9 freshness error"
+   ],
+   "60": [
+    "control"
+   ],
+   "137": [
+    "control"
+   ],
+   "49": [
+    "control"
+   ],
+   "48": [
+    "control"
+   ],
+   "95": [
+    "control"
+   ],
+   "132": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0010": {
+   "87": [
+    "device-model statement"
+   ],
+   "35": [
+    "control"
+   ],
+   "167": [
+    "control"
+   ],
+   "10": [
+    "control"
+   ],
+   "140": [
+    "control"
+   ],
+   "194": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0012": {
+   "57": [
+    "device-model statement"
+   ],
+   "138": [
+    "control"
+   ],
+   "149": [
+    "control"
+   ],
+   "88": [
+    "control"
+   ],
+   "180": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0013": {
+   "112": [
+    "device-model statement"
+   ],
+   "34": [
+    "control"
+   ],
+   "177": [
+    "control"
+   ],
+   "138": [
+    "control"
+   ],
+   "69": [
+    "control"
+   ],
+   "113": [
+    "control"
+   ],
+   "59": [
+    "control"
+   ],
+   "77": [
+    "control"
+   ],
+   "143": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0015": {
+   "86": [
+    "device-model statement"
+   ],
+   "115": [
+    "control"
+   ],
+   "48": [
+    "control"
+   ],
+   "14": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0016": {
+   "39": [
+    "device-model statement"
+   ],
+   "45": [
+    "control"
+   ],
+   "113": [
+    "control"
+   ],
+   "37": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0017": {
+   "62": [
+    "device-model statement"
+   ],
+   "72": [
+    "control"
+   ],
+   "103": [
+    "control"
+   ],
+   "122": [
+    "control"
+   ],
+   "142": [
+    "control"
+   ],
+   "57": [
+    "control"
+   ],
+   "170": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0018": {
+   "51": [
+    "device-model statement"
+   ],
+   "64": [
+    "control"
+   ],
+   "107": [
+    "control"
+   ],
+   "79": [
+    "control"
+   ],
+   "60": [
+    "control"
+   ],
+   "162": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0019": {
+   "41": [
+    "device-model statement"
+   ],
+   "150": [
+    "control"
+   ],
+   "149": [
+    "control"
+   ],
+   "183": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0014": {
+   "99": [
+    "control"
+   ],
+   "138": [
+    "control"
+   ],
+   "134": [
+    "control"
+   ],
+   "46": [
+    "control"
+   ],
+   "83": [
+    "control"
+   ],
+   "8": [
+    "control"
+   ]
+  },
+  "SIM-5353-M0011": {
+   "3": [
+    "control"
+   ],
+   "97": [
+    "control"
+   ],
+   "18": [
+    "control"
+   ],
+   "71": [
+    "control"
+   ],
+   "30": [
+    "control"
+   ],
+   "111": [
+    "control"
+   ],
+   "67": [
+    "control"
+   ]
+  }
+ }
+}
