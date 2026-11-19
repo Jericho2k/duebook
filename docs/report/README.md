@@ -12,7 +12,7 @@
 | Файл | Раздел отчёта | Состояние |
 |---|---|---|
 | [`01-obzor.md`](01-obzor.md) | 1. Обзор предметной области и существующих решений | черновик; источники сверены 17.11.2026, [17], [18], [32]–[39] — 19.11.2026 |
-| [`02-metod.md`](02-metod.md) | 2. Описание предлагаемого метода | черновик; сверен с кодом `main` на коммите `b245a01` |
+| [`02-metod.md`](02-metod.md) | 2. Описание предлагаемого метода | черновик; сверен с кодом на коммите `ce43f99` (ветка `chore/after-round10`: решение 0006, раунд 10b) |
 | [`references.md`](references.md) | Список использованных источников (ГОСТ Р 7.0.5–2008) | черновик; см. раздел «Требует проверки» в конце файла |
 
 ## Пометки в тексте
@@ -40,25 +40,25 @@
 |---|---|---|
 | 1.2 Helpdesk-платформы | документация вендоров [3]–[6], `docs/competitors.md` («Closed helpdesk copilots») | новые версии страниц документации |
 | 1.4 Системы памяти, 1.10 таблица | [12]–[18], [32]–[39], `docs/competitors.md` | новые версии систем; новый базовый метод в `bench/baselines` |
-| 1.5, 1.7 (ссылки на эксперимент) | `docs/results.md`, раунды 1 и 4 | новый прогон эксперимента |
+| 1.5, 1.7 (ссылки на эксперимент) | `docs/results.md`, раунды 1, 4 и 10 | новый прогон эксперимента |
 | 2.1 Общая схема | `src/duebook/reducer.py` (докстринг), `README.md` | принцип «модель предлагает — код решает» |
 | 2.2 События, предшествующая реплика | `src/duebook/events.py` (`other_side`, `remember_turn`), `store.Store.previous_turn` | новые типы событий, роли, стороны |
-| 2.3 Модель данных | `src/duebook/card.py` | поля `Fact`, `Commitment`, `Conditional`, `Suggestion`, `Unread`, `Card` |
+| 2.3 Модель данных | `src/duebook/card.py` | поля `Fact`, `Commitment` (в том числе `claim_checked`), `Conditional`, `Suggestion`, `Unread`, `Card` |
 | 2.4.1–2.4.3 Предложения, редьюсер, извлечение | `src/duebook/proposals.py`, `reducer.py` (`apply`, `replay`, `Guards`, `RULES`), `src/duebook/extract/` (`prompt.py`, `schema.py`, `extractor.py`) | новые виды предложений, новая версия правил, изменения промпта |
 | 2.4.4 Конфигурация модели | `extract/client.py` (`PRESETS`), `settings.py`, `docs/results.md` раунд 3 | смена модели, провайдера или режима рассуждения |
-| 2.5.1–2.5.4, 2.5.8 Правила допуска | `reducer.py` (`Reason`, `_admit`, `_assert_fact`, `_make_commitment`, `_same_promise`, `_resolve_commitment`, `_cancel_commitment`, `_record_step`, `_ask`, `_answer`), решения 0003, 0005 | новые причины отказа, правила фактов и тождества |
-| 2.5.5–2.5.6 Закрытие и верификатор | `src/duebook/closing.py`, `reducer._check_close`, `reducer._resolution_context`, `extract/verifier.py`, решение 0001 с поправкой | правила закрытия, промпт верификатора |
+| 2.5.1–2.5.4, 2.5.8 Правила допуска | `reducer.py` (`Reason`, `_admit`, `_assert_fact`, `_make_commitment`, `_same_promise`, `_resolve_commitment`, `_cancel_commitment`, `_record_step`, `_ask`, `_answer`), решения 0003, 0005, 0006 (заявление о выполнении) | новые причины отказа, правила фактов и тождества |
+| 2.5.5–2.5.6 Закрытие и верификатор | `src/duebook/closing.py`, `reducer._check_close`, `reducer._suggest_fitting`, `reducer._resolution_context`, `extract/verifier.py`, решения 0001 с поправкой и 0006 (подтверждение мимо карточки) | правила закрытия, промпт верификатора |
 | 2.5.7 Условные предложения | `reducer._make_conditional`, `_settle_conditional`, `_offered_due`, решение 0004 | правила активации и утраты силы |
 | 2.6 Сроки | `src/duebook/temporal.py`, `reducer._due`, `card.Confidence` | грамматика `DueExpr`, правила парсера, календарь |
 | 2.7 Нормализация слотов | `src/duebook/slots.py` (`CANONICAL`, `IDENTIFIERS`, `normalise`) | словарь, слоты-идентификаторы |
-| 2.8 Жизненный цикл | `card.CommitmentState`, `card.ConditionalState`, `lifecycle.Status`, `lifecycle.status_at` | новые состояния или переходы |
+| 2.8 Жизненный цикл | `card.CommitmentState`, `card.ConditionalState`, `lifecycle.Status`, `lifecycle.status_at`, `lifecycle.claim_check_at` | новые состояния или переходы |
 | 2.9 Передача | `reducer._hand_over`, `Commitment.orphaned` | правила переноса ответственности |
-| 2.10 Оповещения | `src/duebook/lifecycle.py` (`AlertPolicy`, `NoticeKind`, `notices`, `next_wakeup`) | виды оповещений, политика, формат ключа |
+| 2.10 Оповещения | `src/duebook/lifecycle.py` (`AlertPolicy`, `NoticeKind`, `notices`, `next_wakeup`, `claim_check_at`), решение 0006 | виды оповещений, политика, формат ключа |
 | 2.11 Хранение и доставка | `src/duebook/store/` (`store.py`, `outbox.py`, `worker.py`, `scheduler.py`, `migrations/`), `tests/test_delivery_crash.py` | схема БД (новая миграция), протокол outbox |
 | 2.12 Сводка при передаче | `src/duebook/brief.py` | порядок разделов, формат строк |
 | 2.13 Обвязка, непрочитанные сообщения | `src/duebook/pipeline.py`, `extract/extractor.py` (`ATTEMPTS`, `gives_up`, `unread`), `src/duebook/api/app.py`, `src/duebook/cli.py`, `src/duebook/settings.py`, решение 0002 | новые эндпоинты, параметры, число тестов |
-| 2.14 Методика оценки и ключевые источники | `src/duebook/bench/` (`generate.py`, `score.py`, `baselines/`, `experiment.py`), `docs/results.md` раунды 4, 7, 8, 9 | новый прогон, новые метрики или базовые методы |
-| 2.15 Ограничения | разделы «What is wrong» раундов 8–9 в `docs/results.md` | новый прогон, новое решение |
+| 2.14 Методика оценки и ключевые источники | `src/duebook/bench/` (`generate.py`, `score.py`, `baselines/`, `experiment.py`), `docs/results.md` раунд 10 (`test5` — несмещённая оценка, `test3` — сравнение с базовыми методами) и 10b, раунд 4 (откуда замороженные ответы базовых методов) | новый прогон, новые метрики или базовые методы |
+| 2.15 Ограничения | «What went wrong on `test5`» и «Threats to validity» раунда 10, «Round 10b» в `docs/results.md` | новый прогон, новое решение |
 
 ## Как обновлять
 
@@ -75,9 +75,10 @@
    по коду, добавить причины отказа в таблицу 2.3 и переходы в 2.8, если
    они изменились, и упомянуть новую версию правил в 2.4.2.
 4. **Новый раунд эксперимента:** если это полный прогон всех методов на
-   новой выборке, он заменяет раунд 4 как основной источник сравнения в
-   2.14; если только нашего метода — дополняет раунды 8–9. Обновить абзац
-   об угрозах валидности.
+   новой выборке, он заменяет `test3` раунда 10 как источник сравнения с
+   базовыми методами в 2.14; если только нашего метода на новой
+   невиданной выборке — заменяет `test5` как несмещённую оценку. Обновить
+   абзац об угрозах валидности.
 5. **Новый источник:** добавить в `references.md` по ГОСТ Р 7.0.5–2008 и
    перенумеровать ссылки. При нумерации по порядку первого упоминания проще
    всего добавлять новые источники в конец и переупорядочить один раз перед

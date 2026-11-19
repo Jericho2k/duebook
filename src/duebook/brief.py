@@ -10,7 +10,8 @@ moment always gives the same text.
 It is ordered by what hurts most if missed:
 
 0. messages nobody could read automatically (decision 0002);
-1. promises already broken or about to be;
+1. promises already broken or about to be, and claims of done the other side
+   has not confirmed by the deadline (decision 0006);
 2. promises that changed hands or have nobody answerable;
 3. the remaining unresolved promises;
 4. offers owed only if a condition comes true (decision 0004);
@@ -54,7 +55,7 @@ from .card import (
     StepOutcome,
 )
 from .events import Side
-from .lifecycle import AlertPolicy, Status, status_at
+from .lifecycle import AlertPolicy, Status, claim_check_at, status_at
 from .reducer import Reason
 from .temporal import Precision, WorkCalendar
 
@@ -153,6 +154,10 @@ class _Writer:
 
     # ---------------------------------------------------------- commitments ----
 
+    def unconfirmed(self, c: Commitment) -> bool:
+        at = claim_check_at(c, self.policy)
+        return at is not None and self.now >= at
+
     def commitment(self, c: Commitment, status: Status) -> Line:
         parts = [f"{_OWNER[c.owner]}: {c.action}"]
         sources = [c.source]
@@ -176,7 +181,12 @@ class _Writer:
         if c.activated_by is not None:
             parts.append(f"обещано при условии, условие наступило {self.ref(c.activated_by)}")
             sources.append(c.activated_by)
-        if c.state is CommitmentState.CLAIMED and c.resolution is not None:
+        if self.unconfirmed(c):
+            who = "компания не подтвердила" if c.owner is Party.CUSTOMER else "клиент не подтвердил"
+            parts.append(f"отмечено как выполненное, но {who} — проверьте "
+                         f"{self.ref(c.resolution)}")  # fmt: skip
+            sources.append(c.resolution)
+        elif c.state is CommitmentState.CLAIMED and c.resolution is not None:
             parts.append(f"заявлено как выполненное, не подтверждено {self.ref(c.resolution)}")
             sources.append(c.resolution)
         for hint in c.suggestions:
@@ -280,7 +290,8 @@ def compose(
 def _sections(w: _Writer) -> list[Section]:
     card = w.card
     open_ = [(c, status_at(c, w.now, w.policy)) for c in card.commitments if c.unresolved]
-    urgent = [(c, s) for c, s in open_ if s in (Status.BREACHED, Status.DUE_SOON)]
+    urgent = [(c, s) for c, s in open_
+              if s in (Status.BREACHED, Status.DUE_SOON) or w.unconfirmed(c)]  # fmt: skip
     # Broken promises first, then the nearest deadlines; within each, what the
     # company owes comes before what the customer owes.
     urgent.sort(
@@ -290,7 +301,7 @@ def _sections(w: _Writer) -> list[Section]:
             pair[0].due.deadline.due_at,
         )
     )
-    rest = [(c, s) for c, s in open_ if s not in (Status.BREACHED, Status.DUE_SOON)]
+    rest = [pair for pair in open_ if pair not in urgent]
     moved = [(c, s) for c, s in rest if c.orphaned or c.inherited_from]
     moved.sort(key=lambda pair: not pair[0].orphaned)
     other = [(c, s) for c, s in rest if not (c.orphaned or c.inherited_from)]

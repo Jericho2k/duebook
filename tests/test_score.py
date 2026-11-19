@@ -369,3 +369,27 @@ def test_a_promise_closed_against_its_label_is_mishandled_later():
     closed = tuple(replace(p, status=PromiseStatus.FULFILLED) if p.seq == broken.seq else p
                    for p in end.promises)  # fmt: skip
     assert attribute(ticket, replace(end, promises=closed))[broken.seq] is Stage.MISHANDLED_LATER
+
+
+# ---------------------------------------------------- unconfirmed claims ----
+
+
+def test_a_claim_check_is_right_on_a_promise_still_owed_and_noise_on_one_settled():
+    def company_broken(g) -> bool:
+        return g.fate is Fate.BROKEN and g.owner.side is Side.COMPANY
+
+    t = next(t for t in TICKETS if any(map(company_broken, t.gold.commitments))
+             and any(g.fate is Fate.KEPT for g in t.gold.commitments))  # fmt: skip
+    end = end_of(t)
+    broken = next(g.seq for g in t.gold.commitments if company_broken(g))
+    kept = next(g.seq for g in t.gold.commitments if g.fate is Fate.KEPT)
+
+    def claimed(seqs, check):
+        return replace(end, promises=tuple(
+            replace(p, status=PromiseStatus.CLAIMED, claim_check_at=check(p)) if p.seq in seqs
+            else p for p in end.promises))  # fmt: skip
+
+    checked = claimed({broken, kept}, lambda p: p.due_at or t.end)
+    assert score_snapshot(t, checked).claim_checks == Counts(1, 1, 0)
+    silent = claimed({broken}, lambda p: None)
+    assert score_snapshot(t, silent).claim_checks == Counts(0, 0, 1)

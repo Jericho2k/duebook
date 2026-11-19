@@ -29,7 +29,7 @@ from enum import StrEnum
 
 from ..card import Card, CommitmentState, StepOutcome
 from ..events import AssigneeChanged, Side
-from ..lifecycle import AlertPolicy
+from ..lifecycle import AlertPolicy, claim_check_at
 from .generate import SimTicket
 
 
@@ -69,6 +69,8 @@ class Promise:
     suggested: tuple[int, ...] = ()
     #: For a conditional offer that came true, the message that said so.
     activated_seq: int | None = None
+    #: When the method asks a person to check a claim not confirmed (decision 0006).
+    claim_check_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -191,6 +193,7 @@ def from_card(
             closed_seq=closed_seq(c),
             suggested=tuple(s.source.seq for s in c.suggestions),
             activated_seq=c.activated_by.seq if c.activated_by else None,
+            claim_check_at=claim_check_at(c, policy),
         )
         for c in card.commitments
     )
@@ -228,7 +231,8 @@ def snapshot_of(raw: dict) -> Snapshot:
     promises = tuple(
         Promise(Side(p["side"]), p["seq"], p["action"], when(p["due_at"]),
                 PromiseStatus(p["status"]), p["alertable"], p.get("closed_seq"),
-                tuple(p.get("suggested", ())), p.get("activated_seq"))
+                tuple(p.get("suggested", ())), p.get("activated_seq"),
+                when(p.get("claim_check_at")))
         for p in raw["promises"]
     )  # fmt: skip
     return Snapshot(

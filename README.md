@@ -24,6 +24,7 @@ event stream, so it can be rebuilt, audited, and inspected as of any moment.
 | Every proposal must quote a literal span of the message it comes from | A model's assumption must never be stored as something a person said |
 | Nobody can bind the other side | "You promised me a refund" is a customer's claim, not a company promise |
 | The debtor's "done" is a *claim*; only the other side or a system of record *verifies* | "We sent the refund" and "the refund arrived" are different facts |
+| A claim the other side has not confirmed by the deadline raises one notice for a person to check; it is not a breach | A false claim must not silence a promise ([decision 0006](docs/decisions/0006-unconfirmed-claims.md)) |
 | The debtor cannot cancel their own promise, only renegotiate it | A dropped promise must stay visible |
 | A new promise is a duplicate only when it restates an open one: it names nothing the open one does not, and the reverse, with no other deadline | Two promises alike in action but about different things are both kept; dropping a real promise is silent ([decision 0003](docs/decisions/0003-promise-identity.md)) |
 | A close (done, cancelled, renegotiated) must name its promise twice and be about it; if not, the promise stays open and the close becomes a suggestion | A promise closed by mistake is never alerted on again; one left open still is |
@@ -421,8 +422,8 @@ memory: (a) the whole transcript at each checkpoint, (b) a summary updated
 after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
 (`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
 bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 9); the raw record is under
-`results/` and `results/round2/` to `results/round9/`.
+[docs/results.md](docs/results.md) (rounds 1 to 10); the raw record is under
+`results/` and `results/round2/` to `results/round10/`, one run or ticket per line.
 
 ## Running the service
 

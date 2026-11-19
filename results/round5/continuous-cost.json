@@ -1,21 +1,11 @@
 {
-  "tickets": 20,
-  "messages": 3481,
-  "observed_checkpoint_usage": "Usage(calls=88, prompt_tokens=416339, completion_tokens=86064, cached_tokens=56320, reported_usd=0.08678608399999997, reasoning_tokens=0)",
-  "projected_prompt_tokens": 14020397,
-  "projected_completion_tokens": 3420522,
-  "estimates": {
-    "round4_cache_share": {
-      "cached_input_share": 0.1352743797722529,
-      "cost_total": 3.1419164042000003,
-      "cost_per_message": 0.0009025901764435508,
-      "cost_per_ticket": 0.15709582021000001
-    },
-    "all_input_cached": {
-      "cached_input_share": 1.0,
-      "cost_total": 1.4955049074,
-      "cost_per_message": 0.00042961933565067507,
-      "cost_per_ticket": 0.07477524536999999
-    }
-  }
+"tickets":20,
+"messages":3481,
+"observed_checkpoint_usage":"Usage(calls=88, prompt_tokens=416339, completion_tokens=86064, cached_tokens=56320, reported_usd=0.08678608399999997, reasoning_tokens=0)",
+"projected_prompt_tokens":14020397,
+"projected_completion_tokens":3420522,
+"estimates":{
+"round4_cache_share":{"cached_input_share":0.1352743797722529,"cost_total":3.1419164042000003,"cost_per_message":0.0009025901764435508,"cost_per_ticket":0.15709582021000001},
+"all_input_cached":{"cached_input_share":1.0,"cost_total":1.4955049074,"cost_per_message":0.00042961933565067507,"cost_per_ticket":0.07477524536999999}
+}
 }

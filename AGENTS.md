@@ -43,7 +43,8 @@ promise is a duplicate, in [decision 0003](docs/decisions/0003-promise-identity.
 a conditional offer is kept, in
 [decision 0004](docs/decisions/0004-conditional-commitments.md); when a second
 order or account is a dispute, in
-[decision 0005](docs/decisions/0005-identifier-facts.md).
+[decision 0005](docs/decisions/0005-identifier-facts.md); what an unconfirmed claim
+raises, in [decision 0006](docs/decisions/0006-unconfirmed-claims.md).
 
 If a task cannot be done well within these rules, do not change them. Do the
 part that fits, and write the proposed change as a decision record in

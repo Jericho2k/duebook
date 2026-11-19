@@ -18,6 +18,11 @@ checkpoints — each handoff and the end — and is judged by this code alone.
   deadline it trusts, that has passed by the checkpoint is an alert. Precision
   and recall against the promises planted as broken; every alert that is not
   one is a false alert.
+* *Unconfirmed claims* (decision 0006) — a promise the method holds as
+  claimed, past the moment it asks a person to check it, is a check. It is
+  right when the label says the promise is still owed and noise when the
+  label says it was settled; a company promise held as claimed past its
+  planted deadline while still owed, with no check, is a missed one.
 * *Closes* — of the promises found, which the method holds as closed (done,
   claimed, cancelled or replaced). A *false close* is one closed while the
   label says it is still owed — the costliest error, because a promise closed
@@ -172,6 +177,8 @@ class Score:
     offer_states_right: int = 0
     offer_states_judged: int = 0
     condition_alerts: Counts = field(default_factory=Counts)
+    #: Checks of unconfirmed claims: right (still owed), noise (settled), missed.
+    claim_checks: Counts = field(default_factory=Counts)
 
     def __add__(self, other: Score) -> Score:
         return Score(*(getattr(self, f.name) + getattr(other, f.name) for f in fields(self)))
@@ -280,6 +287,7 @@ def score_snapshot(ticket: SimTicket, snap: Snapshot) -> Score:
         facts_current=current,
         facts_recalled=recalled,
         **_offers(ticket, snap),
+        claim_checks=_claim_checks(pairs, spurious, cp),
     )
 
 
@@ -344,6 +352,18 @@ def alerted_at(p: Promise, cp: Checkpoint) -> bool:
         and p.due_at is not None
         and p.due_at <= cp.at
     )
+
+
+def _claim_checks(pairs, spurious: Sequence[Promise], cp: Checkpoint) -> Counts:
+    def checked(f: Promise) -> bool:
+        return (f.status is PromiseStatus.CLAIMED and f.claim_check_at is not None
+                and f.claim_check_at <= cp.at)  # fmt: skip
+
+    right = sum(1 for g, f in pairs if checked(f) and not g.closed(cp.seq))
+    noise = sum(1 for g, f in pairs if checked(f) and g.closed(cp.seq))
+    missed = sum(1 for g, f in pairs if f.status is PromiseStatus.CLAIMED and not checked(f)
+                 and _breached(g, cp))  # fmt: skip
+    return Counts(right, noise + sum(1 for f in spurious if checked(f)), missed)
 
 
 def _state(status: PromiseStatus) -> str:

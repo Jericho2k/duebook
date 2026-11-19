@@ -168,7 +168,7 @@ def rewritten(
         stored = {"split": split.name, "seed": split.seed, "count": split.count,
                   "profile": split.profile.name, "writer": writer, "tickets": out}  # fmt: skip
         cache.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(stored, ensure_ascii=False, indent=1))
+        path.write_text(compact(stored))
     result = [with_rewritten_text(t, stored["tickets"][t.ticket_id]["texts"]) for t in tickets]
     return result, stored
 
@@ -619,6 +619,9 @@ METRICS: dict[str, tuple[str, Callable[[Score, int], float]]] = {
                              lambda s, n: s.offer_states_right / max(s.offer_states_judged, 1)),
     "condition_alert_recall": ("all", lambda s, n: s.condition_alerts.recall),
     "false_condition_alerts_per_ticket": ("all", lambda s, n: s.condition_alerts.fp / n),
+    # Unconfirmed claims (decision 0006), at the end of each ticket.
+    "claim_check_precision": ("end", lambda s, n: s.claim_checks.precision),
+    "claim_check_recall": ("end", lambda s, n: s.claim_checks.recall),
 }
 #: name -> value per ticket; averaged over tickets.
 COSTS: dict[str, Callable[[MethodRun, SimTicket], float]] = {
@@ -779,6 +782,23 @@ def to_json(value: Any) -> Any:
     if isinstance(value, list | tuple):
         return [to_json(v) for v in value]
     return value
+
+
+def compact(record: dict) -> str:
+    """A record as JSON with one top-level key per line, and one line per item of a list or
+    mapping under it (a run, a ticket): a new record is a few thousand lines, not 80,000."""
+
+    def line(value: Any) -> str:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    def block(value: Any) -> str:
+        if isinstance(value, list) and value:
+            return "[\n" + ",\n".join(line(v) for v in value) + "\n]"
+        if isinstance(value, dict) and value:
+            return "{\n" + ",\n".join(f"{line(k)}:{line(v)}" for k, v in value.items()) + "\n}"
+        return line(value)
+
+    return "{\n" + ",\n".join(f"{line(k)}:{block(v)}" for k, v in record.items()) + "\n}\n"
 
 
 def saved(run: MethodRun) -> dict[str, Any]:
@@ -1044,7 +1064,7 @@ def main(argv: Sequence[str] | None = None) -> None:
         "runs": [record(r, score_ticket(by_id[r.ticket_id], r.snapshots)) for r in runs],
     }  # fmt: skip
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(to_json(result), ensure_ascii=False, indent=1))
+    out.write_text(compact(to_json(result)))
     journal.unlink(missing_ok=True)
     keys = ["commitment_f1", "deadline_accuracy", "status_accuracy", "breach_alert_recall",
             "false_alerts_per_ticket", "false_closes_per_ticket",

@@ -248,3 +248,20 @@ def test_a_second_order_recorded_before_decision_0005_replays_as_a_dispute(store
     store.record(first, t.log[0][1], now=first.at)
     recorded_under(4, store, conn, t.log[-1][0], second)
     assert len(store.replay("T-1").open_contradictions()) == 1
+
+
+def test_an_unconfirmed_claim_is_queued_but_not_one_decided_before_0006(store, conn):
+    ticket = promise("T-1")
+    claim = ResolveCommitment(ticket.card.commitments[0].id, "Перезвонил", "Перезвоню вам")
+    ticket.wait(hours=3).say(IVAN, "Перезвонил.", claim)  # after the deadline
+    persist(store, ticket)
+    (row,) = conn.execute("select * from outbox").fetchall()
+    assert row["kind"] == "claim_unconfirmed" and row["seq"] == ticket.card.last_seq
+    assert store.replay("T-1") == ticket.card
+
+    old = promise("T-2")
+    old.wait(hours=3).say(IVAN, "Перезвонил.", claim)
+    for event, proposals in old.log[:-1]:
+        store.record(event, proposals, now=event.at)
+    recorded_under(5, store, conn, old.log[-1][0], claim)
+    assert not store.replay("T-2").commitments[0].claim_checked

@@ -146,8 +146,9 @@ GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMB
 #: (``event_proposals.close_rules``) and is replayed under it (decision 0001):
 #: 2 a verifier "no" vetoes a close and every close needs evidence; 3 a contextual
 #: close may not name another thing; 4 promise identity (decision 0003);
-#: 5 identifier slots hold a set (decision 0005).
-RULES = 5
+#: 5 identifier slots hold a set (decision 0005); 6 an unconfirmed claim is checked, and a
+#: confirmation aimed at something that is not an open promise is suggested (decision 0006).
+RULES = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +181,10 @@ class Guards:
     @property
     def identifiers(self) -> bool:
         return self.rules >= 5
+
+    @property
+    def claims(self) -> bool:
+        return self.rules >= 6
 
 
 #: The reducer as it was before the guards: who may close, never what.
@@ -567,10 +572,11 @@ def _resolve_commitment(
     previous: MessagePosted | None,
 ) -> tuple[Card, list[Reason]]:
     c = card.commitment(p.commitment_id)
-    if c is None:
-        return card, [Reason.UNKNOWN_TARGET]
-    if not c.unresolved:
-        return card, [Reason.ALREADY_RESOLVED]
+    if c is None or not c.unresolved:
+        refused = Reason.UNKNOWN_TARGET if c is None else Reason.ALREADY_RESOLVED
+        if guards.claims and guards.relevance:  # a suggestion is the guards' evidence
+            card = _suggest_fitting(card, event, p, source, guards, refused)
+        return card, [refused]
     context = _resolution_context(event, p, c, previous, guards)
     # A short excerpt must not hide a second possible subject in the question.
     said = (p.quote, previous.text) if context and previous else (p.quote,)
@@ -587,13 +593,30 @@ def _resolve_commitment(
         # The debtor's word that it is done is a claim, not a fact.
         if c.state is CommitmentState.CLAIMED:
             return card, [Reason.ALREADY_CLAIMED]
-        updated = replace(c, state=CommitmentState.CLAIMED, claimed_at=event.at, resolution=source)
+        updated = replace(c, state=CommitmentState.CLAIMED, claimed_at=event.at, resolution=source,
+                          claim_checked=guards.claims)  # fmt: skip
     else:
         updated = replace(
             c, state=CommitmentState.FULFILLED, resolved_at=event.at, resolution=source,
             resolution_context=context,
         )
     return _put_commitment(card, updated), []
+
+
+def _suggest_fitting(
+    card: Card, event: MessagePosted, p: ResolveCommitment, source: Source, guards: Guards,
+    refused: Reason,
+) -> Card:
+    """A confirmation aimed at something that is not an open promise is not lost: when its
+    words fit exactly one open promise of the other side, it is suggested there (0006)."""
+    owing = other_side(event)
+    checks = Guards(target=False, verifier=False, rules=guards.rules)
+    fitting = [c for c in card.commitments if c.unresolved and c.owner.side is owing
+               and _check_close(c, _rivals(card, c), (p.quote,), "", checks) is None]  # fmt: skip
+    if len(fitting) != 1:
+        return card
+    return _put_commitment(card, _suggest(fitting[0], Suggestion(Closure.RESOLVED, source,
+                                                                 refused.value)))  # fmt: skip
 
 
 def _resolution_context(
