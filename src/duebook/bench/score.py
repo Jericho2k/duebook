@@ -671,7 +671,9 @@ def _alert(g: GoldCommitment, timeline, held, until) -> timedelta | None:
             continue
         fires = max(snap.checkpoint.at, f.due_at)
         if fires <= end and alerted_at(f, Checkpoint(snap.checkpoint.seq, fires, Moment.END)):
-            return fires - g.due_at
+            # A deadline within a minute is the same deadline ("23:59" and "23:59:59").
+            late = fires - g.due_at
+            return late if abs(late) > TOLERANCE else timedelta(0)
     return None
 
 
