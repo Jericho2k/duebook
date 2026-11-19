@@ -146,8 +146,8 @@ GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMB
 #: (``event_proposals.close_rules``) and is replayed under it (decision 0001):
 #: 2 a verifier "no" vetoes a close and every close needs evidence; 3 a contextual
 #: close may not name another thing; 4 promise identity (decision 0003);
-#: 5 identifier slots hold a set (decision 0005).
-RULES = 5
+#: 5 identifier slots hold a set (decision 0005); 6 an unconfirmed claim is checked (0006).
+RULES = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -180,6 +180,10 @@ class Guards:
     @property
     def identifiers(self) -> bool:
         return self.rules >= 5
+
+    @property
+    def claims(self) -> bool:
+        return self.rules >= 6
 
 
 #: The reducer as it was before the guards: who may close, never what.
@@ -587,7 +591,8 @@ def _resolve_commitment(
         # The debtor's word that it is done is a claim, not a fact.
         if c.state is CommitmentState.CLAIMED:
             return card, [Reason.ALREADY_CLAIMED]
-        updated = replace(c, state=CommitmentState.CLAIMED, claimed_at=event.at, resolution=source)
+        updated = replace(c, state=CommitmentState.CLAIMED, claimed_at=event.at, resolution=source,
+                          claim_checked=guards.claims)  # fmt: skip
     else:
         updated = replace(
             c, state=CommitmentState.FULFILLED, resolved_at=event.at, resolution=source,

@@ -1,9 +1,21 @@
 from datetime import datetime, timedelta
 
-from helpers import ANNA, IVAN, MSK, OLGA, Ticket
+from helpers import ANNA, CAL, IVAN, MSK, OLGA, Ticket
 
-from duebook import AlertPolicy, NoticeKind, Party, Status, next_wakeup, notices, status_at
+from duebook import (
+    AlertPolicy,
+    CommitmentState,
+    MessagePosted,
+    NoticeKind,
+    Party,
+    Status,
+    apply,
+    next_wakeup,
+    notices,
+    status_at,
+)
 from duebook.proposals import CancelCommitment, MakeCommitment, ResolveCommitment
+from duebook.reducer import Guards
 from duebook.temporal import Offset, Unit, WeekdayRef
 
 FRIDAY_END = datetime(2027, 1, 15, 23, 59, 59, tzinfo=MSK)
@@ -111,11 +123,11 @@ def test_a_disputed_deadline_is_shown_but_never_alerted_on():
 
 
 def test_settled_commitments_are_silent():
-    for proposal, author in ((ResolveCommitment, IVAN), (CancelCommitment, ANNA)):
+    for proposal in (ResolveCommitment, CancelCommitment):
         t = refund_ticket()
         cid = t.card.commitments[0].id
         said = "Деньги вернули, вопрос закрыт"
-        t.say(author, said, proposal(cid, said, target_quote="вернём деньги"))
+        t.say(ANNA, said, proposal(cid, said, target_quote="вернём деньги"))
         assert notices(t.card, FRIDAY_END + timedelta(days=1)) == []
 
 
@@ -173,3 +185,62 @@ def test_the_cutoff_is_judged_by_the_deadline_not_by_when_it_becomes_due_soon():
         NoticeKind.DUE_SOON
     ]
     assert next_wakeup(t.card, t.now, policy) == FRIDAY_END - timedelta(hours=4)
+
+
+# ---------------------------------------------- unconfirmed claims (0006) ----
+
+
+def claimed(t: Ticket) -> str:
+    """Ivan says the refund went out; the customer has not confirmed it."""
+    cid = t.card.commitments[0].id
+    t.say(IVAN, "Деньги отправили",
+          ResolveCommitment(cid, "Деньги отправили", target_quote="вернём деньги"))  # fmt: skip
+    return cid
+
+
+def test_a_claim_unconfirmed_by_the_deadline_raises_one_notice_and_no_breach():
+    t = refund_ticket()
+    cid = claimed(t.wait(days=1))
+    assert notices(t.card, FRIDAY_END - timedelta(minutes=1)) == []
+    (notice,) = notices(t.card, FRIDAY_END + timedelta(days=2))
+    assert notice.kind is NoticeKind.CLAIM_UNCONFIRMED and notice.due_at == FRIDAY_END
+    assert notice.key == f"T-1:{cid}:claim_unconfirmed:{notice.due_at.isoformat()}"
+    assert notice.recipient == IVAN.id and notice.seq == t.card.last_seq
+    assert status_at(t.card.commitment(cid), FRIDAY_END + timedelta(days=2)) is Status.CLAIMED
+    assert next_wakeup(t.card, t.now) == FRIDAY_END
+
+
+def test_a_claim_made_after_the_deadline_is_checked_from_the_claim():
+    t = refund_ticket()
+    t.wait(days=6)
+    claimed(t)
+    (notice,) = notices(t.card, t.now)
+    assert notice.kind is NoticeKind.CLAIM_UNCONFIRMED and notice.due_at == t.now
+
+
+def test_a_claim_on_a_promise_without_a_deadline_is_never_checked():
+    t = refund_ticket(quote="вернём деньги", due=None, due_quote="")
+    claimed(t)
+    assert notices(t.card, t.now + timedelta(days=365)) == []
+    assert next_wakeup(t.card, t.now) is None
+
+
+def test_a_confirmation_or_a_cancellation_clears_the_check():
+    for proposal in (ResolveCommitment, CancelCommitment):
+        t = refund_ticket()
+        cid = claimed(t)
+        said = "Деньги вернули, спасибо"
+        t.say(ANNA, said, proposal(cid, said, target_quote="вернём деньги"))
+        assert notices(t.card, FRIDAY_END + timedelta(days=1)) == []
+
+
+def test_a_claim_decided_under_earlier_rules_is_not_checked():
+    t = refund_ticket()
+    cid = t.card.commitments[0].id
+    said = "Деньги отправили"
+    event = MessagePosted(id="e9", ticket_id="T-1", seq=t.card.last_seq + 1, at=t.now,
+                          author=IVAN, text=said)
+    card = apply(t.card, event, [ResolveCommitment(cid, said, target_quote="вернём деньги")],
+                 CAL, guards=Guards(rules=5)).card  # fmt: skip
+    assert card.commitment(cid).state is CommitmentState.CLAIMED
+    assert notices(card, FRIDAY_END + timedelta(days=1)) == []

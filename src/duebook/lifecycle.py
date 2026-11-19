@@ -43,6 +43,8 @@ class NoticeKind(StrEnum):
     UNREADABLE = "unreadable"
     #: A conditional offer's condition is due and nothing says whether it holds (0004).
     CONDITION_DUE = "condition_due"
+    #: Claimed done by the side that owes it, not confirmed by the deadline (0006).
+    CLAIM_UNCONFIRMED = "claim_unconfirmed"
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,10 +77,11 @@ class Notice:
     ticket_id: str
     #: None for an alert about a message or a conditional offer.
     commitment_id: str | None
-    #: The deadline; for an unreadable message, when it was posted.
+    #: The deadline; for an unreadable message, when it was posted; for an unconfirmed
+    #: claim, the deadline or the claim, whichever is later.
     due_at: datetime
     recipient: str | None
-    #: The message an unreadable or condition-due alert is about.
+    #: The message an unreadable, condition-due or unconfirmed-claim alert is about.
     seq: int | None = None
 
 
@@ -131,9 +134,16 @@ def notices(card: Card, now: datetime, policy: AlertPolicy | None = None) -> lis
                 ticket_id=card.ticket_id,
                 commitment_id=c.id,
                 due_at=due_at,
-                recipient=card.assignee if c.owner is Party.CUSTOMER else c.responsible,
+                recipient=_recipient(card, c),
             )
         )
+    for c in card.commitments:
+        at = claim_check_at(c, policy)
+        if at is not None and now >= at:
+            kind = NoticeKind.CLAIM_UNCONFIRMED
+            result.append(Notice(f"{card.ticket_id}:{c.id}:{kind.value}:{at.isoformat()}", kind,
+                                 card.ticket_id, c.id, at, _recipient(card, c),
+                                 c.resolution.seq))  # fmt: skip
     for k in card.conditionals:
         if _checkable(k, policy) and now >= k.due.deadline.due_at:
             kind, due_at = NoticeKind.CONDITION_DUE, k.due.deadline.due_at
@@ -160,18 +170,40 @@ def next_wakeup(card: Card, now: datetime, policy: AlertPolicy | None = None) ->
             due_at = c.due.deadline.due_at
             moments += [due_at - _lead(c, policy), due_at]
     moments += [k.due.deadline.due_at for k in card.conditionals if _checkable(k, policy)]
+    moments += [m for c in card.commitments if (m := claim_check_at(c, policy)) is not None]
     future = [m for m in moments if m > now]
     return min(future) if future else None
 
 
+def claim_check_at(c: Commitment, policy: AlertPolicy | None = None) -> datetime | None:
+    """When a claim the other side has not confirmed needs a person (decision 0006).
+
+    The deadline, or the claim if it came later. It neither reopens the promise nor
+    counts as a breach; a confirmation or a cancellation ends the claim, and with it this.
+    """
+    policy = policy or AlertPolicy()
+    if c.state is not CommitmentState.CLAIMED or not c.claim_checked or not _trusted(c, policy):
+        return None
+    return max(c.due.deadline.due_at, c.claimed_at)
+
+
 def _alertable(c: Commitment, policy: AlertPolicy) -> bool:
-    if c.state is not CommitmentState.OPEN or c.due is None:
+    return c.state is CommitmentState.OPEN and _trusted(c, policy)
+
+
+def _trusted(c: Commitment, policy: AlertPolicy) -> bool:
+    """A deadline to alert on: trusted, inside the alerting window, owed by whom the policy says."""
+    if c.due is None:
         return False
     if c.due.confidence < policy.min_confidence:
         return False
     if policy.alerts_since is not None and c.due.deadline.due_at < policy.alerts_since:
         return False
     return policy.include_customer or c.owner is not Party.CUSTOMER
+
+
+def _recipient(card: Card, c: Commitment) -> str | None:
+    return card.assignee if c.owner is Party.CUSTOMER else c.responsible
 
 
 def _checkable(k: Conditional, policy: AlertPolicy) -> bool:

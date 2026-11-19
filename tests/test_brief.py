@@ -93,6 +93,19 @@ def test_a_claim_of_completion_is_shown_as_unconfirmed_with_its_own_source():
     assert "ПРОСРОЧЕНО" not in line and "осталось" not in line
 
 
+def test_a_claim_unconfirmed_by_its_deadline_is_urgent_and_asks_to_check_it():
+    t = story()
+    t.say(
+        OLGA, "Перезвонила клиенту.", ResolveCommitment("e5#2", "Перезвонила клиенту", "перезвоню")
+    )
+    b = brief(t.card, TUESDAY_NOON + timedelta(hours=4))
+    (line,) = [x.text for s in b.sections if s.key == "urgent" for x in s.lines
+               if "перезвонить" in x.text]  # fmt: skip
+    assert ("отмечено как выполненное, но клиент не подтвердил — проверьте "
+            "[№8 Ольга: «Перезвонила клиенту»]") in line  # fmt: skip
+    assert "ПРОСРОЧЕНО" not in line
+
+
 def test_a_deadline_the_two_readers_disagreed_on_is_flagged_not_hidden():
     t = Ticket()
     t.say(IVAN, "Вернём деньги до пятницы.",

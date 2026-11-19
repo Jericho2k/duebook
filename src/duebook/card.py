@@ -166,6 +166,9 @@ class Commitment:
     #: For a conditional offer that came true: the message that said so. The
     #: offer itself is ``source`` (decision 0004).
     activated_by: Source | None = None
+    #: The claim was recorded under rule version 6, so ``lifecycle`` asks a person to
+    #: check it if the other side has not confirmed it by the deadline (decision 0006).
+    claim_checked: bool = False
 
     @property
     def unresolved(self) -> bool:
