@@ -1,1 +1,2 @@
 {"at": "2026-11-19T09:52:42.817597+00:00", "split": "test3", "what": "cost projection only", "methods": "event_memory,full_context_live", "label": "live full context: projection from 20 events", "usd": 0.0017166744, "reused_usd": 0.0}
+{"at": "2026-11-19T09:53:43.695995+00:00", "split": "test3", "what": "run", "methods": "event_memory,full_context_live", "label": "live full context: ticket 1", "usd": 0.05980096640000001, "reused_usd": 0.0033232527999999995}

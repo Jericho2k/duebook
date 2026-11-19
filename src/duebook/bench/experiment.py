@@ -311,9 +311,10 @@ def sample_of(ticket: SimTicket, events: int) -> SimTicket:
 #: round 2's test split against a 20-event sample: event memory 1.5, full
 #: context 0.7, rolling summary 3.4 (it was projected at 2.0 and three of its
 #: four tickets ran into the cap), Mem0 2.4. Graphiti, on two dev2 tickets
-#: against a 30-event sample: 1.1.
+#: against a 30-event sample: 1.1. Full context asked live, on test3's first ticket
+#: against a 20-event sample: 0.46 (early answers are mostly fixed overhead).
 GROWTH = {"event_memory": 1.6, "full_context": 1.5, "rolling_summary": 3.5, "mem0": 2.5,
-          "graphiti": 1.2, "full_context_live": 1.5}  # fmt: skip
+          "graphiti": 1.2, "full_context_live": 0.5}  # fmt: skip
 
 
 def project(
