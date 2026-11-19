@@ -13,6 +13,11 @@
 > исходным кодом пакета `mem0ai` 2.2.1. Где поиск подтвердил не всё,
 > это сказано в примечании к записи.
 >
+> 19.11.2026 добавлены записи [32]–[39] и уточнены [17] и [18]. Страницы
+> GitHub и PyPI в этот раз открывались напрямую; arxiv.org и
+> aclanthology.org из среды были недоступны, поэтому статьи arXiv сверены по
+> данным, которые возвращал поиск (название, авторы, номер, дата подачи).
+>
 > TODO (автор): перед сдачей открыть каждую электронную ссылку, поставить
 > свою дату обращения и проверить требования кафедры к оформлению (тире
 > между областями описания, «[Электронный ресурс]», порядок «et al.»).
@@ -54,10 +59,11 @@
 
 16. Zep: A Temporal Knowledge Graph Architecture for Agent Memory [Электронный ресурс] / P. Rasmussen, P. Paliychuk, T. Beauvais [et al.] // arXiv. — 2025. — arXiv:2501.13956. — URL: https://arxiv.org/abs/2501.13956 (дата обращения: 17.11.2026).
 
-17. Graphiti [Электронный ресурс] : temporal knowledge graphs for AI agents // GitHub. getzep/graphiti. — URL: https://github.com/getzep/graphiti (дата обращения: 17.11.2026).
+17. Graphiti [Электронный ресурс] : a framework for building temporal knowledge graphs // GitHub. getzep/graphiti. — URL: https://github.com/getzep/graphiti (дата обращения: 19.11.2026).
+    *Примечание: сверено 19.11.2026 по README (лицензия Apache-2.0, би-темпоральный учёт, инвалидация без удаления; Neo4j, FalkorDB, Amazon Neptune), по странице PyPI `graphiti-core` (версия 0.31.2) и по файлу `graphiti_core/prompts/extract_edges.py` (фразы «Soft deadlines are not invalid_at values» и «Future-tense plans/promises use the statement reference time»). В эксперименте использована версия 0.31.2.*
 
-18. A-MEM: Agentic Memory for LLM Agents [Электронный ресурс] / W. Xu, Z. Liang, K. Mei [et al.] // arXiv. — 2025. — arXiv:2502.12110. — URL: https://arxiv.org/abs/2502.12110 (дата обращения: 17.11.2026).
-    *Примечание: найти подтверждение публикации на конференции не удалось, поэтому статья цитируется как препринт. TODO (автор): проверить, не вышла ли она в трудах NeurIPS 2025.*
+18. A-Mem: Agentic Memory for LLM Agents / W. Xu, Z. Liang, K. Mei, H. Gao, J. Tan, Y. Zhang // Advances in Neural Information Processing Systems 38 (NeurIPS 2025). — 2025. — URL: https://proceedings.neurips.cc/paper_files/paper/2025/hash/19909c36f51abc4856b4560aff3d36d6-Abstract-Conference.html (дата обращения: 19.11.2026). — Также: arXiv:2502.12110.
+    *Примечание: публикация в трудах NeurIPS 2025 (основная секция) и полный список авторов подтверждены 19.11.2026 по странице трудов в поисковой выдаче. TODO (автор): взять страницы из трудов.*
 
 19. Snodgrass R. T. Developing Time-Oriented Database Applications in SQL. — San Francisco : Morgan Kaufmann, 1999. — ISBN 978-1-55860-436-0.
     *Примечание: издатель указывает 1999 год, некоторые каталоги — 2000. Объём не указан, потому что найденные данные расходятся. TODO (автор): взять год, место издания и объём из библиотечного каталога.*
@@ -90,6 +96,30 @@
 
 31. Model Context Protocol. Specification. Version 2025-11-25 [Электронный ресурс]. — URL: https://modelcontextprotocol.io/specification/2025-11-25 (дата обращения: 17.11.2026).
 
+32. LangMem [Электронный ресурс] : библиотека долговременной памяти для агентов // GitHub. langchain-ai/langmem. — URL: https://github.com/langchain-ai/langmem (дата обращения: 19.11.2026).
+    *Примечание: лицензия MIT; описание «LangMem helps agents learn and adapt from their interactions over time» сверено по README.*
+
+33. Cognee [Электронный ресурс] : open-source AI memory platform for agents // GitHub. topoteretes/cognee. — URL: https://github.com/topoteretes/cognee (дата обращения: 19.11.2026).
+    *Примечание: лицензия Apache-2.0; сверено по README.*
+
+34. Memory OS of AI Agent [Электронный ресурс] / J. Kang, M. Ji, Z. Zhao, T. Bai // arXiv. — 2025. — arXiv:2506.06326. — URL: https://arxiv.org/abs/2506.06326 (дата обращения: 19.11.2026).
+    *Примечание: название, авторы и дата подачи (30.05.2025) — по данным поиска; код — BAI-LAB/MemoryOS. Числа из аннотации не приводятся.*
+
+35. MemOS: A Memory OS for AI System [Электронный ресурс] / Z. Li [et al.] // arXiv. — 2025. — arXiv:2507.03724. — URL: https://arxiv.org/abs/2507.03724 (дата обращения: 19.11.2026).
+    *Примечание: у статьи 39 авторов; первый автор, название и номер — по данным поиска. Есть версии v1–v4 (последняя — 03.12.2025). TODO (автор): выбрать версию и проверить первого автора на титульной странице.*
+
+36. MIRIX: Multi-Agent Memory System for LLM-Based Agents [Электронный ресурс] / Y. Wang, X. Chen // arXiv. — 2025. — arXiv:2507.07957. — URL: https://arxiv.org/abs/2507.07957 (дата обращения: 19.11.2026).
+    *Примечание: по данным поиска; числа из аннотации не приводятся.*
+
+37. Supermemory [Электронный ресурс] : memory and context engine // GitHub. supermemoryai/supermemory. — URL: https://github.com/supermemoryai/supermemory (дата обращения: 19.11.2026).
+    *Примечание: лицензия MIT; фраза «handles knowledge updates and contradictions, forgets expired information» сверена по README.*
+
+38. Hindsight [Электронный ресурс] : agent memory that learns // GitHub. vectorize-io/hindsight. — URL: https://github.com/vectorize-io/hindsight (дата обращения: 19.11.2026).
+    *Примечание: лицензия MIT по репозиторию (на PyPI пакет `hindsight-api` указан под Apache 2.0); PostgreSQL + pgvector указаны в разделе о запуске. Статья о Hindsight найдена только во вторичных источниках и не цитируется.*
+
+39. Letta [Электронный ресурс] : platform for stateful agents // GitHub. letta-ai/letta. — URL: https://github.com/letta-ai/letta (дата обращения: 19.11.2026).
+    *Примечание: README указывает, что текущий код находится в letta-ai/letta-code, а архивная ветка содержит выведенный из эксплуатации сервер Letta V1 API.*
+
 ## Требует проверки
 
 Источники, которые не удалось подтвердить или о которых подтверждена лишь
@@ -98,8 +128,6 @@
 
 - **Число соавторов и их порядок** в [12] и [21]: в записях указаны только
   первые авторы, их подтвердил поиск.
-- **Конференционная версия A-MEM [18].** Публикация на NeurIPS 2025 не
-  подтверждена.
 - **Дата и автор поста DEV Community [1]** уточнены лишь частично.
 - **Утверждения о функциях helpdesk-платформ [3]–[6]** сверены по
   фрагментам официальной документации в поисковой выдаче, а не по полному
@@ -110,3 +138,16 @@
   18,5 % на LongMemEval) и τ-bench [24] (gpt-4o решает менее 50 % задач,
   pass^8 < 25 % в retail) приведены по аннотациям, текст статей не
   перечитывался.
+- **Статьи arXiv [34]–[36]** сверены по данным поиска, а не по самим
+  страницам arXiv (сайт был недоступен из среды). В тексте используются
+  только описания архитектуры, без чисел.
+- **Не цитируются, потому что не проверены:** Memobase, Memori и MemU
+  (упомянуты в `docs/competitors.md`); статья о Hindsight («HINDSIGHT:
+  Structured Agent Memory that Retains, Recalls, and Reflects» — найдена
+  только во вторичных источниках); функции сводок Salesforce Einstein /
+  Agentforce (документация не читалась); утверждения
+  `docs/competitors.md` об отсутствии интервалов действия в LangMem и
+  A-MEM, о метках времени событий в Hindsight и о версии Cognee 1.6.8.
+- **Kuzu в Graphiti [17]:** README на PyPI (0.31.2) помечает Kuzu как
+  устаревший, а README ветки `main` на GitHub его не упоминает. В тексте
+  это не используется.
