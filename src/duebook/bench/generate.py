@@ -373,6 +373,9 @@ SPLITS = {
         # times in test5. Chosen on the labels alone; test5 is never used for tuning.
         Split("dev7", seed=7221, count=4, profile=MAIN5, results=Path("results/round10")),
         Split("test5", seed=7373, count=20, profile=MAIN5, results=Path("results/round10")),
+        # The two readers see the same tickets in the generator's original wording.
+        Split("dev-portability", seed=9091, count=12, profile=MAIN5,
+              results=Path("results/round10/model-comparison")),  # fmt: skip
     )
 }
 
