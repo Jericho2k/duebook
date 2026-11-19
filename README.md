@@ -418,12 +418,15 @@ other methods again, so frozen baselines are never run twice. Finished
 tickets are journalled, so an interrupted run resumes without paying twice.
 
 The baselines (`bench.baselines`) read with the same model as the event
-memory: (a) the whole transcript at each checkpoint, (b) a summary updated
-after every event, (c) Mem0 (`pip install -e ".[mem0]"`), (d) Graphiti
-(`pip install -e ".[graphiti]"`). The comparison, its numbers with 95%
-bootstrap intervals, and its threats to validity are in
-[docs/results.md](docs/results.md) (rounds 1 to 10); the raw record is under
-`results/` and `results/round2/` to `results/round10/`, one run or ticket per line.
+memory: (a) the whole transcript at each checkpoint, or after every message
+(`full_context_live`), (b) a summary updated after every event, (c) Mem0
+(`pip install -e ".[mem0]"`), (d) Graphiti (`pip install -e ".[graphiti]"`).
+Every record also says when each method first held each promise and alerted
+on each broken one, and what a ticket costs answering only at checkpoints and
+with an answer current after every message. The comparison, its numbers with
+95% bootstrap intervals, and its threats to validity are in
+[docs/results.md](docs/results.md) (rounds 1 to 10c); the raw record is under
+`results/` and `results/round2/` to `results/round10c/`, one run or ticket per line.
 
 ## Running the service
 

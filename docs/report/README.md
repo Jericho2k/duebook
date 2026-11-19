@@ -12,7 +12,7 @@
 | Файл | Раздел отчёта | Состояние |
 |---|---|---|
 | [`01-obzor.md`](01-obzor.md) | 1. Обзор предметной области и существующих решений | черновик; источники сверены 17.11.2026, [17], [18], [32]–[39] — 19.11.2026 |
-| [`02-metod.md`](02-metod.md) | 2. Описание предлагаемого метода | черновик; сверен с кодом на коммите `ce43f99` (ветка `chore/after-round10`: решение 0006, раунд 10b) |
+| [`02-metod.md`](02-metod.md) | 2. Описание предлагаемого метода | черновик; сверен с кодом на коммите `ce43f99` (ветка `chore/after-round10`: решение 0006, раунд 10b); 2.14 «Два режима» — по ветке `exp/fair-comparison` (раунд 10c) |
 | [`references.md`](references.md) | Список использованных источников (ГОСТ Р 7.0.5–2008) | черновик; см. раздел «Требует проверки» в конце файла |
 
 ## Пометки в тексте
@@ -58,6 +58,7 @@
 | 2.12 Сводка при передаче | `src/duebook/brief.py` | порядок разделов, формат строк |
 | 2.13 Обвязка, непрочитанные сообщения | `src/duebook/pipeline.py`, `extract/extractor.py` (`ATTEMPTS`, `gives_up`, `unread`), `src/duebook/api/app.py`, `src/duebook/cli.py`, `src/duebook/settings.py`, решение 0002 | новые эндпоинты, параметры, число тестов |
 | 2.14 Методика оценки и ключевые источники | `src/duebook/bench/` (`generate.py`, `score.py`, `baselines/`, `experiment.py`), `docs/results.md` раунд 10 (`test5` — несмещённая оценка, `test3` — сравнение с базовыми методами) и 10b, раунд 4 (откуда замороженные ответы базовых методов) | новый прогон, новые метрики или базовые методы |
+| 2.14 «Два режима» (при передаче и в реальном времени) | `bench/baselines/full_context.py` (`moments`, `live`), `bench/score.py` (`timeliness`, `stability`), `bench/experiment.py` (`timeline`, `when_known`, `regimes`), `docs/results.md` раунд 10c, `results/round10c/` (`test3-live.json`, `timeliness.json`) | новый прогон в реальном времени, новые цены, новый базовый метод |
 | 2.15 Ограничения | «What went wrong on `test5`» и «Threats to validity» раунда 10, «Round 10b» в `docs/results.md` | новый прогон, новое решение |
 
 ## Как обновлять

@@ -2,7 +2,10 @@
 
 Ten rounds, run from 2026-11-17 to 19. Round 10 runs the final method on a
 new, unseen split (`test5`) and on `test3` beside the frozen baselines;
-Round 10b replays its records under decision 0006 at $0.
+Round 10b replays its records under decision 0006 at $0. Round 10c asks full
+context after every message, as our method's card is current after every
+message, and measures when every method knows a promise and alerts on it,
+and what each costs in that live regime.
 Rounds 5 to 7 reuse the frozen Round 4 comparison. Round 4 contains the
 original run on a fresh test split. Round 8 runs our method on a new, unseen
 split (`test4`). Round 9 is not a run: it replays Round 8's record and reads
@@ -26,7 +29,8 @@ prompt fix: once on `test5`, a new split nobody had read, and once on
   gets all 60 hard close cases. Every baseline makes more false closes and
   false alerts and misses more disputes. Round 7 was already level on most
   measures. Full context is level on commitment F1 and costs a quarter as
-  much.
+  much when it answers only at handoffs; with an answer current after every
+  message it costs 4.2 times as much and is not more accurate (Round 10c).
 - **Cost:** $0.0170 a ticket on `test5` and $0.0154 on `test3`, about $0.09
   per 1,000 messages. The session spent **$0.7281 of the $0.75 cap**.
 
@@ -249,7 +253,8 @@ is a single point. Paired differences, other method minus Round 10:
 - It also has fewer false alerts. That interval excludes zero except
   against Graphiti, whose lower bound is 0.
 - On commitment F1, full context is level (+0.003 [−0.004, +0.009]) and
-  costs $0.011 less a ticket. Mem0 costs 3.4 times as much, Graphiti 10
+  costs $0.011 less a ticket, answering at handoffs only (Round 10c prices
+  both regimes). Mem0 costs 3.4 times as much, Graphiti 10
   times and the rolling summary 6 times.
 - Against Round 7 every difference is within its interval of zero, except
   cost: Round 10 costs $0.0014 more a ticket.
@@ -358,6 +363,280 @@ settled) or missed. [Record](../results/round10/replay.json)
 
 ```bash
 python scripts/replay_check.py   # folds the four records under rules 5 and 6 and checks them
+```
+
+## Round 10c: a fair comparison — live versus checkpoint-only
+
+The tables above compare a live system with methods asked only at handoffs.
+Our method reads every message as it arrives, about 184 model calls a ticket
+on `test3`. Its card is current after every message, and an alert fires at
+the deadline itself. Full context was asked only at the 4.4 checkpoints of a
+ticket (each handoff and the end). Its $0.0043 a ticket is the price of
+answering about four times, and between checkpoints it knows nothing. Mem0,
+Graphiti and the rolling summary ingest every message, but they too answer
+only at checkpoints. This round measures what that comparison left out:
+**when** each method knows something, and what each would cost if its answer
+had to be current after every message.
+
+- **Full context, asked live, on three `test3` tickets** (M0000–M0002, 555
+  answers): **$0.0714 a ticket**, 4.6 times our $0.0156 on the same tickets
+  and 15 times its own checkpoint-only cost. Of each answer's prompt, 96.8%
+  came from the provider's cache, so this is close to its cheapest case:
+  91% of the cost is the 835 output tokens it writes each time.
+- **At the checkpoints, asking live changed almost nothing.** It held the
+  same promises, statuses, facts and disputes as checkpoint-only full
+  context. It read one deadline fewer right (45 of 52 against 46) and
+  reported fewer spurious failed steps (failed-step precision 0.867 against
+  0.743).
+- **Live full context knows a promise as soon as ours does.** Both hold
+  every promise from the message that makes it. Checkpoint-only methods hold
+  it a median of 40.6–51.7 hours later, at the next handoff.
+- **It does not stay put.** Between consecutive answers it reopened a closed
+  promise 17 times, changed a deadline 54 times, dropped a promise 3 times
+  and an open dispute 13 times. It raised false alerts in 22 stretches of
+  answers, 18 of which no checkpoint answer shows. Our card made none of
+  these changes in 3,569 states on all 20 tickets.
+- **Alerts.** Ours fired on every broken promise at its deadline (129 of 129
+  on `test3`, 159 of 160 on `test5`). Live full context fired at a median of
+  0 hours too, but its p90 is 48 hours late, and one alert came 5 days early.
+- **Where full context is as good or better:** commitment F1 at the end of a
+  ticket (1.000 on the three tickets against our 0.990, whose one spurious
+  promise is a vague promise the writer added to a filler line), and the
+  context-dependent close (live full context 2 of 3, ours 3 of 3).
+  Commitment F1 at the end is a snapshot measure: full context reads the
+  whole transcript at once there and never has to keep track over time.
+
+### What the earlier tables measured and what they did not
+
+- **They measured** a snapshot of each method at every handoff and at the
+  end: the promises it held, their deadlines and states, its facts,
+  disputes and failed steps. That is a fair test of what a method can read
+  out of a ticket at those moments, and every number above stands.
+- **They did not measure** what a method knows between checkpoints, how soon
+  it knows it, or what it costs to know it all the time. A product that
+  shows the operator a current card and raises an alert at a deadline needs
+  an answer after every message. Only our method's cost was already that
+  cost.
+- **So the cost column compared unlike things.** Full context's $0.0043, and
+  Mem0's, Graphiti's and the rolling summary's answer costs, are the price
+  of answering about four times a ticket. Ours is the price of a card
+  current after every message.
+
+### Full context asked live
+
+`full_context_live` is the full-context baseline with one change: it answers
+after every message and at every checkpoint (185 times a ticket instead of
+5). It uses the same instructions, answer format, scorer and reader:
+DeepSeek V4.1 Flash, reasoning off, locked to DeepInfra (`PRESETS`). The
+instructions come first and the moment ("NOW: …") last, so each question
+extends the previous one and its prefix is served from the provider's
+cache. The checkpoint-only run of Round 4 put the moment first, which left
+only the instructions cached (13% of its prompt tokens).
+
+It ran on the first three `test3` tickets, so its checkpoints are those of
+the frozen Round 4 answers and of Round 10. Our method is Round 10's
+recorded proposals, folded again at $0. Intervals are 95% bootstrap over the
+three tickets and are wide.
+[Record](../results/round10c/test3-live.json)
+
+| Measure, three tickets | **Round 10 (ours)** | Full context, live | Full context, checkpoints |
+|---|---:|---:|---:|
+| Gold promises right at the end | **52 of 52** | 48 of 52 | 48 of 52 |
+| Commitment F1 | 0.990 | **1.000** | **1.000** |
+| Deadline accuracy | **1.000** (52/52) | 0.865 (45/52) | 0.885 (46/52) |
+| Status accuracy | **1.000** | 0.923 | 0.923 |
+| False alerts per ticket, end | **0.00** | 0.67 | 0.67 |
+| False closes at any checkpoint | 0 | 0 | 0 |
+| Missed closes at the end | **0** | 3 | 3 |
+| Freshness error | **0.000** | 0.333 | 0.333 |
+| Dispute recall | **1.000** (19/19) | 0.474 (9/19) | 0.474 (9/19) |
+| Failed-step precision | **1.000** | 0.867 | 0.743 |
+| Context-dependent close recovered | **3 of 3** | 2 of 3 | 2 of 3 |
+| Cost per ticket | $0.0156 | $0.0714 | **$0.0049** |
+| Model calls per ticket | 190 | 185 | 5 |
+| Prompt / output tokens per call | 2,394 / 98 | 4,105 / 835 | 4,826 / 938 |
+| Prompt tokens from the cache | 90.4% | 96.8% | 13.3% |
+| Seconds per call, median (p90) | 1.4 (Round 10, mean) | 5.1 (8.3) | 5.6 (Round 4, mean) |
+
+Paired differences, live full context minus ours: deadline accuracy −0.135
+[−0.250, −0.062], dispute recall −0.526 [−0.800, −0.333], freshness error
++0.333 [+0.222, +0.381], cost +$0.056 [+0.046, +0.062]. The other intervals
+include zero on three tickets.
+
+**Stability across the answers.** A promise is identified by the message it
+was made in and its side. Each answer is compared with the one before it.
+Our method's state is its card after each event.
+
+| Between consecutive answers | Ours, 20 tickets | Ours, the 3 tickets | Full context live, 3 tickets |
+|---|---:|---:|---:|
+| Answers | 3,569 | 558 | 555 |
+| A promise dropped / held again after a drop | 0 / 0 | 0 / 0 | 3 / 2 |
+| A closed promise open again | 0 | 0 | 17 |
+| A deadline changed | 0 | 0 | 54 |
+| A planted value still current, dropped | 0 | 0 | 1 |
+| An open dispute dropped | 0 | 0 | 13 |
+| False closes: (answer, promise) pairs / stretches / stretches no checkpoint shows | 0 / 0 / 0 | 0 / 0 / 0 | 2 / 2 / 2 |
+| False alerts: pairs / stretches / stretches no checkpoint shows | 0 / 0 / 0 | 0 / 0 / 0 | 82 / 22 / 18 |
+
+- **16 of the 17 reopenings and 10 of the 22 false-alert stretches are one
+  promise.**
+  M0000's "Возместим стоимость монтажа до 16 января" (seq 54) is the
+  context-dependent close: "Ага, вижу" (seq 58) settled it. Live full
+  context marks it claimed by seq 57, then flips between claimed and open
+  from one answer to the next until the end of the ticket. Each open
+  stretch past the deadline is a false alert. In a live product each would
+  be delivered: the alert key deduplicates one promise's breach, so that is
+  one false notice for the operator, but its card flickers 17 times.
+- **11 stretches are M0001's "Курьер заберёт товар до конца недели"** (seq
+  47). Its deadline changes 47 times between answers, between a Sunday a
+  week too early and the right Friday. The wrong date passes first, so it
+  alerts five days before the deadline. The label says the promise is
+  broken: the alert is right in the end, but early. The last stretch is
+  M0000's seq 163, a close live full context missed.
+- **The two false closes last one answer each** (M0001 seq 17 at seq 148,
+  M0002 seq 63 at seq 65), so no checkpoint would see them. Live, a promise
+  closed by mistake for one answer silences no alert unless its deadline
+  passes in that answer.
+- **The 54 deadline changes** are three promises: 47 on that one, 6 on
+  another "до конца недели" and 1 on "в течение 5 рабочих дней". Our method
+  resolves a deadline once, in code, from the message's time.
+- **The 17th reopening** is the false close of M0001's seq 17 undone by the
+  next answer.
+
+### Timeliness: when each method knows, for every method
+
+The answers of a method form a timeline. Each answer holds from its moment
+until the next one, and the last until the ticket ends.
+
+- **Promise delay** is the time from the message that makes a planted
+  promise to the first answer that holds it.
+- **Alert delay** is the time from the planted deadline of a promise the
+  label says is broken to the breach alert. An alert fires as soon as an
+  answer holds the promise open past a deadline the method trusts, as if a
+  scheduler ran on every answer, as ours does. That is generous to
+  checkpoint-only methods: their last answer's deadlines are watched until
+  the next handoff, even though the answer may be stale by then. An alert
+  within a minute of the planted deadline is on time.
+- "Never" means it did not happen before the ticket ended. Median and p90
+  count "never" as the longest delay; "never" is shown where a percentile
+  falls on it.
+
+Our method's state updates per message, so its delays come from its
+per-event proposals, folded again. A checkpoint-only method knows only at
+its next checkpoint. Hours, at $0 from the saved records.
+[Record](../results/round10c/timeliness.json)
+
+| Method (`test3` unless marked) | Tickets | Promise delay: median / p90 / never | Alert delay: median / p90 / never | Alerts > 1 min early |
+|---|---:|---|---|---:|
+| **Round 10 (ours)** | 20 | **0 / 0 / 0 of 367** | **0 / 0 / 0 of 129** | 0 |
+| Round 10 (ours), `test5` | 20 | 0 / 0 / 0 of 463 | 0 / 0 / 1 of 160 | 0 |
+| Full context, live | 3 | 0 / 0 / 0 of 52 | 0 / 48.0 / 0 of 17 | 1 |
+| Full context, checkpoints | 20 | 40.6 / 76.4 / 0 of 367 | 0 / 43.0 / 1 of 129 | 4 |
+| Mem0 | 20 | 42.0 / 79.2 / 5 of 367 | 0 / 48.0 / 1 of 129 | 1 |
+| Graphiti | 10 | 41.5 / 213.0 / 17 of 180 | 13.4 / never / 9 of 65 | 1 |
+| Rolling summary | 4 | 51.7 / never / 24 of 71 | 19.7 / never / 5 of 25 | 0 |
+
+- **Ours is never late.** Every promise is on the card at its own message,
+  plus the model's time to read it (1.4 s a call). Every broken promise
+  alerts at its deadline. The one "never" on `test5` is M0006, the claim
+  the writer added: the promise is held as claimed, which silences its
+  breach alert. Under decision 0006 it raises a `claim_unconfirmed` notice
+  at that deadline instead (Round 10b).
+- **Checkpoint-only methods learn a promise at the next handoff**, a
+  median of 41–52 hours after it was made. Their median alert delay is
+  still 0 for full context and Mem0, because most deadlines fall after the
+  handoff that first shows the promise, and a scheduler on that answer
+  would catch them. Their p90 is two days late, from deadlines that fall
+  before the next handoff and from wrong deadlines.
+- **Live full context closes the knowledge gap but not the deadline gap.**
+  Its median is 0 on both. Its p90 alert is still 48 hours late, from "end
+  of week" read as Sunday, and one alert is five days early.
+
+### Cost in two regimes
+
+- **Handoff-only** is what the tables above recorded: each method answers at
+  every handoff and at the end.
+- **Live** is a card current after every message.
+  - Ours is measured: it reads every message in both regimes, and answering
+    from the card costs nothing.
+  - Full context is measured on the three tickets above. For the other 17,
+    it is projected from those tickets' dollars per character of transcript
+    read: $0.214 on 4.50 million characters read over the three tickets,
+    4.8 cents per million.
+  - Mem0, Graphiti and the rolling summary are projected. The projection is
+    their recorded ingest cost plus one answer per message (as many answers
+    as live full context gave) at their recorded cost per checkpoint
+    answer. Their checkpoint answers come late in a ticket, so for the
+    rolling summary, whose summary grows, this is on the high side; Mem0's
+    and Graphiti's answer prompts are bounded by retrieval.
+
+`test3`, dollars per ticket (per 1,000 messages):
+
+| Method | Tickets | Handoff-only | Live |
+|---|---:|---:|---:|
+| **Round 10 (ours)** | 20 | $0.0154 (0.088), measured | **$0.0154 (0.088), measured** |
+| Full context | 3 | $0.0049 (0.027), measured | $0.0714 (0.394), measured |
+| Full context | 20 | $0.0043 (0.025), measured | $0.0651 (0.374), 3 measured + 17 projected |
+| Mem0 | 20 | $0.0530 (0.304), measured | $0.304 (1.747), projected |
+| Graphiti | 10 | $0.1602 (0.907), measured | $0.325 (1.842), projected |
+| Rolling summary | 4 | $0.0956 (0.536), measured | $0.210 (1.176), projected |
+
+- In the live regime ours is the cheapest by a factor of 4.2 (full context)
+  to 21 (Graphiti). In the handoff-only regime full context is a quarter of
+  ours, as the earlier tables say. That is the regime the tables measured,
+  not the one the product runs in.
+- Round 5 projected live full context at $0.157 a ticket at Round 4's cache
+  share, and $0.075 with all input cached
+  ([inputs](../results/round5/continuous-cost.json)). The measurement,
+  $0.0714 at a 96.8% cache share, is close to the second figure.
+- A cheaper live full context would have to write less each time. Its
+  output, the whole account rewritten after every message, is 91% of its
+  cost, and caching cannot reduce it.
+
+### Threats to validity
+
+- **Three tickets.** Live full context ran on 3 of 20 tickets, so its
+  intervals are wide. Its stability counts are from 555 answers, but most
+  of its false-alert stretches come from two promises.
+- **`test3` is known to our method** (Rounds 5–7), as Round 10 says.
+- **One prompt order per regime.** Live full context puts the moment after
+  the transcript; checkpoint-only full context put it first. At
+  temperature 0 that is a different request, so some differences at the
+  checkpoints may come from the order, not from asking more often.
+- **The scheduler assumption** for alert delays favours checkpoint-only
+  methods, as said above. The projections for Mem0, Graphiti and the
+  rolling summary hold their ingest unchanged and price one answer per
+  message from their checkpoint answers. None of them was run live.
+- **Latency.** Seconds per call are from the passes that reached the model:
+  ticket 1 from its own run, tickets 2–3 from the first pass of the
+  three-ticket run, and the four answers lost to connection resets from the
+  resume. The record's own pass served those answers from the cache.
+
+**Spend.** $0.2142 of the $0.40 cap: $0.0017 for the 20-answer projection
+sample, $0.0598 for ticket 1, $0.1502 for tickets 2–3 (ticket 1 from the
+cache), and $0.0025 for the resume that asked the four lost answers again.
+Calls cut by a connection reset are not logged. If they were billed, they
+add at most about $0.002.
+- The runner projected $0.201 (upper) for ticket 1 from its first 20
+  answers, at the growth factor of checkpoint-only full context (1.5). Two
+  tickets projected at $0.436, over the $0.398 left, so one ticket was run
+  first.
+- Ticket 1 cost $0.0614, which puts the live growth factor at 0.46: early
+  answers are mostly fixed overhead. At 0.5, tickets 2–3 projected at
+  $0.207 (upper), and $0.339 was left.
+[Spend log](../results/round10c/spend.jsonl)
+
+```bash
+python -m duebook.bench.experiment --split test3 --tickets 3 \
+    --methods event_memory,full_context_live --replay results/round10/test3.json \
+    --frozen results/round4/test3.json --sample-events 20 --max-usd 0.40 \
+    --session-cap 0.40 --results results/round10c --out results/round10c/test3-live.json
+python -m duebook.bench.experiment --split test3 --methods event_memory \
+    --replay results/round10/test3.json --frozen results/round10c/test3-live.json \
+    --frozen results/round4/test3.json --max-usd 0 --results /tmp/r10c --out /tmp/r10c/test3.json
+python -m duebook.bench.experiment --split test5 --methods event_memory \
+    --replay results/round10/test5.json --max-usd 0 --results /tmp/r10c --out /tmp/r10c/test5.json
+python scripts/replay_check.py   # rebuilds the live record's scores and round10c/timeliness at $0
 ```
 
 ## Round 9 — conditional offers, several orders, issue-summary noise
