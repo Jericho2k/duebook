@@ -500,11 +500,13 @@ that cannot be reconciled fails closed. Internal notes, attachments and
 system articles are excluded from extraction.
 
 Open `/zammad/tickets/17`, where `17` is Zammad's internal ticket ID. Use
-your own Zammad agent token. The app checks live access to the history and
-articles for each review request. Its card shows commitments, responsibility,
-deadlines and confidence, and links quotes and disputed evidence to the
-originating article. If a suggestion needs clarification, follow the source
-link and request a public reply in Zammad. The reply is attributed to its
+your own Zammad agent token to unlock the Duebook workspace. The token stays
+in the open page's memory until you disconnect or leave. Refreshing the card
+or opening the conversation or a citation checks live access again. The
+card shows commitments, responsibility, deadlines and confidence. Selecting
+a citation highlights its message in the conversation pane, with a link to
+the original article. If a suggestion needs clarification, open the
+article and request a public reply in Zammad. The reply is attributed to its
 author and goes through normal extraction and reduction on the next sync.
 A debtor claim and a counterparty confirmation have distinct labels.
 Independent verification requires a separate source of record.
@@ -526,7 +528,7 @@ version and the model data policy need to be verified with the pilot customer.
 | `GET /tickets/{id}/card?as_of=<seq>` | the card replayed from the log up to that event, with statuses as of that event's time |
 | `GET /tickets/{id}/brief?budget=<tokens>&format=text\|json` | the handoff brief; as JSON, its sections and lines, each line with its sources (event id, seq, author, side, quote) |
 | `GET /tickets/{id}/status` | last applied seq, backlog, hold details if any, and verifier call and failure counts for the ticket |
-| `GET /zammad/tickets/{id}/review` | source-authorized commitments, evidence links, uncertainty and processing status |
+| `GET /zammad/tickets/{id}/review` | source-authorized commitments, evidence links, uncertainty and processing status. `include_conversation=true` also returns articles visible to the reviewer |
 | `GET /health` | database status, pending alerts, held tickets, and service-wide verifier call and failure counts |
 
 `verifier_calls` counts proposals sent to the verifier, including calls that

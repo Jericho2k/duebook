@@ -28,7 +28,7 @@ def sync(settings: Settings, ticket_id: int, duebook_url: str) -> int:
         raise ConfigError("ticket ID must be positive")
     database = settings.require_database()
     try:
-        _, remote = source_events(base, ticket_id, token)
+        _, _, remote = source_events(base, ticket_id, token)
     except httpx.HTTPStatusError as error:
         raise SyncError(f"Zammad returned HTTP {error.response.status_code}") from None
     except (httpx.RequestError, ValueError, TypeError, KeyError):

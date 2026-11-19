@@ -26,12 +26,14 @@ import json
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool, PoolTimeout
 
@@ -84,6 +86,10 @@ def create_app(
             yield Store(conn, cal, policy)
 
     if settings.zammad_url:
+        app.mount(
+            "/assets/operator", StaticFiles(directory=Path(__file__).with_name("fonts")),
+            name="operator-fonts",
+        )
         app.include_router(zammad_router(settings.zammad_url, settings.timezone, store, clock))
 
     def authorized(ticket_id: str, request: Request) -> None:

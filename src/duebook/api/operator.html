@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>Zammad · Тикет #1042</title>
+  <title>duebook · Рабочее пространство оператора</title>
   <style>
     body {
       max-width: 1024px;
@@ -13,226 +13,42 @@
       font: 400 14px/1.5 system-ui, sans-serif;
     }
 
-    .prototype-layout {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
+  @font-face {
+    font-family: "Golos Text";
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url("{{fonts}}/golos-cyrillic.woff2") format("woff2");
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  }
 
-    .prototype-layout select { font: inherit; }
+  @font-face {
+    font-family: "Golos Text";
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url("{{fonts}}/golos-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
 
-    .prototype-layout[hidden] { display: none; }
+  @font-face {
+    font-family: "Literata";
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url("{{fonts}}/literata-cyrillic.woff2") format("woff2");
+    unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116;
+  }
 
-    #zammad-ticket {
-      --zm-border: color-mix(in srgb, CanvasText 15%, Canvas);
-      --zm-surface: color-mix(in srgb, CanvasText 4%, Canvas);
-      --zm-link: light-dark(#224faa, #acc8ff);
-      --db-muted: light-dark(#535e6e, #b7c2d2);
-      border: 1px solid var(--zm-border);
-      border-radius: 8px;
-      overflow: clip;
-    }
+  @font-face {
+    font-family: "Literata";
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url("{{fonts}}/literata-latin.woff2") format("woff2");
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+  }
 
-    .zm-header,
-    .zm-title,
-    .zm-thread,
-    .zm-sidebar { padding: 16px 24px; }
-
-    .zm-header {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      border-bottom: 1px solid var(--zm-border);
-      background: var(--zm-surface);
-    }
-
-    .zm-header strong { font-size: 16px; }
-    .zm-header span,
-    .zm-ticket-id { color: var(--db-muted); font-size: 12px; }
-
-    .zm-title { border-bottom: 1px solid var(--zm-border); }
-    .zm-title h1 { margin: 4px 0 0; font-size: 24px; font-weight: 600; }
-    .zm-body { display: grid; }
-    .zm-body h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
-
-    .zm-sidebar {
-      border-bottom: 1px solid var(--zm-border);
-      background: var(--zm-surface);
-    }
-
-    .zm-sidebar dl { display: grid; gap: 12px; margin: 0; }
-    .zm-sidebar dt { color: var(--db-muted); font-size: 12px; }
-    .zm-sidebar dd { margin: 4px 0 0; }
-
-    .zm-launch {
-      padding-top: 12px;
-      border-top: 1px solid var(--zm-border);
-    }
-
-    .zm-launch a {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 8px 12px;
-      border: 1px solid var(--zm-border);
-      border-radius: 4px;
-      background: Canvas;
-      color: var(--zm-link);
-      font-weight: 500;
-      text-decoration: none;
-    }
-
-    .zm-launch a:hover { border-color: var(--zm-link); text-decoration: underline; }
-
-    .zm-recent { margin: 0; padding: 0; list-style: none; }
-    .zm-recent li { padding: 12px 0; border-top: 1px solid var(--zm-border); }
-
-    @media (min-width: 640px) {
-      .zm-body { grid-template-columns: minmax(0, 1fr) minmax(248px, 30%); }
-      .zm-thread { grid-area: 1 / 1; }
-      .zm-sidebar { grid-area: 1 / 2; border-inline-start: 1px solid var(--zm-border); border-bottom: 0; }
-    }
-  </style>
-</head>
-<body>
-  <main id="zammad-ticket" aria-labelledby="zm-title">
-    <header class="zm-header">
-      <strong>Zammad</strong>
-      <span>Прототип</span>
-    </header>
-    <div class="zm-title">
-      <div class="zm-ticket-id">Тикет #1042</div>
-      <h1 id="zm-title">Возврат за установку</h1>
-    </div>
-    <div class="zm-body">
-      <aside class="zm-sidebar" aria-labelledby="zm-sidebar">
-        <h2 id="zm-sidebar">Тикет</h2>
-        <dl>
-          <div><dt>Ответственная</dt><dd>Ольга Миронова</dd></div>
-          <div><dt>Состояние</dt><dd>Открыт</dd></div>
-          <div class="zm-launch">
-            <dt>Duebook</dt>
-            <dd><a href="?view=duebook" target="_blank" rel="noopener" aria-label="Открыть карточку в Duebook в новой вкладке">Открыть карточку <span aria-hidden="true">↗</span></a></dd>
-          </div>
-        </dl>
-      </aside>
-      <section class="zm-thread" aria-labelledby="zm-thread">
-        <h2 id="zm-thread">Последние сообщения</h2>
-        <ol class="zm-recent"></ol>
-      </section>
-    </div>
-  </main>
-  <div class="prototype-layout" hidden>
-    <label for="prototype-layout">Сценарий прототипа</label>
-    <select id="prototype-layout">
-      <option value="Ticket workspace">Карточка тикета</option>
-      <option value="Handoff first">Передача смены</option>
-    </select>
-  </div>
-<main id="duebook-operator" class="viz-carousel" aria-label="Рабочее пространство Duebook" hidden>
-  <section data-variant="Ticket workspace" aria-label="Ticket workspace">
-    <article class="db-app" lang="ru" aria-label="Рабочее пространство">
-      <header class="db-brand">
-        <div class="db-lockup">
-          <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
-        </div>
-        <div class="db-access"><span>Только чтение</span><a href="?view=zammad">Вернуться в Zammad</a></div>
-      </header>
-      <div class="db-ticket">
-        <div class="db-context">Тикет #1042</div>
-        <h2>Возврат за установку</h2>
-        <p class="db-ticket-meta" aria-live="polite">Ответственная: Ольга Миронова</p>
-      </div>
-      <div class="db-nav" role="group" aria-label="Представление тикета">
-        <button type="button" data-view="card" aria-pressed="true">Карточка</button>
-        <button type="button" data-view="brief" aria-pressed="false">Передача смены</button>
-        <button type="button" class="db-chat-toggle" aria-expanded="false" aria-controls="db-ticket-chat">Переписка</button>
-      </div>
-      <div class="db-body">
-        <aside id="db-ticket-chat" class="db-source" aria-label="Переписка" hidden></aside>
-        <div class="db-work"></div>
-      </div>
-    </article>
-  </section>
-  <section data-variant="Handoff first" aria-label="Handoff first" hidden>
-    <article class="db-app db-handoff" lang="ru" aria-label="Передача смены">
-      <header class="db-brand">
-        <div class="db-lockup">
-          <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
-        </div>
-        <div class="db-access"><span>Только чтение</span><a href="?view=zammad">Вернуться в Zammad</a></div>
-      </header>
-      <div class="db-ticket">
-        <div class="db-context">Тикет #1042</div>
-        <h2>Возврат за установку</h2>
-        <p class="db-ticket-meta" aria-live="polite">Иван Соколов → Ольга Миронова</p>
-      </div>
-      <div class="db-nav" role="group" aria-label="Представление тикета">
-        <button type="button" data-view="brief" aria-pressed="true">Передача смены</button>
-        <button type="button" data-view="card" aria-pressed="false">Карточка</button>
-        <button type="button" class="db-chat-toggle" aria-expanded="false" aria-controls="db-handoff-chat">Переписка</button>
-      </div>
-      <div class="db-body">
-        <aside id="db-handoff-chat" class="db-source" aria-label="Переписка" hidden></aside>
-        <div class="db-work"></div>
-      </div>
-    </article>
-  </section>
-  <template id="db-view">
-    <div class="db-work-head">
-      <h3></h3>
-      <label class="db-snapshot">
-        <span>Версия карточки</span>
-        <select>
-          <option value="current">Сейчас</option>
-          <option value="before-handoff">До передачи</option>
-        </select>
-      </label>
-    </div>
-    <div class="db-record"></div>
-  </template>
-  <template id="db-row">
-    <li class="db-row">
-      <div class="db-row-head"><strong></strong><span class="db-status"></span></div>
-      <div class="db-meta"></div>
-      <div class="db-citations" role="group" aria-label="Сообщения-источники"></div>
-    </li>
-  </template>
-  <template id="db-section">
-    <details class="db-section">
-      <summary><span class="db-section-name"></span><span class="db-section-count"></span></summary>
-      <ul></ul>
-    </details>
-  </template>
-  <template id="db-chat">
-    <div class="db-chat-head">
-      <h3>Переписка</h3>
-      <button type="button" class="db-chat-close">Закрыть</button>
-    </div>
-    <ol class="db-messages" tabindex="0" aria-label="Сообщения тикета"></ol>
-  </template>
-  <template id="db-zammad-access">
-    <form class="db-zammad-access" method="post">
-      <label for="db-zammad-token">Токен Zammad</label>
-      <input id="db-zammad-token" type="password" autocomplete="off" required>
-      <button type="submit">Показать обязательства</button>
-    </form>
-    <p class="db-zammad-status" role="status"></p>
-  </template>
-  <template id="db-message">
-    <li class="db-message" tabindex="-1">
-      <div class="db-message-header"><strong></strong><span class="db-article-id"></span></div>
-      <p class="db-source-byline"></p>
-      <p class="db-message-text"></p>
-    </li>
-  </template>
-</main>
-<style>
-  @import url("https://fonts.googleapis.com/css2?family=Golos+Text:wght@400..700&family=Literata:opsz,wght@7..72,400..600&display=swap");
 
   #duebook-operator .db-app {
     color-scheme: light dark;
@@ -259,7 +75,6 @@
     font: 400 14px/1.5 "Golos Text", system-ui, sans-serif;
   }
 
-  #duebook-operator [data-variant] { min-height: 644px; }
 
   #duebook-operator .db-brand,
   #duebook-operator .db-ticket,
@@ -268,27 +83,8 @@
   }
 
   #duebook-operator .db-brand {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px 24px;
     padding-block: 12px;
     border-bottom: 1px solid var(--db-hairline);
-  }
-
-  #duebook-operator .db-access {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px 16px;
-    color: var(--db-muted);
-    font-size: 12px;
-  }
-
-  #duebook-operator .db-access a {
-    color: var(--db-index);
-    text-underline-offset: 3px;
   }
 
   #duebook-operator .db-lockup {
@@ -332,7 +128,8 @@
   }
 
   #duebook-operator .db-ticket p,
-  #duebook-operator .db-meta {
+  #duebook-operator .db-meta,
+  #duebook-operator .db-source-byline {
     color: var(--db-muted);
     font-size: 12px;
   }
@@ -348,7 +145,7 @@
     letter-spacing: .015em;
   }
 
-  #duebook-operator .db-ticket h2 {
+  #duebook-operator .db-ticket h1 {
     margin: 8px 0 9px;
     font: 500 clamp(26px, 4.6vw, 44px)/1.1 var(--db-display-font);
     letter-spacing: -.04em;
@@ -363,8 +160,6 @@
     gap: 22px;
     border-block: 1px solid var(--db-hairline);
   }
-
-  #duebook-operator .db-nav[hidden] { display: none; }
 
   #duebook-operator .db-app button { font: inherit; color: inherit; }
 
@@ -419,30 +214,6 @@
     padding: 21px var(--db-gutter) 24px;
   }
 
-  #duebook-operator .db-zammad-access {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 8px 12px;
-  }
-
-  #duebook-operator .db-zammad-access[hidden] { display: none; }
-
-  #duebook-operator .db-zammad-access input,
-  #duebook-operator .db-zammad-access button {
-    box-sizing: border-box;
-    max-width: 100%;
-    padding: 6px 8px;
-    border: 1px solid var(--db-divider);
-    border-radius: 3px;
-    background: var(--db-surface);
-    color: var(--db-ink);
-    font: inherit;
-  }
-
-  #duebook-operator .db-zammad-access button { color: var(--db-index); }
-  #duebook-operator .db-zammad-status:empty { margin: 0; }
-
   #duebook-operator .db-work h3,
   #duebook-operator .db-source h3 {
     margin: 0;
@@ -458,25 +229,6 @@
     justify-content: space-between;
     gap: 8px 14px;
     margin-bottom: 13px;
-  }
-
-  #duebook-operator .db-snapshot {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--db-muted);
-    font-size: 11px;
-  }
-
-  #duebook-operator .db-snapshot[hidden] { display: none; }
-
-  #duebook-operator .db-snapshot select {
-    padding: 3px 5px;
-    border: 1px solid var(--db-hairline);
-    border-radius: 2px;
-    color: var(--db-ink);
-    background: var(--db-surface);
-    font: inherit;
   }
 
   #duebook-operator .db-work ul {
@@ -575,7 +327,6 @@
   #duebook-operator .db-section ul { padding: 0 0 10px 13px; }
 
   #duebook-operator .db-citations { gap: 6px; }
-  #duebook-operator .db-citations a { color: var(--db-index); overflow-wrap: anywhere; }
 
   #duebook-operator .db-citations button {
     display: inline-flex;
@@ -649,7 +400,7 @@
     outline-offset: -1px;
   }
 
-  :is(#duebook-operator, #zammad-ticket) .db-message-header {
+  #duebook-operator .db-message-header {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
@@ -658,25 +409,14 @@
     font-size: 11px;
   }
 
-  :is(#duebook-operator, #zammad-ticket) .db-message-header strong { font-weight: 600; }
+  #duebook-operator .db-message-header strong { font-weight: 600; }
   #duebook-operator .db-message[aria-current="true"] .db-message-header { color: var(--db-index); }
-  :is(#duebook-operator, #zammad-ticket) .db-source-byline {
-    margin: 0 0 4px;
-    color: var(--db-muted);
-    font-size: 11px;
-  }
+  #duebook-operator .db-source-byline { margin: 0 0 4px; font-size: 11px; }
 
-  :is(#duebook-operator, #zammad-ticket) .db-message-text {
+  #duebook-operator .db-message-text {
     margin: 0;
     overflow-wrap: anywhere;
-    white-space: pre-wrap;
     font-size: 13px;
-  }
-
-  @media (min-width: 591px) {
-    #duebook-operator .db-handoff .db-ticket { padding-block: 16px 13px; }
-    #duebook-operator .db-handoff .db-work { padding-block: 16px; }
-    #duebook-operator .db-app.db-handoff { --db-gap: 13px; }
   }
 
   @media (min-width: 761px) {
@@ -697,14 +437,14 @@
 
   @media (pointer: coarse) {
     #duebook-operator .db-app button,
-    #duebook-operator .db-snapshot select,
+    #duebook-operator .db-auth input,
     #duebook-operator .db-section summary { min-height: 44px; }
     #duebook-operator .db-citations button { align-items: center; }
-    #duebook-operator .db-snapshot select { font-size: 16px; }
+    #duebook-operator .db-access { column-gap: 12px; }
+    #duebook-operator .db-access button { min-height: 44px; }
   }
 
   @media (max-width: 590px) {
-    #duebook-operator [data-variant] { min-height: 760px; }
     #duebook-operator .db-app { --db-gutter: 16px; }
     #duebook-operator .db-nav {
       gap: 8px;
@@ -712,457 +452,512 @@
     }
   }
 
-  #duebook-operator .db-app[data-compact] { --db-gap: 9px; }
-</style>
+  #duebook-operator [hidden] { display: none; }
+
+  #duebook-operator .db-brand,
+  #duebook-operator .db-access,
+  #duebook-operator .db-auth-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+  }
+
+  #duebook-operator .db-brand { justify-content: space-between; }
+  #duebook-operator .db-access { font-size: 12px; }
+
+  #duebook-operator .db-access a,
+  #duebook-operator .db-message-header a {
+    color: var(--db-index);
+    text-underline-offset: 3px;
+  }
+
+  #duebook-operator .db-evidence-detail {
+    margin: 6px 0 0;
+    color: var(--db-attention);
+    font-size: 12px;
+  }
+
+  #duebook-operator .db-message mark {
+    color: inherit;
+    background: transparent;
+    text-decoration: underline;
+    text-decoration-color: var(--db-index);
+    text-underline-offset: 3px;
+  }
+
+  #duebook-operator .db-access button {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--db-index);
+  }
+
+  #duebook-operator .db-access button:hover { text-decoration: underline; }
+
+  #duebook-operator .db-auth-controls {
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  #duebook-operator .db-auth input,
+  #duebook-operator .db-auth button {
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--db-divider);
+    border-radius: 3px;
+    background: var(--db-surface);
+    color: inherit;
+    font: inherit;
+  }
+
+  #duebook-operator .db-auth input { width: 248px; font-size: 16px; }
+  #duebook-operator .db-auth button { color: var(--db-index); }
+  #duebook-operator .db-auth button:disabled { opacity: .6; }
+  #duebook-operator .db-work-status { margin: 0 0 13px; color: var(--db-muted); }
+  #duebook-operator .db-work-status:empty { margin: 0; }
+  #duebook-operator .db-auth:not([hidden]) + .db-work-status:not(:empty) { margin: 13px 0 0; }
+  #duebook-operator .db-ticket h1 { overflow-wrap: anywhere; }
+
+  </style>
+</head>
+<body>
+<main id="duebook-operator" data-provider="{{provider}}" aria-label="Рабочее пространство Duebook">
+  <article class="db-app">
+    <header class="db-brand">
+      <div class="db-lockup">
+        <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
+      </div>
+      <div class="db-access" hidden>
+        <a class="db-ticket-link" target="_blank" rel="noopener noreferrer"></a>
+        <button type="button" class="db-lock">Отключиться</button>
+      </div>
+    </header>
+    <div class="db-ticket">
+      <div class="db-context" hidden></div>
+      <h1>Обязательства по тикету</h1>
+      <p class="db-ticket-meta" hidden></p>
+    </div>
+    <nav class="db-nav" aria-label="Представление тикета" hidden>
+      <button type="button" data-view="card" aria-pressed="true">Карточка</button>
+      <button type="button" class="db-chat-toggle" aria-expanded="false" aria-controls="db-ticket-chat">Переписка</button>
+    </nav>
+    <div class="db-body">
+      <aside id="db-ticket-chat" class="db-source" aria-label="Переписка" hidden></aside>
+      <div class="db-work">
+        <form class="db-auth" method="post">
+          <label for="db-access-token">Токен доступа</label>
+          <div class="db-auth-controls">
+            <input id="db-access-token" type="password" autocomplete="off" spellcheck="false" required>
+            <button type="submit">Открыть карточку</button>
+          </div>
+        </form>
+        <p class="db-work-status" role="status"></p>
+        <section class="db-card" hidden>
+          <div class="db-work-head">
+            <h3>Обязательства и факты</h3>
+            <div class="db-access"><button type="button" class="db-refresh">Обновить</button></div>
+          </div>
+          <div class="db-record"></div>
+        </section>
+      </div>
+    </div>
+  </article>
+  <template id="db-row">
+    <li class="db-row">
+      <div class="db-row-head"><strong></strong><span class="db-status"></span></div>
+      <div class="db-meta"></div>
+      <div class="db-citations" role="group" aria-label="Сообщения-источники"></div>
+    </li>
+  </template>
+  <template id="db-section">
+    <details class="db-section">
+      <summary><span class="db-section-name"></span><span class="db-section-count"></span></summary>
+      <ul></ul>
+    </details>
+  </template>
+  <template id="db-chat">
+    <div class="db-chat-head">
+      <h3>Переписка</h3>
+      <button type="button" class="db-chat-close">Закрыть</button>
+    </div>
+    <ol class="db-messages" tabindex="0" aria-label="Сообщения тикета"></ol>
+  </template>
+  <template id="db-message">
+    <li class="db-message" tabindex="-1">
+      <div class="db-message-header"><strong></strong><a class="db-article-id" target="_blank" rel="noopener noreferrer"></a></div>
+      <p class="db-source-byline"></p>
+      <p class="db-message-text"></p>
+    </li>
+  </template>
+</main>
 <script>
 (() => {
-  const root = document.getElementById("duebook-operator");
-  const zammad = document.getElementById("zammad-ticket");
-  const live = /\/zammad\/tickets\/[0-9]+\/?$/.test(location.pathname);
-  const view = new URLSearchParams(location.search).get("view");
-  const compare = view === "layouts";
-  zammad.hidden = live || view === "duebook" || compare;
-  root.hidden = !zammad.hidden;
+  const root = document.querySelector("#duebook-operator");
+  const provider = root.dataset.provider;
+  const title = root.querySelector(".db-ticket h1");
+  const number = root.querySelector(".db-context");
+  const ticketMeta = root.querySelector(".db-ticket-meta");
+  const connection = root.querySelector(".db-brand .db-access");
+  const ticketLink = root.querySelector(".db-ticket-link");
+  const nav = root.querySelector(".db-nav");
+  const chatToggle = nav.querySelector(".db-chat-toggle");
+  const chat = root.querySelector(".db-source");
+  const form = root.querySelector(".db-auth");
+  const input = form.querySelector("input");
+  const submit = form.querySelector("button");
+  const status = root.querySelector(".db-work-status");
+  const card = root.querySelector(".db-card");
+  const record = card.querySelector(".db-record");
+  const pageTitle = document.title;
+  const lockedTitle = title.textContent;
+  const narrow = matchMedia("(max-width: 760px)");
+  const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
+  const reviewUrl = location.pathname.replace(/\/$/, "") + "/review";
+  let token = "";
+  let pending;
+  let activeCitation;
 
-  const chatTemplate = root.querySelector("#db-chat");
-  const messageTemplate = root.querySelector("#db-message");
-
-  function renderMessage(number, data) {
-    const fragment = messageTemplate.content.cloneNode(true);
-    fragment.querySelector(".db-message").dataset.message = number;
-    fragment.querySelector(".db-message-header strong").textContent = data.author;
-    fragment.querySelector(".db-article-id").textContent = "№" + number;
-    fragment.querySelector(".db-source-byline").textContent = data.time + " МСК · " + data.visibility;
-    fragment.querySelector(".db-message-text").textContent = data.quote;
-    return fragment;
-  }
-
-  function renderLiveReview(review, panel) {
-    const labels = {
-      open: "Открыто", due_soon: "Срок приближается", breached: "Срок истёк",
-      claimed: "Должник сообщил о выполнении", fulfilled: "Выполнено",
-      fulfilled_late: "Выполнено с опозданием", cancelled: "Отменено", superseded: "Заменено",
-      counterparty_confirmation: "Подтвердила другая сторона",
-      system_verification: "Подтвердила независимая система"
-    };
-    const confidence = {high: "высокая", medium: "средняя", low: "низкая"};
-    function addRow(list, title, status, meta, sources) {
-      const row = root.querySelector("#db-row").content.cloneNode(true);
-      row.querySelector("strong").textContent = title;
-      row.querySelector(".db-status").textContent = status;
-      const details = row.querySelector(".db-meta");
-      details.textContent = meta;
-      details.hidden = !meta;
-      const citations = row.querySelector(".db-citations");
-      for (const [label, source] of sources) {
-        if (!source) continue;
-        const link = document.createElement("a");
-        link.href = source.url;
-        link.textContent = label + " · №" + source.article_id + (source.quote ? " «" + source.quote + "»" : "");
-        citations.append(link);
-      }
-      list.append(row);
-    }
-    function addSection(title) {
-      const heading = document.createElement("h3");
-      const list = document.createElement("ul");
-      heading.textContent = title;
-      list.className = "db-record";
-      panel.append(heading, list);
-      return list;
-    }
-    const list = addSection("Обязательства");
-    if (!review.commitments.length) addRow(list, "Обязательства пока не найдены", "", "", []);
-    for (const item of review.commitments) {
-      const owner = item.party === "customer" ? "Клиент" :
-        item.responsible_name || (item.responsible_id ? "Оператор №" + item.responsible_id : "Без ответственного");
-      const due = item.deadline;
-      const deadline = due ? new Date(due.at).toLocaleString("ru-RU", {timeZoneName: "short"}) +
-        " · Уверенность " + confidence[due.confidence] + (due.quote ? " «" + due.quote + "»" : "") :
-        "Срок не определён";
-      const sources = [
-        ["Обещание", item.source], ["Условие выполнено", item.activated_by],
-        [labels[item.resolution?.kind], item.resolution?.source],
-        ["Контекст подтверждения", item.resolution_context],
-        ...item.suggestions.map(s => ["Требует проверки (" + s.reason + ")", s.source])
-      ];
-      addRow(list, item.action, labels[item.status], owner + " · " + deadline, sources);
-    }
-    if (review.contradictions.length || review.unread.length ||
-        [...review.commitments, ...review.conditionals].some(item => item.suggestions.length)) {
-      const guidance = document.createElement("p");
-      guidance.textContent = "Откройте сообщение-источник и запросите уточнение в Zammad.";
-      panel.append(guidance);
-    }
-    if (review.contradictions.length) {
-      const disputed = addSection("Открытые противоречия");
-      for (const item of review.contradictions) {
-        addRow(disputed, item.slot, "", "", item.facts.map(f => [f.value, f.source]));
-      }
-    }
-    if (review.conditionals.length) {
-      const conditional = addSection("Условные обещания");
-      for (const item of review.conditionals) {
-        addRow(conditional, item.action, "Условие не подтверждено", item.condition, [
-          ["Обещание", item.source],
-          ...item.suggestions.map(s => ["Требует проверки (" + s.reason + ")", s.source])
-        ]);
-      }
-    }
-    if (review.unread.length) {
-      const unread = addSection("Сообщения с ошибкой разбора");
-      for (const source of review.unread) addRow(unread, "Проверьте сообщение", "", "", [["Источник", source]]);
-    }
-  }
-
-  function showLiveTicket() {
-    const app = root.querySelector(".db-app");
-    const work = app.querySelector(".db-work");
-    const title = app.querySelector(".db-ticket h2");
-    const number = app.querySelector(".db-context");
-    const owner = app.querySelector(".db-ticket-meta");
-    const returnLink = app.querySelector(".db-access a");
-    document.title = "Duebook · Zammad";
-    title.textContent = "Обязательства по тикету Zammad";
-    number.hidden = owner.hidden = returnLink.hidden = true;
-    app.querySelector(".db-nav").hidden = true;
-    work.append(root.querySelector("#db-zammad-access").content.cloneNode(true));
-    const form = work.querySelector("form");
-    const input = form.querySelector("input");
-    const submit = form.querySelector("button");
-    const status = work.querySelector(".db-zammad-status");
-    const panel = document.createElement("div");
-    work.append(panel);
-
-    if (!window.isSecureContext) {
-      form.hidden = true;
-      status.textContent = "Откройте эту страницу по HTTPS, чтобы загрузить обязательства.";
-      return;
-    }
-
-    form.addEventListener("submit", async event => {
-      event.preventDefault();
-      submit.disabled = true;
-      panel.replaceChildren();
-      document.title = "Duebook · Zammad";
-      title.textContent = "Обязательства по тикету Zammad";
-      number.hidden = owner.hidden = returnLink.hidden = true;
-      status.textContent = "Проверяем доступ и загружаем обязательства…";
-      const token = input.value.trim();
-      input.value = "";
-      try {
-        const response = await fetch(location.pathname.replace(/\/$/, "") + "/review", {
-          headers: {Authorization: "Bearer " + token},
-          cache: "no-store"
-        });
-        if (response.status === 401) {
-          status.textContent = "Zammad не принял токен. Проверьте его и попробуйте снова.";
-          input.focus();
-        } else if (response.status === 403 || response.status === 404) {
-          status.textContent = "Тикет недоступен с этим токеном Zammad.";
-        } else if (response.status === 409) {
-          status.textContent = "Источники изменились или недоступны. Обновите данные и повторите запрос.";
-        } else if (!response.ok) {
-          throw new Error("Zammad request failed");
-        } else {
-          const ticket = await response.json();
-          document.title = "Duebook · Тикет #" + ticket.number;
-          number.textContent = "Тикет #" + ticket.number;
-          title.textContent = ticket.title;
-          owner.textContent = [ticket.ticket_state, ticket.owner].filter(item => item && item !== "-").join(" · ");
-          returnLink.href = ticket.url;
-          number.hidden = returnLink.hidden = false;
-          owner.hidden = !owner.textContent;
-          const {awaiting_sync, backlog, held} = ticket.processing;
-          status.textContent = [
-            awaiting_sync ? "Ожидают импорта: " + awaiting_sync : "",
-            backlog ? "Ожидают обработки: " + backlog : "",
-            held ? "Ошибка обработки. Событие №" + held + " будет обработано повторно." : ""
-          ].filter(Boolean).join(" · ");
-          renderLiveReview(ticket, panel);
-        }
-      } catch {
-        status.textContent = "Не удалось загрузить обязательства. Попробуйте ещё раз.";
-      } finally {
-        submit.disabled = false;
-      }
-    });
-  }
-
-  if (live) {
-    showLiveTicket();
-    return;
-  }
-
-  const sources = {
-    3: { author: "Иван Соколов", time: "18 нояб., 09:23", visibility: "Публичный ответ", quote: "Запрошу у банка копию квитанции." },
-    4: { author: "Анна Крылова", time: "18 нояб., 09:27", visibility: "Публичный ответ", quote: "Пришлю скриншот оплаты завтра до 12:00." },
-    5: { author: "Анна Крылова", time: "18 нояб., 09:31", visibility: "Публичный ответ", quote: "На портале вижу два заказа: №4827 и №4831." },
-    6: { author: "Анна Крылова", time: "18 нояб., 09:42", visibility: "Публичный ответ", quote: "Адрес для документов — Тверская, 12." },
-    7: { author: "Иван Соколов", time: "18 нояб., 09:45", visibility: "Публичный ответ", quote: "Пришлю акт об отмене установки сегодня до 18:00." },
-    8: { author: "Иван Соколов", time: "18 нояб., 09:56", visibility: "Публичный ответ", quote: "Отправил акт об отмене установки на почту." },
-    9: { author: "Анна Крылова", time: "18 нояб., 10:01", visibility: "Публичный ответ", quote: "Акт об отмене установки пришёл, спасибо." },
-    10: { author: "Анна Крылова", time: "18 нояб., 10:08", visibility: "Публичный ответ", quote: "Установку отменили. Подскажите, когда вернут оплату?" },
-    11: { author: "Иван Соколов", time: "18 нояб., 10:20", visibility: "Публичный ответ", quote: "Вернём стоимость установки до 14:00 завтра." },
-    12: { author: "Анна Крылова", time: "19 нояб., 10:50", visibility: "Публичный ответ", quote: "По заказу №4827 мастер не приехал, установка не состоялась." },
-    13: { author: "Анна Крылова", time: "19 нояб., 10:58", visibility: "Публичный ответ", quote: "Можете набрать меня после обеда? Хочу уточнить детали возврата." },
-    14: { author: "Иван Соколов", time: "19 нояб., 11:05", visibility: "Публичный ответ", quote: "Перезвоню вам сегодня до 16:00." },
-    15: { author: "Анна Крылова", time: "19 нояб., 12:40", visibility: "Публичный ответ", quote: "По заказу №4827 в кабинете пока нет операции возврата." },
-    16: { author: "Иван Соколов", time: "19 нояб., 12:45", visibility: "Внутренняя заметка", quote: "Проверил статус по номеру заказа. Платёж в журнале банка не нашёлся." },
-    17: { author: "Иван Соколов", time: "19 нояб., 13:48", visibility: "Публичный ответ", quote: "Возврат за установку отправили." },
-    18: { author: "Ольга Миронова", time: "19 нояб., 14:04", visibility: "Публичный ответ", quote: "Анна, проверьте, пожалуйста, поступление по карте, с которой оплачивали установку." },
-    19: { author: "Анна Крылова", time: "19 нояб., 14:10", visibility: "Публичный ответ", quote: "Деньги за установку пока не поступили." },
-    20: { author: "Ольга Миронова", time: "19 нояб., 14:11", visibility: "Публичный ответ", quote: "По данным заказа №4827 установка выполнена." },
-    21: { author: "Анна Крылова", time: "19 нояб., 14:11", visibility: "Публичный ответ", quote: "Для документов укажите новый адрес: Петровка, 8." },
-    22: { author: "Ольга Миронова", time: "19 нояб., 14:11", visibility: "Публичный ответ", quote: "Если банк отклонит возврат, пришлю форму для новых реквизитов." },
-    23: { author: "Анна Крылова", time: "19 нояб., 14:12", visibility: "Публичный ответ", quote: "На чеке есть ещё один номер, оканчивается на 312. Возможно, он поможет." },
-    24: { author: "Анна Крылова", time: "19 нояб., 14:12", visibility: "Публичный ответ", quote: "Должна ли я подписать акт об отмене установки?" }
-  };
-
-  const refund = {
-    title: "Возврат стоимости установки", status: "Проверить получение", attention: true,
-    meta: "Ольга Миронова · Срок 19 нояб., 14:00 МСК", sources: [11, 17, 19]
-  };
-  const proof = {
-    title: "Прислать скриншот оплаты", status: "Просрочено", attention: true,
-    meta: "Клиент · Срок 19 нояб., 12:00 МСК", sources: [4]
-  };
-  const callback = {
-    title: "Перезвонить клиенту", status: "Унаследовано",
-    meta: "Ольга Миронова, ранее Иван Соколов · Срок 19 нояб., 16:00 МСК", sources: [14]
-  };
-  const unread = {
-    title: "Прочитать сообщение", status: "Ошибка разбора", attention: true, unread: true, sources: [23]
-  };
-  const orders = {
-    title: "Заказы №4827 и №4831", status: "Со слов клиента", sources: [5]
-  };
-  const receipt = {
-    title: "Запросить копию квитанции у банка", status: "Открыто",
-    meta: "Оператор поддержки · Срок не назван", sources: [3]
-  };
-  const tried = {
-    title: "Поиск платежа по номеру заказа", status: "Не помогло",
-    meta: "В журнале банка платёж не найден", sources: [16]
-  };
-  const closed = {
-    title: "Отправить акт об отмене установки", status: "Получено клиентом", sources: [7, 9]
-  };
-  const sections = [
-    { title: "Условные обещания", rows: [{
-      title: "Прислать форму для новых реквизитов", status: "Условие не подтверждено",
-      meta: "Ольга Миронова · Если банк отклонит возврат", sources: [22]
-    }] },
-    { title: "Открытые противоречия", rows: [{
-      title: "Установка по заказу №4827", status: "Открыто",
-      meta: "Клиент: мастер не приехал · Компания: установка выполнена", sources: [12, 20]
-    }] },
-    { title: "Что известно сейчас", rows: [
-      orders,
-      { title: "Адрес для документов: Петровка, 8", status: "Со слов клиента", meta: "Обновлено 19 нояб. в 14:11 МСК", sources: [21] }
-    ] },
-    { title: "Что изменилось", rows: [{
-      title: "Адрес для документов", status: "Обновлено клиентом",
-      meta: "Тверская, 12 → Петровка, 8", sources: [6, 21]
-    }] },
-    { title: "Что уже пробовали", rows: [tried] },
-    { title: "Открытые вопросы", rows: [{
-      title: "Подписывать акт об отмене?", status: "Ждём ответа компании", sources: [24]
-    }] }
-  ];
-  const views = {
-    card: {
-      heading: "Обязательства и факты",
-      rows: [refund, proof, callback, unread],
-      sections: [...sections, { title: "Другие обязательства", rows: [receipt, closed] }]
-    },
-    brief: {
-      heading: "Сводка по тикету",
-      rows: [unread, proof, refund, callback],
-      sections: [...sections, { title: "Другие открытые обязательства", rows: [receipt] }]
-    }
-  };
-
-  const beforeHandoff = {
-    heading: views.card.heading,
-    rows: [
-      { ...refund, attention: false, status: "Оператор сообщил об отправке", meta: "Иван Соколов · Срок 19 нояб., 14:00 МСК", sources: [11, 17] },
-      proof,
-      { ...callback, status: "Открыто", meta: "Иван Соколов · Срок 19 нояб., 16:00 МСК" }
-    ],
-    sections: [
-      { title: "Что известно на этот момент", rows: [
-        orders,
-        { title: "Адрес для документов: Тверская, 12", status: "Со слов клиента", meta: "Указан 18 нояб. в 09:42 МСК", sources: [6] }
-      ] },
-      { title: "Что уже пробовали", rows: [tried] },
-      { title: "Другие обязательства", rows: [receipt, closed] }
-    ]
-  };
-  const viewTemplate = root.querySelector("#db-view");
+  ticketLink.textContent = "Открыть в " + provider;
+  form.querySelector("label").textContent = "Токен доступа " + provider;
+  chat.append(root.querySelector("#db-chat").content.cloneNode(true));
+  const messages = chat.querySelector(".db-messages");
   const rowTemplate = root.querySelector("#db-row");
   const sectionTemplate = root.querySelector("#db-section");
-  const narrow = window.matchMedia("(max-width: 760px)");
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  if (!zammad.hidden) {
-    const recent = zammad.querySelector(".zm-recent");
-    for (const [number, data] of Object.entries(sources).slice(-4)) {
-      recent.append(renderMessage(number, data));
-    }
-    return;
+  const messageTemplate = root.querySelector("#db-message");
+
+  const lifecycle = {
+    open: "Открыто", due_soon: "Срок приближается", breached: "Просрочено",
+    claimed: "Должник сообщил о выполнении", fulfilled: "Выполнено",
+    fulfilled_late: "Выполнено с опозданием", cancelled: "Отменено", superseded: "Заменено"
+  };
+  const resolution = {
+    claimed: "Заявление о выполнении", cancelled: "Отмена", superseded: "Замена",
+    counterparty_confirmation: "Подтвердила другая сторона",
+    system_verification: "Подтвердила независимая система"
+  };
+  const confidence = {high: "высокая", medium: "средняя", low: "низкая"};
+  const suggestionReasons = {
+    target_mismatch: "Указано другое обязательство",
+    not_about_target: "Сообщение не уточняет, какое обязательство выполнено",
+    ambiguous_target: "Подходит несколько обязательств",
+    verifier_rejected: "Проверка не подтвердила связь с обязательством",
+    context_names_other: "В ответе упоминается другое обязательство",
+    says_condition_holds: "Из сообщения следует, что условие выполнено",
+    unknown_target: "Обязательство не опознано",
+    already_resolved: "Указанное обязательство уже закрыто"
+  };
+
+  function source(label, evidence, detail = "") {
+    return {...evidence, label, detail};
   }
 
-  document.title = "Duebook · Тикет #1042";
-  for (const app of root.querySelectorAll(".db-app")) {
-    const viewButtons = [...app.querySelectorAll("[data-view]")];
-    const work = app.querySelector(".db-work");
-    const chat = app.querySelector(".db-source");
-    const chatToggle = app.querySelector(".db-chat-toggle");
-    const nav = chatToggle.closest(".db-nav");
-    const ticketMeta = app.querySelector(".db-ticket-meta");
-    const currentMeta = ticketMeta.textContent;
-    const settings = { compact: false };
-    let currentView = viewButtons[0].dataset.view;
-    let activeCitation;
+  function suggestionSources(suggestions) {
+    return suggestions.map(item =>
+      source("Уточнить", item.source, suggestionReasons[item.reason] || item.reason)
+    );
+  }
+
+  function addRows(list, rows) {
+    for (const row of rows) {
+      const fragment = rowTemplate.content.cloneNode(true);
+      const item = fragment.querySelector(".db-row");
+      item.toggleAttribute("data-unread", Boolean(row.unread));
+      item.querySelector("strong").textContent = row.title;
+      const state = item.querySelector(".db-status");
+      state.textContent = row.status || "";
+      state.toggleAttribute("data-attention", Boolean(row.attention));
+      const meta = item.querySelector(".db-meta");
+      meta.textContent = row.meta || "";
+      meta.hidden = !row.meta;
+      const citations = item.querySelector(".db-citations");
+      for (const evidence of row.sources) {
+        const button = document.createElement("button");
+        const reference = document.createElement("span");
+        const label = evidence.label;
+        button.type = "button";
+        button.dataset.source = evidence.article_id;
+        button.dataset.label = label;
+        button.setAttribute("aria-controls", chat.id);
+        button.setAttribute("aria-pressed", "false");
+        if (evidence.detail) button.title = evidence.detail;
+        reference.textContent = "№" + evidence.article_id;
+        button.append(label + " ", reference);
+        button.addEventListener("click", () => load({conversation: true, evidence}));
+        citations.append(button);
+      }
+      list.append(fragment);
+    }
+  }
+
+  function commitmentRow(item, formatDate) {
+    const owner = item.party === "customer" ? "Клиент" :
+      item.responsible_name || (item.responsible_id ? "Оператор №" + item.responsible_id : "Без ответственного");
+    const inherited = item.inherited_from
+      ? "ранее " + (item.inherited_from_name || "оператор №" + item.inherited_from) : "";
+    const deadline = item.deadline;
+    const due = deadline ? "Срок " + formatDate(new Date(deadline.at)) : "Срок не определён";
+    const certainty = deadline && "Уверенность " + confidence[deadline.confidence];
+    const resolved = item.resolution;
+    const sources = [source("Обещание", item.source)];
+    if (item.activated_by) sources.push(source("Условие выполнено", item.activated_by));
+    if (resolved) sources.push(source(resolution[resolved.kind] || "Решение", resolved.source));
+    if (item.resolution_context) sources.push(source("Контекст", item.resolution_context));
+    sources.push(...suggestionSources(item.suggestions));
+    const status = lifecycle[item.status];
+    return {
+      title: item.action, status, sources,
+      attention: ["breached", "due_soon", "claimed"].includes(item.status) || Boolean(item.suggestions.length),
+      meta: [owner, inherited, due, certainty].filter(Boolean).join(" · ")
+    };
+  }
+
+  function renderCard(review) {
+    const expanded = new Set([...record.querySelectorAll("details[open]")].map(section => section.dataset.section));
+    const formatDate = new Intl.DateTimeFormat("ru-RU", {
+      day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: review.timezone
+    }).format;
+    const active = [];
+    const other = [];
+    for (const commitment of review.commitments) {
+      const list = ["open", "claimed"].includes(commitment.state) ? active : other;
+      list.push(commitmentRow(commitment, formatDate));
+    }
+    const primary = document.createElement("ul");
+    addRows(primary, [
+      ...active.filter(row => row.attention),
+      ...active.filter(row => !row.attention),
+      ...review.unread.map(evidence => ({
+        title: "Прочитать сообщение", status: "Ошибка разбора",
+        unread: true, attention: true, sources: [source("Сообщение", evidence)]
+      }))
+    ]);
+    const sections = [
+      ["Условные обещания", review.conditionals.map(item => ({
+        title: item.action, status: "Условие не подтверждено", meta: item.condition,
+        sources: [source("Обещание", item.source), ...suggestionSources(item.suggestions)]
+      }))],
+      ["Открытые противоречия", review.contradictions.map(item => ({
+        title: item.slot, status: "Требует проверки", attention: true,
+        meta: item.facts.map(fact => fact.value).join(" · "),
+        sources: item.facts.map(fact => source("Сообщение", fact.source))
+      }))],
+      ["Что известно сейчас", review.facts.map(fact => ({
+        title: fact.value, meta: fact.slot, sources: [source("Сообщение", fact.source)]
+      }))],
+      ["Что изменилось", review.changes.map(([old, next]) => ({
+        title: next.slot, meta: old.value + " → " + next.value,
+        sources: [source("Ранее", old.source), source("Сейчас", next.source)]
+      }))],
+      ["Что уже пробовали", review.steps.map(step => ({
+        title: step.action,
+        status: {worked: "Помогло", failed: "Не помогло", pending: "Результат неизвестен"}[step.outcome],
+        sources: [source("Действие", step.source), ...(step.outcome_source
+          ? [source("Результат", step.outcome_source)] : [])]
+      }))],
+      ["Открытые вопросы", review.questions.map(question => ({
+        title: question.text, status: question.waiting_on === "customer" ? "Ждём ответа клиента" : "Ждём ответа компании",
+        sources: [source("Сообщение", question.source)]
+      }))],
+      ["Другие обязательства", other]
+    ];
+    const groups = document.createElement("div");
+    groups.className = "db-sections";
+    for (const [name, rows] of sections) {
+      if (!rows.length) continue;
+      const section = sectionTemplate.content.cloneNode(true);
+      const details = section.querySelector("details");
+      details.dataset.section = name;
+      details.open = expanded.has(name);
+      section.querySelector(".db-section-name").textContent = name;
+      section.querySelector(".db-section-count").textContent = rows.length;
+      addRows(section.querySelector("ul"), rows);
+      groups.append(section);
+    }
+    if (!primary.children.length) {
+      const empty = document.createElement("li");
+      const pendingWork = review.processing.awaiting_sync || review.processing.backlog;
+      empty.textContent = pendingWork ? "Карточка ещё обрабатывается." : "Открытых обязательств нет.";
+      primary.append(empty);
+    }
+    record.replaceChildren(primary);
+    if (groups.children.length) record.append(groups);
+  }
+
+  function closeChat(restoreFocus = false) {
+    chat.hidden = true;
+    chatToggle.setAttribute("aria-expanded", "false");
+    activeCitation?.setAttribute("aria-pressed", "false");
+    messages.replaceChildren();
+    if (restoreFocus) (activeCitation || chatToggle).focus();
+    activeCitation = undefined;
+  }
+
+  function showQuote(row, quote) {
+    if (!quote) return;
+    const text = row.querySelector(".db-message-text");
+    const body = text.textContent;
+    const start = body.indexOf(quote);
+    if (start === -1 || body === quote) return;
+    const mark = document.createElement("mark");
+    mark.textContent = quote;
+    text.replaceChildren(body.slice(0, start), mark, body.slice(start + quote.length));
+  }
+
+  function showConversation(items, evidence) {
     let cited;
-
-    chat.append(chatTemplate.content.cloneNode(true));
-    const messages = chat.querySelector(".db-messages");
-    for (const [number, data] of Object.entries(sources)) {
-      messages.append(renderMessage(number, data));
+    for (const message of items) {
+      const fragment = messageTemplate.content.cloneNode(true);
+      const row = fragment.querySelector(".db-message");
+      row.querySelector("strong").textContent = message.author;
+      const link = row.querySelector(".db-article-id");
+      link.href = message.url;
+      link.textContent = "№" + message.id + " ↗";
+      link.setAttribute("aria-label", "Открыть сообщение №" + message.id + " в " + provider);
+      link.title = link.getAttribute("aria-label");
+      const visibility = message.internal ? "Внутреннее сообщение" : "Публичное сообщение";
+      row.querySelector(".db-source-byline").textContent = message.time + " · " + visibility;
+      row.querySelector(".db-message-text").textContent = message.body;
+      if (String(message.id) === evidence?.article_id) cited = row;
+      messages.append(fragment);
     }
-    work.append(viewTemplate.content.cloneNode(true));
-    const heading = work.querySelector(".db-work-head h3");
-    const snapshot = work.querySelector(".db-snapshot");
-    const snapshotSelect = snapshot.querySelector("select");
-    const record = work.querySelector(".db-record");
-
-    function setChatOpen(open) {
-      chat.hidden = !open;
-      chatToggle.setAttribute("aria-expanded", String(open));
-      activeCitation?.setAttribute("aria-pressed", String(open));
+    if (!items.length) {
+      const empty = document.createElement("li");
+      empty.className = "db-message";
+      empty.textContent = "В тикете пока нет сообщений.";
+      messages.append(empty);
     }
-
-    function centerCitation(behavior) {
-      const scrollport = messages.getBoundingClientRect();
-      const message = cited.getBoundingClientRect();
-      const top = messages.scrollTop + message.top - scrollport.top
-        - (messages.clientHeight - message.height) / 2;
-      messages.scrollTo({top, behavior});
-    }
-
-    function showCitation(button) {
-      activeCitation?.setAttribute("aria-pressed", "false");
-      cited?.removeAttribute("aria-current");
-      activeCitation = button;
-      cited = messages.querySelector(`[data-message="${button.dataset.source}"]`);
+    chat.hidden = false;
+    chatToggle.setAttribute("aria-expanded", "true");
+    if (cited) {
+      activeCitation = [...record.querySelectorAll("button[data-source]")].find(button =>
+        button.dataset.source === evidence.article_id && button.dataset.label === evidence.label &&
+        button.getClientRects().length
+      );
+      activeCitation?.setAttribute("aria-pressed", "true");
       cited.setAttribute("aria-current", "true");
-      setChatOpen(true);
+      showQuote(cited, evidence.quote);
+      if (evidence.detail) {
+        const detail = document.createElement("p");
+        detail.className = "db-evidence-detail";
+        detail.textContent = evidence.detail;
+        cited.append(detail);
+      }
       const behavior = reducedMotion.matches ? "auto" : "smooth";
       if (narrow.matches) nav.scrollIntoView({block: "start", behavior});
       cited.focus({preventScroll: true});
-      centerCitation(behavior);
-    }
-
-    function closeChat() {
-      setChatOpen(false);
-      const returnTo = activeCitation?.getClientRects().length ? activeCitation : chatToggle;
-      returnTo.focus();
-    }
-
-    chatToggle.addEventListener("click", () => {
-      setChatOpen(chat.hidden);
-      if (chat.hidden) return;
-      if (cited) centerCitation("auto");
-      else messages.scrollTop = messages.scrollHeight;
-    });
-    chat.querySelector(".db-chat-close").addEventListener("click", closeChat);
-    chat.addEventListener("keydown", event => {
-      if (event.key === "Escape") closeChat();
-    });
-
-    function fillRows(list, rows) {
-      for (const row of rows) {
-        const fragment = rowTemplate.content.cloneNode(true);
-        fragment.querySelector(".db-row").toggleAttribute("data-unread", Boolean(row.unread));
-        fragment.querySelector("strong").textContent = row.title;
-        const status = fragment.querySelector(".db-status");
-        status.textContent = row.status;
-        status.toggleAttribute("data-attention", Boolean(row.attention));
-        const meta = fragment.querySelector(".db-meta");
-        if (row.meta) meta.textContent = row.meta;
-        else meta.remove();
-        const citations = fragment.querySelector(".db-citations");
-        for (const number of row.sources) {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.dataset.source = number;
-          button.setAttribute("aria-controls", chat.id);
-          button.setAttribute("aria-pressed", "false");
-          const reference = document.createElement("span");
-          reference.textContent = "№" + number;
-          button.append("Сообщение ", reference);
-          button.addEventListener("click", () => showCitation(button));
-          citations.append(button);
-        }
-        list.append(fragment);
+      const top = messages.scrollTop + cited.getBoundingClientRect().top -
+        messages.getBoundingClientRect().top - (messages.clientHeight - cited.offsetHeight) / 2;
+      messages.scrollTo({top, behavior});
+    } else {
+      if (evidence) {
+        resetAccess(accessErrors[409]);
+        input.focus();
+        return;
       }
+      messages.scrollTop = messages.scrollHeight;
+      messages.focus({preventScroll: true});
     }
+  }
 
-    function showView(name) {
-      currentView = name;
-      const isCard = name === "card";
-      const historical = isCard && snapshotSelect.value === "before-handoff";
-      const view = historical ? beforeHandoff : views[name];
-      heading.textContent = view.heading;
-      snapshot.hidden = !isCard;
-      ticketMeta.textContent = historical
-        ? "Иван Соколов · 19 нояб., 13:48 МСК, событие №17"
-        : currentMeta;
+  function resetAccess(message = "") {
+    pending?.abort();
+    pending = undefined;
+    token = "";
+    input.value = "";
+    submit.disabled = false;
+    closeChat();
+    record.replaceChildren();
+    ticketLink.removeAttribute("href");
+    card.hidden = nav.hidden = connection.hidden = number.hidden = ticketMeta.hidden = true;
+    number.textContent = ticketMeta.textContent = "";
+    form.hidden = !window.isSecureContext;
+    document.title = pageTitle;
+    title.textContent = lockedTitle;
+    status.textContent = message;
+  }
 
-      const list = document.createElement("ul");
-      fillRows(list, view.rows);
-      const groups = document.createElement("div");
-      groups.className = "db-sections";
-      for (const section of view.sections) {
-        const fragment = sectionTemplate.content.cloneNode(true);
-        fragment.querySelector(".db-section-name").textContent = section.title;
-        fragment.querySelector(".db-section-count").textContent = section.rows.length;
-        fillRows(fragment.querySelector("ul"), section.rows);
-        groups.append(fragment);
-      }
-      record.replaceChildren(list, groups);
-      if (cited) {
-        activeCitation = record.querySelector(`[data-source="${cited.dataset.message}"]`);
-        activeCitation?.setAttribute("aria-pressed", String(!chat.hidden));
-      }
-      for (const button of viewButtons) {
-        button.setAttribute("aria-pressed", String(button.dataset.view === currentView));
-      }
-    }
-    for (const button of viewButtons) {
-      button.addEventListener("click", () => showView(button.dataset.view));
-    }
-    snapshotSelect.addEventListener("change", () => showView(currentView));
-    showView(currentView);
-    if (globalThis.Tweak) {
-      const tweak = new Tweak({
-        container: app,
-        onChange: () => app.toggleAttribute("data-compact", settings.compact)
+  const accessErrors = {
+    401: "Токен не принят. Проверьте его и попробуйте снова.",
+    403: "У вас нет доступа к этому тикету.",
+    404: "Тикет недоступен.",
+    409: "Источники изменились или недоступны. Проверьте тикет в системе поддержки."
+  };
+
+  async function load({conversation = false, evidence} = {}) {
+    if (pending || !token) return;
+    const request = new AbortController();
+    pending = request;
+    submit.disabled = true;
+    const firstLoad = card.hidden;
+    status.textContent = conversation ? "Проверяем доступ к переписке…" : "Обновляем карточку…";
+    closeChat();
+    try {
+      const response = await fetch(reviewUrl + (conversation ? "?include_conversation=true" : ""), {
+        headers: {Authorization: "Bearer " + token},
+        cache: "no-store",
+        signal: request.signal
       });
-      tweak.addToggle(settings, "compact", { label: "Компактные строки" });
+      if (pending !== request) return;
+      if (!response.ok) {
+        resetAccess(accessErrors[response.status] || "Не удалось загрузить карточку. Попробуйте ещё раз.");
+        input.focus();
+        return;
+      }
+      const review = await response.json();
+      if (pending !== request) return;
+      document.title = "Duebook · Тикет #" + review.number;
+      number.textContent = "Тикет #" + review.number;
+      title.textContent = review.title;
+      ticketMeta.textContent = [review.owner && review.owner !== "-" ? "Ответственный: " + review.owner : "",
+        review.ticket_state].filter(Boolean).join(" · ");
+      ticketLink.href = review.url;
+      card.hidden = nav.hidden = connection.hidden = number.hidden = false;
+      ticketMeta.hidden = !ticketMeta.textContent;
+      form.hidden = true;
+      const {awaiting_sync, backlog, held} = review.processing;
+      status.textContent = [
+        awaiting_sync ? "Ожидают импорта: " + awaiting_sync : "",
+        backlog ? "Ожидают обработки: " + backlog : "",
+        held ? "Ошибка обработки. Событие №" + held + " будет обработано повторно." : ""
+      ].filter(Boolean).join(" · ");
+      renderCard(review);
+      if (conversation) showConversation(review.messages, evidence);
+      else if (firstLoad) card.querySelector(".db-refresh").focus();
+    } catch {
+      if (pending === request) {
+        resetAccess("Не удалось загрузить карточку. Попробуйте ещё раз.");
+        input.focus();
+      }
+    } finally {
+      if (pending === request) {
+        pending = undefined;
+        submit.disabled = false;
+      }
     }
   }
-  if (compare) {
-    const layout = document.getElementById("prototype-layout");
-    const sections = root.querySelectorAll("[data-variant]");
-    function showLayout() {
-      for (const section of sections) section.hidden = section.dataset.variant !== layout.value;
-    }
-    layout.closest(".prototype-layout").hidden = false;
-    layout.addEventListener("change", showLayout);
-    showLayout();
-  }
+
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    if (pending) return;
+    token = input.value.trim();
+    input.value = "";
+    load();
+  });
+  root.querySelector(".db-lock").addEventListener("click", () => {
+    resetAccess();
+    input.focus();
+  });
+  card.querySelector(".db-refresh").addEventListener("click", () => load());
+  nav.querySelector("[data-view=card]").addEventListener("click", () => closeChat());
+  chatToggle.addEventListener("click", () => chat.hidden ? load({conversation: true}) : closeChat());
+  chat.querySelector(".db-chat-close").addEventListener("click", () => closeChat(true));
+  chat.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeChat(true);
+  });
+  window.addEventListener("pagehide", () => resetAccess());
+  if (!window.isSecureContext) resetAccess("Откройте эту страницу по HTTPS для доступа к карточке.");
 })();
 </script>
 </body>

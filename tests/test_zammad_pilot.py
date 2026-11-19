@@ -47,6 +47,7 @@ class ZammadTicket:
         self.articles = []
         self.unavailable = False
         self.reorder = False
+        self.revoked = set()
 
     def say(self, aid, hid, minutes, body, sender, author_id, name, *, internal=False):
         self.articles.append({
@@ -70,7 +71,9 @@ class ZammadTicket:
         assert request.method == "GET"
         _, token = request.headers["authorization"].split("=")
         path = request.url.path
-        if token == "denied" or (token == "customer" and "ticket_history" in path):
+        if token in self.revoked or token == "denied":
+            return httpx.Response(403)
+        if token == "customer" and "ticket_history" in path:
             return httpx.Response(403)
         assert token in {"sync-only", "viewer", "limited", "customer"}
         if path == "/api/v1/ticket_history/17":
@@ -159,8 +162,11 @@ def test_external_commitment_lifecycle_is_replayable_and_source_authorized(
             partial(original, transport=httpx.MockTransport(to_webhook)),
         )
 
-        def review(token="viewer", code=200):
-            response = api.get(REVIEW, headers={"Authorization": f"Bearer {token}"})
+        def review(token="viewer", code=200, *, conversation=False):
+            response = api.get(
+                REVIEW, headers={"Authorization": f"Bearer {token}"},
+                params={"include_conversation": conversation},
+            )
             assert response.status_code == code, response.text
             assert response.headers.get("cache-control") == "no-store"
             return response.json()
@@ -187,6 +193,12 @@ def test_external_commitment_lifecycle_is_replayable_and_source_authorized(
         }
         (dispute,) = initial["contradictions"]
         assert {f["value"] for f in dispute["facts"]} == {"received", "missing"}
+        assert "messages" not in initial and PRIVATE_NOTE not in str(initial)
+        viewed = review(conversation=True)["messages"]
+        assert [message["id"] for message in viewed] == [40, 41, 42]
+        assert viewed[1]["internal"] and viewed[1]["body"] == PRIVATE_NOTE
+        assert viewed[-1]["url"] == commitment["source"]["url"]
+        assert PROMISE in viewed[-1]["body"]
 
         provider.change(104, 25, "owner", 27, "Olga")
         provider.change(105, 25, "state", 4, "closed")
@@ -203,6 +215,7 @@ def test_external_commitment_lifecycle_is_replayable_and_source_authorized(
         assert still_owed["id"] == commitment["id"]
         assert (still_owed["responsible_id"], still_owed["responsible_name"]) == ("27", "Olga")
         assert still_owed["inherited_from"] == "24"
+        assert still_owed["inherited_from_name"] == "Ivan"
         assert (still_owed["state"], still_owed["status"]) == ("open", "breached")
         assert still_owed["suggestions"][0]["source"]["article_id"] == "44"
 
@@ -239,16 +252,25 @@ def test_external_commitment_lifecycle_is_replayable_and_source_authorized(
         ]
 
         for token, code in [("denied", 403), ("customer", 403), ("limited", 409)]:
-            assert PROMISE not in str(review(token, code))
+            refused = review(token, code, conversation=True)
+            assert "commitments" not in refused and "messages" not in refused
         for path in ("card", "card?as_of=4", "brief?format=json", "status"):
             assert api.get(f"/tickets/{stream}/{path}", headers={
                 "Authorization": "Bearer internal-key",
             }).status_code == 404
 
+        # A viewer who opened the card earlier must be reauthorized for the evidence panel.
+        provider.revoked.add("viewer")
+        for conversation in (False, True):
+            denied = review(code=403, conversation=conversation)
+            assert "commitments" not in denied and "messages" not in denied
+        provider.revoked.clear()
+
         # Deletion (or a visibility change) stops both new extraction and historical disclosure.
         provider.articles = [article for article in provider.articles if article["id"] != 42]
         provider.history = [change for change in provider.history if change["id"] != 103]
-        assert PROMISE not in str(review(code=409))
+        unavailable = review(code=409, conversation=True)
+        assert "commitments" not in unavailable and "messages" not in unavailable
         with pytest.raises(zammad_sync.SyncError, match="differs from the acknowledged prefix"):
             zammad_sync.sync(settings, 17, TARGET)
         assert len(list(store.events(stream))) == 9

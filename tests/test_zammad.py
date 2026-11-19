@@ -29,9 +29,15 @@ def client():
 def test_workspace_page_can_open_from_zammad_without_a_token(client):
     response = client.get(PAGE)
     assert response.status_code == 200
-    assert 'id="db-zammad-token"' in response.text
+    assert 'id="db-access-token"' in response.text
+    assert 'data-provider="Zammad"' in response.text
     assert response.headers["cache-control"] == "no-store"
-    assert "connect-src 'self'" in response.headers["content-security-policy"]
+    csp = response.headers["content-security-policy"]
+    for directive in ("connect-src 'self'", "font-src 'self'", "frame-ancestors 'none'"):
+        assert directive in csp
+    assert "fonts.googleapis.com" not in response.text
+    assert "/assets/operator/golos-cyrillic.woff2" in response.text
+    assert client.get("/assets/operator/golos-cyrillic.woff2").content.startswith(b"wOF2")
 
 
 def test_conversation_requires_the_viewers_token(client):

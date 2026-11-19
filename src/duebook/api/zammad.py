@@ -7,15 +7,15 @@ from hashlib import sha256
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Annotated, TypeVar
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from httpx import Client, HTTPStatusError, RequestError
 from pydantic import AwareDatetime, BaseModel, Field, PositiveInt, TypeAdapter
 
-from ..card import Card, CommitmentState, Source, Suggestion
+from ..card import Card, CommitmentState, Fact, Source, Suggestion
 from ..events import Actor, AssigneeChanged, Event, MessagePosted, Role, Side, StatusChanged
 from ..lifecycle import AlertPolicy, status_at
 from ..settings import ConfigError
@@ -26,7 +26,8 @@ PAGE_HEADERS = {
     **PRIVATE,
     "Content-Security-Policy": (
         "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; "
-        "connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'"
+        "font-src 'self'; connect-src 'self'; form-action 'none'; "
+        "frame-ancestors 'none'; base-uri 'none'"
     ),
 }
 DENIED = {401, 403, 404}
@@ -178,13 +179,15 @@ def _events(
     return events
 
 
-def source_events(base: str, ticket_id: int, token: str) -> tuple[_SyncTicket, list[Event]]:
+def source_events(
+    base: str, ticket_id: int, token: str,
+) -> tuple[_SyncTicket, list[_Article], list[Event]]:
     with _client(base, token) as client:
         # This endpoint requires ticket.agent as well as access to the ticket.
         raw = client.get(f"api/v1/ticket_history/{ticket_id}").raise_for_status().json()
         history = TypeAdapter(list[_Change]).validate_python(raw["history"])
         ticket, articles = _load_ticket(client, ticket_id, _SyncTicket)
-    return ticket, _events(base, ticket, articles, history)
+    return ticket, articles, _events(base, ticket, articles, history)
 
 
 class _ArticleText(HTMLParser):
@@ -242,11 +245,14 @@ def zammad_router(
     base = secure_base(base_url, "DUEBOOK_ZAMMAD_URL")
     zone = ZoneInfo(timezone)
     workspace = Path(__file__).with_name("operator.html").read_text(encoding="utf-8")
+    workspace = workspace.replace("{{provider}}", "Zammad")
     router = APIRouter(prefix="/zammad/tickets")
 
     @router.get("/{ticket_id}", response_class=HTMLResponse)
-    def page(ticket_id: int) -> HTMLResponse:
-        return HTMLResponse(workspace, headers=PAGE_HEADERS)
+    def page(ticket_id: int, request: Request) -> HTMLResponse:
+        fonts = request.url_for("operator-fonts", path="/").path.rstrip("/")
+        page_html = workspace.replace("{{fonts}}", quote(fonts, safe="/%"))
+        return HTMLResponse(page_html, headers=PAGE_HEADERS)
 
     def viewer_token(authorization: Annotated[str, Header()] = "") -> str:
         scheme, _, token = authorization.partition(" ")
@@ -272,9 +278,9 @@ def zammad_router(
         )
 
     @router.get("/{ticket_id}/review")
-    def review(ticket_id: int, token: Viewer) -> JSONResponse:
+    def review(ticket_id: int, token: Viewer, include_conversation: bool = False) -> JSONResponse:
         with _provider_read():
-            ticket, visible = source_events(base, ticket_id, token)
+            ticket, articles, visible = source_events(base, ticket_id, token)
         url = f"{base}#ticket/zoom/{ticket.id}"
         current_id = stream_id(base, ticket_id)
         with store() as s, s.conn.transaction():
@@ -285,16 +291,25 @@ def zammad_router(
                     409, "Stored evidence is unavailable at the source", headers=PRIVATE
                 )
             card, hold = s.card(current_id), s.held(current_id)
+        names = {
+            event.author.id: event.author.name for event in stored
+            if isinstance(event, MessagePosted) and event.author.name
+        }
+        messages = {
+            "messages": [{**article.display(zone), "url": f"{url}/{article.id}"}
+                         for article in articles]
+        } if include_conversation else {}
         return JSONResponse(
             {
                 "number": ticket.number, "title": ticket.title, "owner": ticket.owner,
-                "ticket_state": ticket.state, "url": url,
+                "ticket_state": ticket.state, "url": url, "timezone": timezone,
                 "processing": {
                     "awaiting_sync": len(visible) - len(stored),
                     "backlog": len(stored) - card.last_seq,
                     "held": hold.seq if hold else None,
                 },
-                **_review_card(card, ticket, url, clock(), s.policy),
+                **_review_card(card, ticket, url, clock(), s.policy, names),
+                **messages,
             },
             headers=PRIVATE,
         )
@@ -304,6 +319,7 @@ def zammad_router(
 
 def _review_card(
     card: Card, ticket: _SyncTicket, url: str, now: datetime, policy: AlertPolicy,
+    names: dict[str, str],
 ) -> dict:
     def evidence(source: Source) -> dict:
         article_id = source.event_id.removeprefix("article:")
@@ -311,6 +327,9 @@ def _review_card(
 
     def suggestion(item: Suggestion) -> dict:
         return {"kind": item.kind.value, "reason": item.reason, "source": evidence(item.source)}
+
+    def fact(item: Fact) -> dict:
+        return {"slot": item.slot, "value": item.value, "source": evidence(item.source)}
 
     commitments = []
     current_owner = owner_id(ticket.owner_id)
@@ -325,9 +344,10 @@ def _review_card(
         commitments.append({
             "id": c.id, "action": c.action, "party": c.owner.value,
             "responsible_id": c.responsible, "inherited_from": c.inherited_from,
+            "inherited_from_name": names.get(c.inherited_from or ""),
             "responsible_name": (
                 ticket.owner if c.responsible and c.responsible == current_owner else None
-            ),
+            ) or names.get(c.responsible or ""),
             "state": c.state.value, "status": status_at(c, now, policy).value,
             "deadline": {
                 "at": c.due.deadline.due_at.isoformat(),
@@ -342,10 +362,19 @@ def _review_card(
     return {
         "commitments": commitments,
         "contradictions": [
-            {"slot": c.slot, "facts": [
-                {"value": facts[key].value, "source": evidence(facts[key].source)}
-                for key in c.fact_ids
-            ]} for c in card.open_contradictions()
+            {"slot": c.slot, "facts": [fact(facts[key]) for key in c.fact_ids]}
+            for c in card.open_contradictions()
+        ],
+        "facts": [fact(item) for item in card.current_facts()],
+        "changes": [[fact(old), fact(new)] for old, new in card.changed_facts()],
+        "steps": [
+            {"action": step.action, "outcome": step.outcome.value, "source": evidence(step.source),
+             "outcome_source": evidence(step.outcome_source) if step.outcome_source else None}
+            for step in card.steps
+        ],
+        "questions": [
+            {"text": q.text, "waiting_on": q.waiting_on.value, "source": evidence(q.source)}
+            for q in card.questions if q.open
         ],
         "unread": [evidence(item.source) for item in card.unread],
         "conditionals": [
