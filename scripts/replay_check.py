@@ -45,7 +45,7 @@ R = Path("results")
 #: The full records, and the closing rules their round decided under.
 FULL = {"round4/test3": 1, "round5/test3": 2, "round5/dev3": 2, "round6/test3": 3,
         "round7/test3": 3, "round7/dev3": 3, "round7/dev4": 3, "round8/test4": 4,
-        "round8/dev5": 4, "round10/test5": 5}  # fmt: skip
+        "round8/dev5": 4, "round10/test5": 5, "round10/test3": 5}  # fmt: skip
 #: Targeted re-extractions: (record, split, what was replayed, the messages read
 #: again, in the order the rounds read them, and the records that hold those reads).
 R9_TEST4 = (["results/round9/reread.json"], ["round9/test4"])
