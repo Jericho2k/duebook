@@ -8,6 +8,10 @@ original run on a fresh test split. Round 8 runs our method on a new, unseen
 split (`test4`). Round 9 is not a run: it replays Round 8's record and reads
 297 chosen messages again. The earlier rounds follow in reverse order.
 
+The [Round 10 model comparison](model-comparison.md) tests DeepSeek V4.1
+Flash and GLM 5.3 Flash on the same 12 tickets and includes the frozen
+full-context, rolling-summary, Mem0 and Graphiti results on `test3`.
+
 ## Round 10: the final method
 
 Two full runs of the final method, as `main` ships it plus this round's

@@ -1,0 +1,5 @@
+{"at": "2026-11-19T12:56:40.183495+03:00", "split": "dev-portability", "what": "cost projection only: the run would not fit", "methods": "event_memory", "label": "Round 10 portability, deepinfra/fp8", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-19T12:56:40.183495+03:00", "split": "dev-portability", "what": "run", "methods": "event_memory", "label": "Round 10 portability, relace", "usd": 0.08112106300000012, "reused_usd": 0.0032469244}
+{"at": "2026-11-19T12:57:00.683639+03:00", "split": "dev-portability", "what": "run", "methods": "event_memory", "label": "Round 10 portability, deepinfra/fp8", "usd": 0.1836862663999997, "reused_usd": 0.0009078440000000001}
+{"at": "2026-11-19T13:02:52.108664+03:00", "split": "dev-portability", "what": "cost projection only: the run would not fit", "methods": "event_memory", "label": "Round 10 portability, relace", "usd": 0.0, "reused_usd": 0.0032296505000000003}
+{"at": "2026-11-19T13:03:03.639929+03:00", "split": "dev-portability", "what": "run", "methods": "event_memory", "label": "Round 10 portability, relace", "usd": 0.16163180359999985, "reused_usd": 0.0844031624000001}
