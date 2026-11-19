@@ -26,12 +26,14 @@ import json
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, Any, Literal
 
 import psycopg
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool, PoolTimeout
 
@@ -43,7 +45,7 @@ from ..settings import Settings
 from ..store import Conflict, Store
 from ..store.codec import encode
 from .validation import Invalid, read_event
-from .zammad import zammad_router
+from .zammad import TICKET_PREFIX, zammad_router
 
 #: The largest webhook body accepted. One ticket event is a few kilobytes; a
 #: limit keeps a misbehaving sender from filling memory or the append-only log.
@@ -78,15 +80,21 @@ def create_app(
 
     app = FastAPI(title="duebook", version="0.1.0", lifespan=lifespan)
     app.state.pool = pool
-    if settings.zammad_url:
-        app.include_router(zammad_router(settings.zammad_url, settings.timezone))
-
     @contextmanager
     def store(timeout: float = 5.0) -> Iterator[Store]:
         with pool.connection(timeout=timeout) as conn:
             yield Store(conn, cal, policy)
 
-    def authorized(request: Request) -> None:
+    if settings.zammad_url:
+        app.mount(
+            "/assets/operator", StaticFiles(directory=Path(__file__).with_name("fonts")),
+            name="operator-fonts",
+        )
+        app.include_router(zammad_router(settings.zammad_url, settings.timezone, store, clock))
+
+    def authorized(ticket_id: str, request: Request) -> None:
+        if ticket_id.startswith(TICKET_PREFIX):
+            raise HTTPException(404, "ticket unavailable on this route")
         if not settings.api_key:
             return
         scheme, _, key = request.headers.get("authorization", "").partition(" ")
@@ -128,6 +136,8 @@ def create_app(
             event = read_event(raw)
         except Invalid as error:
             raise HTTPException(422, str(error)) from error
+        if event.ticket_id.startswith(TICKET_PREFIX) and not settings.webhook_secret:
+            raise HTTPException(403, "Zammad imports require signed ingestion")
 
         def ingest() -> bool:
             with store() as s:
