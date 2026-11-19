@@ -219,7 +219,7 @@
     <form class="db-zammad-access" method="post">
       <label for="db-zammad-token">Токен Zammad</label>
       <input id="db-zammad-token" type="password" autocomplete="off" required>
-      <button type="submit">Загрузить переписку</button>
+      <button type="submit">Показать обязательства</button>
     </form>
     <p class="db-zammad-status" role="status"></p>
   </template>
@@ -442,8 +442,6 @@
 
   #duebook-operator .db-zammad-access button { color: var(--db-index); }
   #duebook-operator .db-zammad-status:empty { margin: 0; }
-  #duebook-operator .db-work > .db-source { margin: 0; }
-  #duebook-operator .db-work > .db-source .db-messages { max-height: min(68dvh, 680px); }
 
   #duebook-operator .db-work h3,
   #duebook-operator .db-source h3 {
@@ -577,6 +575,7 @@
   #duebook-operator .db-section ul { padding: 0 0 10px 13px; }
 
   #duebook-operator .db-citations { gap: 6px; }
+  #duebook-operator .db-citations a { color: var(--db-index); overflow-wrap: anywhere; }
 
   #duebook-operator .db-citations button {
     display: inline-flex;
@@ -733,10 +732,87 @@
     fragment.querySelector(".db-message").dataset.message = number;
     fragment.querySelector(".db-message-header strong").textContent = data.author;
     fragment.querySelector(".db-article-id").textContent = "№" + number;
-    const time = live ? data.time : data.time + " МСК";
-    fragment.querySelector(".db-source-byline").textContent = time + " · " + data.visibility;
+    fragment.querySelector(".db-source-byline").textContent = data.time + " МСК · " + data.visibility;
     fragment.querySelector(".db-message-text").textContent = data.quote;
     return fragment;
+  }
+
+  function renderLiveReview(review, panel) {
+    const labels = {
+      open: "Открыто", due_soon: "Срок приближается", breached: "Срок истёк",
+      claimed: "Должник сообщил о выполнении", fulfilled: "Выполнено",
+      fulfilled_late: "Выполнено с опозданием", cancelled: "Отменено", superseded: "Заменено",
+      counterparty_confirmation: "Подтвердила другая сторона",
+      system_verification: "Подтвердила независимая система"
+    };
+    const confidence = {high: "высокая", medium: "средняя", low: "низкая"};
+    function addRow(list, title, status, meta, sources) {
+      const row = root.querySelector("#db-row").content.cloneNode(true);
+      row.querySelector("strong").textContent = title;
+      row.querySelector(".db-status").textContent = status;
+      const details = row.querySelector(".db-meta");
+      details.textContent = meta;
+      details.hidden = !meta;
+      const citations = row.querySelector(".db-citations");
+      for (const [label, source] of sources) {
+        if (!source) continue;
+        const link = document.createElement("a");
+        link.href = source.url;
+        link.textContent = label + " · №" + source.article_id + (source.quote ? " «" + source.quote + "»" : "");
+        citations.append(link);
+      }
+      list.append(row);
+    }
+    function addSection(title) {
+      const heading = document.createElement("h3");
+      const list = document.createElement("ul");
+      heading.textContent = title;
+      list.className = "db-record";
+      panel.append(heading, list);
+      return list;
+    }
+    const list = addSection("Обязательства");
+    if (!review.commitments.length) addRow(list, "Обязательства пока не найдены", "", "", []);
+    for (const item of review.commitments) {
+      const owner = item.party === "customer" ? "Клиент" :
+        item.responsible_name || (item.responsible_id ? "Оператор №" + item.responsible_id : "Без ответственного");
+      const due = item.deadline;
+      const deadline = due ? new Date(due.at).toLocaleString("ru-RU", {timeZoneName: "short"}) +
+        " · Уверенность " + confidence[due.confidence] + (due.quote ? " «" + due.quote + "»" : "") :
+        "Срок не определён";
+      const sources = [
+        ["Обещание", item.source], ["Условие выполнено", item.activated_by],
+        [labels[item.resolution?.kind], item.resolution?.source],
+        ["Контекст подтверждения", item.resolution_context],
+        ...item.suggestions.map(s => ["Требует проверки (" + s.reason + ")", s.source])
+      ];
+      addRow(list, item.action, labels[item.status], owner + " · " + deadline, sources);
+    }
+    if (review.contradictions.length || review.unread.length ||
+        [...review.commitments, ...review.conditionals].some(item => item.suggestions.length)) {
+      const guidance = document.createElement("p");
+      guidance.textContent = "Откройте сообщение-источник и запросите уточнение в Zammad.";
+      panel.append(guidance);
+    }
+    if (review.contradictions.length) {
+      const disputed = addSection("Открытые противоречия");
+      for (const item of review.contradictions) {
+        addRow(disputed, item.slot, "", "", item.facts.map(f => [f.value, f.source]));
+      }
+    }
+    if (review.conditionals.length) {
+      const conditional = addSection("Условные обещания");
+      for (const item of review.conditionals) {
+        addRow(conditional, item.action, "Условие не подтверждено", item.condition, [
+          ["Обещание", item.source],
+          ...item.suggestions.map(s => ["Требует проверки (" + s.reason + ")", s.source])
+        ]);
+      }
+    }
+    if (review.unread.length) {
+      const unread = addSection("Сообщения с ошибкой разбора");
+      for (const source of review.unread) addRow(unread, "Проверьте сообщение", "", "", [["Источник", source]]);
+    }
   }
 
   function showLiveTicket() {
@@ -747,7 +823,7 @@
     const owner = app.querySelector(".db-ticket-meta");
     const returnLink = app.querySelector(".db-access a");
     document.title = "Duebook · Zammad";
-    title.textContent = "Переписка Zammad";
+    title.textContent = "Обязательства по тикету Zammad";
     number.hidden = owner.hidden = returnLink.hidden = true;
     app.querySelector(".db-nav").hidden = true;
     work.append(root.querySelector("#db-zammad-access").content.cloneNode(true));
@@ -755,21 +831,27 @@
     const input = form.querySelector("input");
     const submit = form.querySelector("button");
     const status = work.querySelector(".db-zammad-status");
+    const panel = document.createElement("div");
+    work.append(panel);
 
     if (!window.isSecureContext) {
       form.hidden = true;
-      status.textContent = "Откройте эту страницу по HTTPS, чтобы загрузить переписку.";
+      status.textContent = "Откройте эту страницу по HTTPS, чтобы загрузить обязательства.";
       return;
     }
 
     form.addEventListener("submit", async event => {
       event.preventDefault();
       submit.disabled = true;
-      status.textContent = "Загружаем переписку…";
+      panel.replaceChildren();
+      document.title = "Duebook · Zammad";
+      title.textContent = "Обязательства по тикету Zammad";
+      number.hidden = owner.hidden = returnLink.hidden = true;
+      status.textContent = "Проверяем доступ и загружаем обязательства…";
       const token = input.value.trim();
       input.value = "";
       try {
-        const response = await fetch(location.pathname.replace(/\/$/, "") + "/conversation", {
+        const response = await fetch(location.pathname.replace(/\/$/, "") + "/review", {
           headers: {Authorization: "Bearer " + token},
           cache: "no-store"
         });
@@ -778,6 +860,8 @@
           input.focus();
         } else if (response.status === 403 || response.status === 404) {
           status.textContent = "Тикет недоступен с этим токеном Zammad.";
+        } else if (response.status === 409) {
+          status.textContent = "Источники изменились или недоступны. Обновите данные и повторите запрос.";
         } else if (!response.ok) {
           throw new Error("Zammad request failed");
         } else {
@@ -785,33 +869,20 @@
           document.title = "Duebook · Тикет #" + ticket.number;
           number.textContent = "Тикет #" + ticket.number;
           title.textContent = ticket.title;
-          owner.textContent = ticket.owner && ticket.owner !== "-" ? ticket.owner : "";
+          owner.textContent = [ticket.ticket_state, ticket.owner].filter(item => item && item !== "-").join(" · ");
           returnLink.href = ticket.url;
           number.hidden = returnLink.hidden = false;
           owner.hidden = !owner.textContent;
-          form.hidden = true;
-          status.textContent = ticket.messages.length ? "" : "В тикете пока нет сообщений.";
-          if (!ticket.messages.length) return;
-
-          const chat = app.querySelector(".db-source");
-          chat.append(chatTemplate.content.cloneNode(true));
-          chat.querySelector(".db-chat-close").remove();
-          const messages = chat.querySelector(".db-messages");
-          for (const message of ticket.messages) {
-            messages.append(renderMessage(message.id, {
-              author: message.author,
-              time: message.time,
-              visibility: message.internal ? "Внутреннее сообщение" : "Публичное сообщение",
-              quote: message.body
-            }));
-          }
-          work.append(chat);
-          chat.hidden = false;
-          messages.scrollTop = messages.scrollHeight;
-          messages.focus({preventScroll: true});
+          const {awaiting_sync, backlog, held} = ticket.processing;
+          status.textContent = [
+            awaiting_sync ? "Ожидают импорта: " + awaiting_sync : "",
+            backlog ? "Ожидают обработки: " + backlog : "",
+            held ? "Ошибка обработки. Событие №" + held + " будет обработано повторно." : ""
+          ].filter(Boolean).join(" · ");
+          renderLiveReview(ticket, panel);
         }
       } catch {
-        status.textContent = "Не удалось загрузить переписку. Попробуйте ещё раз.";
+        status.textContent = "Не удалось загрузить обязательства. Попробуйте ещё раз.";
       } finally {
         submit.disabled = false;
       }

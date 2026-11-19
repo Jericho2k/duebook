@@ -240,6 +240,9 @@ def parser() -> argparse.ArgumentParser:
     s = sub.add_parser("serve", help="run the HTTP API")
     s.add_argument("--host", help="overrides DUEBOOK_HOST")
     s.add_argument("--port", type=int, help="overrides DUEBOOK_PORT")
+    zammad = sub.add_parser("sync-zammad", help="import or update a single Zammad ticket")
+    zammad.add_argument("ticket_id", type=int)
+    zammad.add_argument("--duebook-url", default="http://127.0.0.1:8000")
     for name, text in (
         ("process", "apply stored events"),
         ("schedule", "queue alerts as deadlines come due"),
@@ -263,6 +266,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             return migrate(settings, args)
         if args.command == "serve":
             return serve(settings, args)
+        if args.command == "sync-zammad":
+            from .api.zammad_sync import SyncError, sync
+
+            try:
+                count = sync(settings, args.ticket_id, args.duebook_url)
+            except SyncError as error:
+                log.error("Zammad sync: %s", error)
+                return 1
+            print(f"Synced {count} new events for Zammad ticket {args.ticket_id}")
+            return 0
         stopper = Stopper().install()
         command = {"process": process, "schedule": schedule, "deliver": deliver}[args.command]
         return command(settings, args, stopper)

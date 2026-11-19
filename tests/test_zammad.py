@@ -111,3 +111,12 @@ def test_zammad_denial_prevents_a_transcript_lookup(client, monkeypatch):
     assert response.status_code == 403
     assert "private upstream details" not in response.text
     assert paths == ["/helpdesk/api/v1/tickets/17"]
+
+
+def test_unsigned_ingestion_cannot_write_a_zammad_pilot_stream(client):
+    payload = {
+        "type": "AssigneeChanged", "id": "initial:owner", "seq": 1,
+        "ticket_id": zammad.stream_id("https://support.example.test/", 17),
+        "at": "2026-11-19T12:00:00Z", "previous": None, "current": "27",
+    }
+    assert client.post("/events", json=payload).status_code == 403

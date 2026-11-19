@@ -273,6 +273,13 @@ class Store:
         ).fetchone()
         return decode_event(row["body"]) if row else None
 
+    def events(self, ticket_id: str) -> Iterator[Event]:
+        """The acknowledged stream, including events still waiting for processing."""
+        rows = self.conn.execute(
+            "select body from events where ticket_id = %s order by seq", (ticket_id,),
+        )
+        return (decode_event(row["body"]) for row in rows)
+
     def previous_turn(self, event: Event) -> MessagePosted | None:
         side = other_side(event)
         if side is None:

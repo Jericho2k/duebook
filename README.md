@@ -475,25 +475,47 @@ The core library does not need the web stack: `pip install duebook[store]`
 is enough for the event store, `[service]` adds FastAPI, uvicorn and the
 connection pool.
 
-### Zammad ticket workspace
+### Zammad commitment pilot
 
-Set `DUEBOOK_ZAMMAD_URL` to the Zammad base URL and start `duebook serve`.
-In Zammad's Object Manager, add an agent-visible ticket text field named
-**Duebook**. Its link template points to the Duebook ticket page:
+Use one Zammad instance and one Duebook deployment and database for the pilot.
+Configure `DUEBOOK_ZAMMAD_URL` with the instance's stable HTTPS base URL,
+set `DUEBOOK_WEBHOOK_SECRET` on the API and poller, and start `duebook serve`
+and `duebook process`. Supply `DUEBOOK_ZAMMAD_SYNC_TOKEN` to the poller only.
+Use an agent service account with read access to the pilot ticket and its
+history and articles. Set `DUEBOOK_ALERTS_SINCE` to the go-live instant before
+processing historical messages. Keep delivery and logs restricted to
+authorized operators until the customer approves an alert destination.
 
-    https://duebook.example.com/zammad/tickets/#{ticket.id}
+```bash
+duebook sync-zammad 17 --duebook-url https://duebook.example.com
+```
 
-For a local pilot use `http://127.0.0.1:8000` and bind Duebook to
-`127.0.0.1`. Populate the field on the pilot ticket and save it to show
-the link icon. The URL uses the ticket's internal ID from the Zammad
-address bar. The page displays the ticket's public-facing number.
+Run the command again to pick up changes, or schedule it for the selected
+ticket. It fetches the ticket, history and articles on each pass and checks
+the acknowledged event prefix in the same database the API writes to.
+Only the new suffix is submitted to signed `POST /events`. Import and model
+processing can resume independently after an unavailable provider or a lost
+HTTP acknowledgement. A changed, truncated or reordered historical prefix
+that cannot be reconciled fails closed. Internal notes, attachments and
+system articles are excluded from extraction.
 
-Enter your own Zammad personal access token with ticket read access in
-the workspace. The service uses it for that request and Zammad decides
-which articles the viewer can read, including internal notes. The view
-shows message text in order and links back to the original ticket for
-native formatting and attachments. Reads bypass extraction and storage.
-Deploy the workspace over HTTPS outside localhost.
+Open `/zammad/tickets/17`, where `17` is Zammad's internal ticket ID. Use
+your own Zammad agent token. The app checks live access to the history and
+articles for each review request. Its card shows commitments, responsibility,
+deadlines and confidence, and links quotes and disputed evidence to the
+originating article. If a suggestion needs clarification, follow the source
+link and request a public reply in Zammad. The reply is attributed to its
+author and goes through normal extraction and reduction on the next sync.
+A debtor claim and a counterparty confirmation have distinct labels.
+Independent verification requires a separate source of record.
+
+Use synthetic or approved data for this slice. Removing or restricting a
+source article suppresses the derived card on the next request, including
+historical access through the generic card and brief endpoints. The
+append-only event log, proposals, database backups and any model-provider
+copies still require an agreed retention and deletion process before
+customer data is imported. Live instance permissions, the supported Zammad
+version and the model data policy need to be verified with the pilot customer.
 
 ### Endpoints
 
@@ -504,11 +526,15 @@ Deploy the workspace over HTTPS outside localhost.
 | `GET /tickets/{id}/card?as_of=<seq>` | the card replayed from the log up to that event, with statuses as of that event's time |
 | `GET /tickets/{id}/brief?budget=<tokens>&format=text\|json` | the handoff brief; as JSON, its sections and lines, each line with its sources (event id, seq, author, side, quote) |
 | `GET /tickets/{id}/status` | last applied seq, backlog, hold details if any, and verifier call and failure counts for the ticket |
+| `GET /zammad/tickets/{id}/review` | source-authorized commitments, evidence links, uncertainty and processing status |
 | `GET /health` | database status, pending alerts, held tickets, and service-wide verifier call and failure counts |
 
 `verifier_calls` counts proposals sent to the verifier, including calls that
 fail. `verifier_failures` counts calls that end in an error. Both counts
 cover applied events and count a retried call once.
+
+The generic `/tickets` reads exclude Zammad pilot streams. Use the Zammad
+review route with a viewer token for those tickets.
 
 `POST /events` takes one event in the format `duebook.store.codec` stores:
 
