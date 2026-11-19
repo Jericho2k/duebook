@@ -1,0 +1,83 @@
+{
+ "what": "dev7: each conditional offer, the message saying whether its condition held, and each invoice number and its correction, read live against the card the planted proposals build (template words)",
+ "tickets": {
+  "SIM-7221-M0000": [
+   33,
+   67,
+   103,
+   113
+  ],
+  "SIM-7221-M0001": [
+   17,
+   22,
+   81,
+   164
+  ],
+  "SIM-7221-M0002": [
+   108,
+   109,
+   116
+  ],
+  "SIM-7221-M0003": [
+   81,
+   111,
+   112,
+   144
+  ]
+ },
+ "why": {
+  "SIM-7221-M0000": {
+   "33": [
+    "conditional offer"
+   ],
+   "67": [
+    "condition failed"
+   ],
+   "103": [
+    "invoice number given"
+   ],
+   "113": [
+    "correction own"
+   ]
+  },
+  "SIM-7221-M0001": {
+   "17": [
+    "invoice number given"
+   ],
+   "22": [
+    "correction other"
+   ],
+   "81": [
+    "conditional offer"
+   ],
+   "164": [
+    "condition held"
+   ]
+  },
+  "SIM-7221-M0002": {
+   "108": [
+    "invoice number given"
+   ],
+   "109": [
+    "correction other"
+   ],
+   "116": [
+    "conditional offer"
+   ]
+  },
+  "SIM-7221-M0003": {
+   "81": [
+    "conditional offer"
+   ],
+   "111": [
+    "invoice number given"
+   ],
+   "112": [
+    "correction own"
+   ],
+   "144": [
+    "condition held"
+   ]
+  }
+ }
+}

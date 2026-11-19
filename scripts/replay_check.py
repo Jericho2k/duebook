@@ -55,7 +55,9 @@ REREAD = [("round9/test4", "test4", "results/round8/test4.json", *R9_TEST4),
           ("round9/dev6", "dev6", "oracle", ["results/round9/reread-dev6.json"], ["round9/dev6"]),
           ("round10/test4-reread", "test4", "results/round8/test4.json",
            [*R9_TEST4[0], "results/round10/reread-test4.json"],
-           [*R9_TEST4[1], "round10/test4-reread"])]  # fmt: skip
+           [*R9_TEST4[1], "round10/test4-reread"]),
+          ("round10/dev7", "dev7", "oracle", ["results/round10/reread-dev7.json"],
+           ["round10/dev7"])]  # fmt: skip
 
 
 def no_model(self, body):

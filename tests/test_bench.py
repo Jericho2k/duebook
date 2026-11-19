@@ -26,10 +26,19 @@ from duebook.bench import (
     require_different_models,
 )
 from duebook.bench.experiment import to_json
-from duebook.bench.generate import MAIN3, PROMISE_BEATS, TWINS, Beat, CloseCase
+from duebook.bench.generate import (
+    CORRECTION_BEATS,
+    MAIN3,
+    PROMISE_BEATS,
+    TWINS,
+    Beat,
+    CloseCase,
+)
 from duebook.bench.match import mentions
+from duebook.bench.result import checkpoints
 from duebook.bench.rewrite import acceptable
-from duebook.bench.run import fold
+from duebook.bench.run import fold, snapshots
+from duebook.bench.score import attribute, beat_outcomes
 from duebook.closing import overlap
 from duebook.events import Role, Side
 from duebook.extract import Completion, ModelError, Usage
@@ -531,6 +540,32 @@ def test_round_eight_messages_match_the_hashes_captured_before_round_nine(name, 
     assert digest_of(tickets) == digest
 
 
+# Captured before Round 10 added main5: messages and labels of Rounds 8 and 9.
+@pytest.mark.parametrize(
+    ("name", "digest"),
+    [
+        ("dev5", "491738193ed3f904c9c6389f34e14a6a65721afd357d85527a685b8ab93b23a2"),
+        ("test4", "a14c0b505fdeb5d6fa1c13e67fbe3964cc4abc28bac8394d3861143869e2451a"),
+        ("dev6", "ddccf6a4de43d91281203cbce7cb97dac6706ec86c63dc74d44979ac3196a676"),
+    ],
+)
+def test_round_eight_and_nine_splits_match_the_hashes_captured_before_main5(name, digest):
+    assert digest_of(to_json(SPLITS[name].tickets())) == digest
+
+
+def test_a_correction_changes_ones_own_value_and_disputes_the_other_sides():
+    expected = {Beat.CORRECTION_OWN: "replaced", Beat.CORRECTION_OTHER: "disputed"}
+    for name in ("dev7", "test5"):
+        for ticket in SPLITS[name].tickets():
+            folded = fold(ticket, Oracle.of([ticket]), [cp.seq for cp in checkpoints(ticket)])
+            end = snapshots(ticket, folded)[-1]
+            outcomes = beat_outcomes(ticket, end, attribute(ticket, end))
+            corrections = [b for b in ticket.gold.beats if b.kind in CORRECTION_BEATS]
+            assert len(corrections) == 1
+            kind = corrections[0].kind
+            assert outcomes[kind.value] == {expected[kind]: 1}
+
+
 def test_round_eight_splits_plant_every_beat():
     for name in ("dev5", "test4"):
         assert SPLITS[name].profile is MAIN3
@@ -540,7 +575,7 @@ def test_round_eight_splits_plant_every_beat():
             kinds |= set(mine)
             assert mine.count(Beat.SAME_ACTION) == 2
             assert mine.count(Beat.DELEGATED_DATED) + mine.count(Beat.DELEGATED_UNDATED) == 2
-        assert kinds == set(Beat)
+        assert kinds == set(Beat) - CORRECTION_BEATS
 
 
 def test_a_beat_that_is_not_a_promise_plants_no_commitment():

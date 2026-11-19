@@ -346,7 +346,11 @@ alert ([decision 0004](docs/decisions/0004-conditional-commitments.md)). `dev5`
 (8 tickets, seed 5151) is for tuning; `test4` (20 tickets, seed 5353) was
 never used for it. The `main4` profile (Round 9) adds the customer saying
 whether the offer's condition held, failed, or nothing; `dev6` (8 tickets,
-seed 6174) uses it. `--reread` reads chosen messages live inside a replay
+seed 6174) uses it. The `main5` profile (Round 10) adds an invoice number
+corrected ("номер счёта не 538916, а 538961") by the side that gave it, a
+change, or by the other side, a dispute; its splits are rewritten like the
+others: `dev7` (4 tickets, seed 7221) and `test5` (20 tickets, seed 7373),
+never used for tuning. `--reread` reads chosen messages live inside a replay
 (`--replay` a record, or `oracle` for the planted proposals), so a prompt
 change can be checked on a few hundred messages instead of whole tickets.
 Every gold promise lost at the end is attributed to a
