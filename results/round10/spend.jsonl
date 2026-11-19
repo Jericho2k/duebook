@@ -3,3 +3,6 @@
 {"at": "2026-11-19T00:35:39.817875+00:00", "split": "dev7", "what": "cost projection only: the run would not fit", "methods": "event_memory", "label": "dev7 oracle, no call", "usd": 0.0, "reused_usd": 0.0}
 {"at": "2026-11-19T00:35:45.827353+00:00", "split": "dev7", "what": "run", "methods": "event_memory", "label": "dev7 oracle, no call", "usd": 0.0, "reused_usd": 0.0}
 {"at": "2026-11-19T00:35:53.991177+00:00", "split": "dev7", "what": "run", "methods": "event_memory", "label": "A2: dev7 offers, outcomes, corrections", "usd": 0.0024452624, "reused_usd": 0.0}
+{"at": "2026-11-19T00:39:58.864971+00:00", "split": "test5", "what": "rewriting the tickets", "methods": "", "label": "B1: rewrite test5", "usd": 0.057213525600000065, "reused_usd": 0.0}
+{"at": "2026-11-19T01:00:11.885436+00:00", "split": "test5", "what": "cost projection only", "methods": "event_memory", "label": "B1: test5 projection", "usd": 0.0, "reused_usd": 0.0}
+{"at": "2026-11-19T01:00:18.382551+00:00", "split": "test5", "what": "run", "methods": "event_memory", "label": "B1: test5, our method once", "usd": 0.33944483440000095, "reused_usd": 0.0015386392000000001}

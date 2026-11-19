@@ -3,14 +3,14 @@
     python scripts/replay_check.py --write /tmp/before.json    # before a change
     python scripts/replay_check.py --against /tmp/before.json  # after it
 
-1. Rounds 4-8: every event-memory run's recorded proposals, folded under the
+1. Rounds 4-8 and 10: every event-memory run's recorded proposals, folded under the
    closing rules of its round, must give exactly the snapshots it saved; a
    run that stopped on a message stops there again.
-2. Round 9: Round 8's proposals folded under rule versions 4 and 5, and the
+2. Rounds 9 and 10: Round 8's proposals folded under rule versions 4 and 5, and the
    targeted re-extractions of Rounds 9 and 10 (the messages read again are
    served from their records, a later round's over an earlier one's), must
    give exactly the metrics they saved.
-3. Every record of rounds 4-8 is scored again through the experiment runner,
+3. Every full record of rounds 4-10 is scored again through the experiment runner,
    its saved snapshots (``--frozen``) and its proposals folded under today's
    rules (``--replay``). These summaries differ from the saved ones where a
    later round changed the rules or the scorer, so with ``--against`` they
@@ -45,7 +45,7 @@ R = Path("results")
 #: The full records, and the closing rules their round decided under.
 FULL = {"round4/test3": 1, "round5/test3": 2, "round5/dev3": 2, "round6/test3": 3,
         "round7/test3": 3, "round7/dev3": 3, "round7/dev4": 3, "round8/test4": 4,
-        "round8/dev5": 4}  # fmt: skip
+        "round8/dev5": 4, "round10/test5": 5}  # fmt: skip
 #: Targeted re-extractions: (record, split, what was replayed, the messages read
 #: again, in the order the rounds read them, and the records that hold those reads).
 R9_TEST4 = (["results/round9/reread.json"], ["round9/test4"])
