@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>duebook · Рабочее пространство оператора</title>
+  <style>
+    body {
+      max-width: 1024px;
+      margin: 20px auto;
+      padding-inline: 12px;
+      font: 400 14px/1.5 system-ui, sans-serif;
+    }
+
+    .prototype-layout {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .prototype-layout select { font: inherit; }
+  </style>
+</head>
+<body>
+  <div class="prototype-layout">
+    <label for="prototype-layout">Сценарий прототипа</label>
+    <select id="prototype-layout">
+      <option value="Ticket workspace">Карточка тикета</option>
+      <option value="Handoff first">Передача смены</option>
+    </select>
+  </div>
+<div id="duebook-operator" class="viz-carousel" aria-label="Duebook operator workflows">
+  <section data-variant="Ticket workspace" aria-label="Ticket workspace">
+    <article class="db-app" lang="ru" aria-label="Рабочее пространство">
+      <header class="db-brand">
+        <div class="db-lockup">
+          <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
+        </div>
+      </header>
+      <div class="db-ticket">
+        <div class="db-context">Тикет #1042</div>
+        <h2>Возврат за установку</h2>
+        <p class="db-ticket-meta" aria-live="polite">Ответственная: Ольга Миронова</p>
+      </div>
+      <div class="db-nav" role="group" aria-label="Представление тикета">
+        <button type="button" data-view="card" aria-pressed="true">Карточка</button>
+        <button type="button" data-view="brief" aria-pressed="false">Передача смены</button>
+        <button type="button" class="db-chat-toggle" aria-expanded="false" aria-controls="db-ticket-chat">Переписка</button>
+      </div>
+      <div class="db-body">
+        <aside id="db-ticket-chat" class="db-source" aria-label="Переписка" hidden></aside>
+        <div class="db-work"></div>
+      </div>
+    </article>
+  </section>
+  <section data-variant="Handoff first" aria-label="Handoff first" hidden>
+    <article class="db-app db-handoff" lang="ru" aria-label="Передача смены">
+      <header class="db-brand">
+        <div class="db-lockup">
+          <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
+        </div>
+      </header>
+      <div class="db-ticket">
+        <div class="db-context">Тикет #1042</div>
+        <h2>Возврат за установку</h2>
+        <p class="db-ticket-meta" aria-live="polite">Иван Соколов → Ольга Миронова</p>
+      </div>
+      <div class="db-nav" role="group" aria-label="Представление тикета">
+        <button type="button" data-view="brief" aria-pressed="true">Передача смены</button>
+        <button type="button" data-view="card" aria-pressed="false">Карточка</button>
+        <button type="button" class="db-chat-toggle" aria-expanded="false" aria-controls="db-handoff-chat">Переписка</button>
+      </div>
+      <div class="db-body">
+        <aside id="db-handoff-chat" class="db-source" aria-label="Переписка" hidden></aside>
+        <div class="db-work"></div>
+      </div>
+    </article>
+  </section>
+  <template id="db-view">
+    <div class="db-work-head">
+      <h3></h3>
+      <label class="db-snapshot">
+        <span>Версия карточки</span>
+        <select>
+          <option value="current">Сейчас</option>
+          <option value="before-handoff">До передачи</option>
+        </select>
+      </label>
+    </div>
+    <div class="db-record"></div>
+  </template>
+  <template id="db-row">
+    <li class="db-row">
+      <div class="db-row-head"><strong></strong><span class="db-status"></span></div>
+      <div class="db-meta"></div>
+      <div class="db-citations" role="group" aria-label="Сообщения-источники"></div>
+    </li>
+  </template>
+  <template id="db-section">
+    <details class="db-section">
+      <summary><span class="db-section-name"></span><span class="db-section-count"></span></summary>
+      <ul></ul>
+    </details>
+  </template>
+  <template id="db-chat">
+    <div class="db-chat-head">
+      <h3>Переписка</h3>
+      <button type="button" class="db-chat-close">Закрыть</button>
+    </div>
+    <ol class="db-messages" tabindex="0" aria-label="Сообщения тикета"></ol>
+  </template>
+  <template id="db-message">
+    <li class="db-message" tabindex="-1">
+      <div class="db-message-header"><strong></strong><span class="db-article-id"></span></div>
+      <p class="db-source-byline"></p>
+      <p class="db-message-text"></p>
+    </li>
+  </template>
+</div>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Golos+Text:wght@400..700&family=Literata:opsz,wght@7..72,400..600&display=swap");
+
+  #duebook-operator .db-app {
+    color-scheme: light dark;
+    --db-ink: light-dark(#1c2534, #edf0f6);
+    --db-muted: light-dark(#515b6c, #b5bfce);
+    --db-stock: light-dark(#f7f4ed, #22262c);
+    --db-surface: light-dark(#fefdf9, #1b1f26);
+    --db-panel: light-dark(#efefe9, #242a32);
+    --db-hairline: light-dark(#d6d3c9, #414a58);
+    --db-divider: light-dark(#b0afa7, #626b7a);
+    --db-index: light-dark(#233e9f, #b1c3ff);
+    --db-index-wash: light-dark(#e9edfa, #303e64);
+    --db-attention: light-dark(#913c26, #f2aa95);
+    --db-meta-font: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    --db-display-font: "Literata", Georgia, serif;
+    --db-gutter: 30px;
+    --db-gap: 16px;
+    overflow: clip;
+    border: 1px solid var(--db-divider);
+    border-radius: 9px;
+    color: var(--db-ink);
+    background: var(--db-surface);
+    box-shadow: 0 2px 4px light-dark(#1c253411, #0004);
+    font: 400 14px/1.5 "Golos Text", system-ui, sans-serif;
+  }
+
+  #duebook-operator [data-variant] { min-height: 644px; }
+
+  #duebook-operator .db-brand,
+  #duebook-operator .db-ticket,
+  #duebook-operator .db-nav {
+    padding-inline: var(--db-gutter);
+  }
+
+  #duebook-operator .db-brand {
+    padding-block: 12px;
+    border-bottom: 1px solid var(--db-hairline);
+  }
+
+  #duebook-operator .db-lockup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--db-index);
+  }
+
+  #duebook-operator .db-arch {
+    position: relative;
+    width: 19px;
+    height: 21px;
+    margin-inline-end: 1px;
+    border: 1.5px solid currentColor;
+    border-radius: 50% 50% 0 0 / 44% 44% 0 0;
+  }
+
+  #duebook-operator .db-arch::after {
+    position: absolute;
+    inset: 5px 4px 0;
+    border: 1px solid currentColor;
+    border-bottom: 0;
+    border-radius: 50% 50% 0 0 / 42% 42% 0 0;
+    content: "";
+  }
+
+  #duebook-operator .db-parent {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: .025em;
+  }
+
+  #duebook-operator .db-wordmark {
+    margin-inline-start: 4px;
+    padding-inline-start: 12px;
+    border-inline-start: 1px solid var(--db-hairline);
+    color: var(--db-ink);
+    font: 600 19px/1.2 var(--db-display-font);
+    letter-spacing: -.055em;
+  }
+
+  #duebook-operator .db-ticket p,
+  #duebook-operator .db-meta,
+  #duebook-operator .db-source-byline {
+    color: var(--db-muted);
+    font-size: 12px;
+  }
+
+  #duebook-operator .db-ticket {
+    padding-block: 23px 19px;
+    background: var(--db-stock);
+  }
+
+  #duebook-operator .db-context {
+    color: var(--db-index);
+    font: 600 11px/1.3 var(--db-meta-font);
+    letter-spacing: .015em;
+  }
+
+  #duebook-operator .db-ticket h2 {
+    margin: 8px 0 9px;
+    font: 500 clamp(26px, 4.6vw, 44px)/1.1 var(--db-display-font);
+    letter-spacing: -.04em;
+  }
+
+  #duebook-operator .db-ticket p { margin: 0; }
+
+  #duebook-operator .db-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 22px;
+    border-block: 1px solid var(--db-hairline);
+  }
+
+  #duebook-operator .db-app button { font: inherit; color: inherit; }
+
+  #duebook-operator .db-nav button[data-view] {
+    position: relative;
+    padding: 10px 1px;
+    border: 0;
+    background: transparent;
+    color: var(--db-muted);
+    font-size: 13px;
+  }
+
+  #duebook-operator .db-nav button[data-view]:hover,
+  #duebook-operator .db-nav button[data-view][aria-pressed="true"] {
+    color: var(--db-index);
+  }
+
+  #duebook-operator .db-nav button[data-view][aria-pressed="true"]::after {
+    position: absolute;
+    inset-inline: 0;
+    bottom: -1px;
+    height: 2px;
+    background: currentColor;
+    content: "";
+  }
+
+  #duebook-operator .db-nav .db-chat-toggle,
+  #duebook-operator .db-chat-head .db-chat-close {
+    padding: 4px 8px;
+    border: 1px solid var(--db-hairline);
+    border-radius: 3px;
+    background: var(--db-surface);
+    color: var(--db-index);
+    font-size: 12px;
+  }
+
+  #duebook-operator .db-chat-toggle { margin-inline-start: auto; }
+
+  #duebook-operator .db-chat-toggle:hover,
+  #duebook-operator .db-chat-toggle[aria-expanded="true"],
+  #duebook-operator .db-chat-close:hover {
+    border-color: var(--db-index);
+    background: var(--db-index-wash);
+  }
+
+  #duebook-operator .db-body {
+    display: grid;
+  }
+
+  #duebook-operator .db-work {
+    min-width: 0;
+    padding: 21px var(--db-gutter) 24px;
+  }
+
+  #duebook-operator .db-work h3,
+  #duebook-operator .db-source h3 {
+    margin: 0;
+    color: var(--db-ink);
+    font: 550 18px/1.3 var(--db-display-font);
+    letter-spacing: -.025em;
+  }
+
+  #duebook-operator .db-work-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 14px;
+    margin-bottom: 13px;
+  }
+
+  #duebook-operator .db-snapshot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--db-muted);
+    font-size: 11px;
+  }
+
+  #duebook-operator .db-snapshot[hidden] { display: none; }
+
+  #duebook-operator .db-snapshot select {
+    padding: 3px 5px;
+    border: 1px solid var(--db-hairline);
+    border-radius: 2px;
+    color: var(--db-ink);
+    background: var(--db-surface);
+    font: inherit;
+  }
+
+  #duebook-operator .db-work ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  #duebook-operator .db-row {
+    position: relative;
+    padding-block: var(--db-gap);
+    border-top: 1px solid var(--db-hairline);
+  }
+
+  #duebook-operator .db-row:last-child { padding-bottom: 0; }
+
+  #duebook-operator .db-row:has(button[data-source][aria-pressed="true"])::before {
+    position: absolute;
+    inset-block-start: var(--db-gap);
+    inset-inline-start: calc(var(--db-gutter) * -.5);
+    width: 2px;
+    height: 20px;
+    background: var(--db-index);
+    content: "";
+  }
+
+  #duebook-operator .db-row-head,
+  #duebook-operator .db-citations {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 13px;
+  }
+
+  #duebook-operator .db-row-head strong {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  #duebook-operator .db-status {
+    color: var(--db-muted);
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  #duebook-operator .db-status[data-attention] {
+    color: var(--db-attention);
+    font-weight: 650;
+  }
+
+  #duebook-operator .db-meta { margin: 4px 0 8px; }
+  #duebook-operator .db-row-head + .db-citations { margin-top: 8px; }
+
+  #duebook-operator .db-row[data-unread] {
+    padding: 10px;
+    background: var(--db-stock);
+  }
+
+  #duebook-operator .db-row[data-unread] .db-row-head strong { font-size: 13px; }
+
+  #duebook-operator .db-sections { margin-top: 19px; }
+
+  #duebook-operator .db-section { border-top: 1px solid var(--db-hairline); }
+
+  #duebook-operator .db-section:last-child { border-bottom: 1px solid var(--db-hairline); }
+
+  #duebook-operator .db-section summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 0;
+    list-style: none;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  #duebook-operator .db-section summary::-webkit-details-marker { display: none; }
+
+  #duebook-operator .db-section summary::before {
+    width: 5px;
+    height: 5px;
+    border-inline-end: 1px solid var(--db-index);
+    border-block-end: 1px solid var(--db-index);
+    transform: rotate(-45deg);
+    content: "";
+  }
+
+  #duebook-operator .db-section[open] summary::before { transform: rotate(45deg); }
+
+  #duebook-operator .db-section-count {
+    margin-inline-start: auto;
+    color: var(--db-muted);
+    font: 400 11px/1 var(--db-meta-font);
+  }
+
+  #duebook-operator .db-section ul { padding: 0 0 10px 13px; }
+
+  #duebook-operator .db-citations { gap: 6px; }
+
+  #duebook-operator .db-citations button {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 3px 7px;
+    border: 1px solid var(--db-hairline);
+    border-radius: 2px;
+    background: transparent;
+    color: var(--db-index);
+    font-size: 11px;
+  }
+
+  #duebook-operator .db-citations button span,
+  #duebook-operator .db-article-id {
+    font-family: var(--db-meta-font);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #duebook-operator .db-citations button:hover {
+    background: var(--db-index-wash);
+  }
+
+  #duebook-operator .db-citations button[aria-pressed="true"] {
+    border-color: var(--db-index);
+    background: var(--db-index-wash);
+  }
+
+  #duebook-operator .db-source {
+    min-width: 0;
+    margin: 16px var(--db-gutter) 0;
+    border: 1px solid var(--db-hairline);
+    border-radius: 4px;
+    background: var(--db-panel);
+  }
+
+  #duebook-operator .db-chat-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--db-hairline);
+  }
+
+  #duebook-operator .db-messages {
+    max-height: min(52dvh, 440px);
+    margin: 0;
+    padding: 4px 8px;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    list-style: none;
+  }
+
+  #duebook-operator .db-message {
+    padding: 8px 12px;
+    border-inline-start: 2px solid transparent;
+  }
+
+  #duebook-operator .db-message + .db-message { border-top: 1px solid var(--db-hairline); }
+
+  #duebook-operator .db-message[aria-current="true"] {
+    border-inline-start-color: var(--db-index);
+    background: var(--db-index-wash);
+  }
+
+  #duebook-operator .db-message:focus-visible,
+  #duebook-operator .db-messages:focus-visible {
+    outline: 1px solid var(--db-index);
+    outline-offset: -1px;
+  }
+
+  #duebook-operator .db-message-header {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 2px 8px;
+    color: var(--db-muted);
+    font-size: 11px;
+  }
+
+  #duebook-operator .db-message-header strong { font-weight: 600; }
+  #duebook-operator .db-message[aria-current="true"] .db-message-header { color: var(--db-index); }
+  #duebook-operator .db-source-byline { margin: 0 0 4px; font-size: 11px; }
+
+  #duebook-operator .db-message-text {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+  }
+
+  @media (min-width: 591px) {
+    #duebook-operator .db-handoff .db-ticket { padding-block: 16px 13px; }
+    #duebook-operator .db-handoff .db-work { padding-block: 16px; }
+    #duebook-operator .db-app.db-handoff { --db-gap: 13px; }
+  }
+
+  @media (min-width: 761px) {
+    #duebook-operator .db-body:has(.db-source:not([hidden])) {
+      grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+    }
+
+    #duebook-operator .db-work { grid-area: 1 / 1; }
+
+    #duebook-operator .db-source {
+      grid-area: 1 / 2;
+      position: sticky;
+      top: 16px;
+      align-self: start;
+      margin-inline-start: 0;
+    }
+  }
+
+  @media (pointer: coarse) {
+    #duebook-operator .db-app button,
+    #duebook-operator .db-snapshot select,
+    #duebook-operator .db-section summary { min-height: 44px; }
+    #duebook-operator .db-citations button { align-items: center; }
+    #duebook-operator .db-snapshot select { font-size: 16px; }
+  }
+
+  @media (max-width: 590px) {
+    #duebook-operator [data-variant] { min-height: 760px; }
+    #duebook-operator .db-app { --db-gutter: 16px; }
+    #duebook-operator .db-nav {
+      gap: 8px;
+      padding-inline: 12px;
+    }
+  }
+
+  #duebook-operator .db-app[data-compact] { --db-gap: 9px; }
+</style>
+<script>
+(() => {
+  const root = document.getElementById("duebook-operator");
+  const sources = {
+    3: { author: "Иван Соколов", time: "18 нояб., 09:23", visibility: "Публичный ответ", quote: "Запрошу у банка копию квитанции." },
+    4: { author: "Анна Крылова", time: "18 нояб., 09:27", visibility: "Публичный ответ", quote: "Пришлю скриншот оплаты завтра до 12:00." },
+    5: { author: "Анна Крылова", time: "18 нояб., 09:31", visibility: "Публичный ответ", quote: "На портале вижу два заказа: №4827 и №4831." },
+    6: { author: "Анна Крылова", time: "18 нояб., 09:42", visibility: "Публичный ответ", quote: "Адрес для документов — Тверская, 12." },
+    7: { author: "Иван Соколов", time: "18 нояб., 09:45", visibility: "Публичный ответ", quote: "Пришлю акт об отмене установки сегодня до 18:00." },
+    8: { author: "Иван Соколов", time: "18 нояб., 09:56", visibility: "Публичный ответ", quote: "Отправил акт об отмене установки на почту." },
+    9: { author: "Анна Крылова", time: "18 нояб., 10:01", visibility: "Публичный ответ", quote: "Акт об отмене установки пришёл, спасибо." },
+    10: { author: "Анна Крылова", time: "18 нояб., 10:08", visibility: "Публичный ответ", quote: "Установку отменили. Подскажите, когда вернут оплату?" },
+    11: { author: "Иван Соколов", time: "18 нояб., 10:20", visibility: "Публичный ответ", quote: "Вернём стоимость установки до 14:00 завтра." },
+    12: { author: "Анна Крылова", time: "19 нояб., 10:50", visibility: "Публичный ответ", quote: "По заказу №4827 мастер не приехал, установка не состоялась." },
+    13: { author: "Анна Крылова", time: "19 нояб., 10:58", visibility: "Публичный ответ", quote: "Можете набрать меня после обеда? Хочу уточнить детали возврата." },
+    14: { author: "Иван Соколов", time: "19 нояб., 11:05", visibility: "Публичный ответ", quote: "Перезвоню вам сегодня до 16:00." },
+    15: { author: "Анна Крылова", time: "19 нояб., 12:40", visibility: "Публичный ответ", quote: "По заказу №4827 в кабинете пока нет операции возврата." },
+    16: { author: "Иван Соколов", time: "19 нояб., 12:45", visibility: "Внутренняя заметка", quote: "Проверил статус по номеру заказа. Платёж в журнале банка не нашёлся." },
+    17: { author: "Иван Соколов", time: "19 нояб., 13:48", visibility: "Публичный ответ", quote: "Возврат за установку отправили." },
+    18: { author: "Ольга Миронова", time: "19 нояб., 14:04", visibility: "Публичный ответ", quote: "Анна, проверьте, пожалуйста, поступление по карте, с которой оплачивали установку." },
+    19: { author: "Анна Крылова", time: "19 нояб., 14:10", visibility: "Публичный ответ", quote: "Деньги за установку пока не поступили." },
+    20: { author: "Ольга Миронова", time: "19 нояб., 14:11", visibility: "Публичный ответ", quote: "По данным заказа №4827 установка выполнена." },
+    21: { author: "Анна Крылова", time: "19 нояб., 14:11", visibility: "Публичный ответ", quote: "Для документов укажите новый адрес: Петровка, 8." },
+    22: { author: "Ольга Миронова", time: "19 нояб., 14:11", visibility: "Публичный ответ", quote: "Если банк отклонит возврат, пришлю форму для новых реквизитов." },
+    23: { author: "Анна Крылова", time: "19 нояб., 14:12", visibility: "Публичный ответ", quote: "На чеке есть ещё один номер, оканчивается на 312. Возможно, он поможет." },
+    24: { author: "Анна Крылова", time: "19 нояб., 14:12", visibility: "Публичный ответ", quote: "Должна ли я подписать акт об отмене установки?" }
+  };
+
+  const refund = {
+    title: "Возврат стоимости установки", status: "Проверить получение", attention: true,
+    meta: "Ольга Миронова · Срок 19 нояб., 14:00 МСК", sources: [11, 17, 19]
+  };
+  const proof = {
+    title: "Прислать скриншот оплаты", status: "Просрочено", attention: true,
+    meta: "Клиент · Срок 19 нояб., 12:00 МСК", sources: [4]
+  };
+  const callback = {
+    title: "Перезвонить клиенту", status: "Унаследовано",
+    meta: "Ольга Миронова, ранее Иван Соколов · Срок 19 нояб., 16:00 МСК", sources: [14]
+  };
+  const unread = {
+    title: "Прочитать сообщение", status: "Ошибка разбора", attention: true, unread: true, sources: [23]
+  };
+  const orders = {
+    title: "Заказы №4827 и №4831", status: "Со слов клиента", sources: [5]
+  };
+  const receipt = {
+    title: "Запросить копию квитанции у банка", status: "Открыто",
+    meta: "Оператор поддержки · Срок не назван", sources: [3]
+  };
+  const tried = {
+    title: "Поиск платежа по номеру заказа", status: "Не помогло",
+    meta: "В журнале банка платёж не найден", sources: [16]
+  };
+  const closed = {
+    title: "Отправить акт об отмене установки", status: "Получено клиентом", sources: [7, 9]
+  };
+  const sections = [
+    { title: "Условные обещания", rows: [{
+      title: "Прислать форму для новых реквизитов", status: "Условие не подтверждено",
+      meta: "Ольга Миронова · Если банк отклонит возврат", sources: [22]
+    }] },
+    { title: "Открытые противоречия", rows: [{
+      title: "Установка по заказу №4827", status: "Открыто",
+      meta: "Клиент: мастер не приехал · Компания: установка выполнена", sources: [12, 20]
+    }] },
+    { title: "Что известно сейчас", rows: [
+      orders,
+      { title: "Адрес для документов: Петровка, 8", status: "Со слов клиента", meta: "Обновлено 19 нояб. в 14:11 МСК", sources: [21] }
+    ] },
+    { title: "Что изменилось", rows: [{
+      title: "Адрес для документов", status: "Обновлено клиентом",
+      meta: "Тверская, 12 → Петровка, 8", sources: [6, 21]
+    }] },
+    { title: "Что уже пробовали", rows: [tried] },
+    { title: "Открытые вопросы", rows: [{
+      title: "Подписывать акт об отмене?", status: "Ждём ответа компании", sources: [24]
+    }] }
+  ];
+  const views = {
+    card: {
+      heading: "Обязательства и факты",
+      rows: [refund, proof, callback, unread],
+      sections: [...sections, { title: "Другие обязательства", rows: [receipt, closed] }]
+    },
+    brief: {
+      heading: "Сводка по тикету",
+      rows: [unread, proof, refund, callback],
+      sections: [...sections, { title: "Другие открытые обязательства", rows: [receipt] }]
+    }
+  };
+
+  const beforeHandoff = {
+    heading: views.card.heading,
+    rows: [
+      { ...refund, attention: false, status: "Оператор сообщил об отправке", meta: "Иван Соколов · Срок 19 нояб., 14:00 МСК", sources: [11, 17] },
+      proof,
+      { ...callback, status: "Открыто", meta: "Иван Соколов · Срок 19 нояб., 16:00 МСК" }
+    ],
+    sections: [
+      { title: "Что известно на этот момент", rows: [
+        orders,
+        { title: "Адрес для документов: Тверская, 12", status: "Со слов клиента", meta: "Указан 18 нояб. в 09:42 МСК", sources: [6] }
+      ] },
+      { title: "Что уже пробовали", rows: [tried] },
+      { title: "Другие обязательства", rows: [receipt, closed] }
+    ]
+  };
+  const viewTemplate = root.querySelector("#db-view");
+  const rowTemplate = root.querySelector("#db-row");
+  const sectionTemplate = root.querySelector("#db-section");
+  const chatTemplate = root.querySelector("#db-chat");
+  const messageTemplate = root.querySelector("#db-message");
+  const narrow = window.matchMedia("(max-width: 760px)");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  function renderMessage(number, data) {
+    const fragment = messageTemplate.content.cloneNode(true);
+    fragment.querySelector(".db-message").dataset.message = number;
+    fragment.querySelector(".db-message-header strong").textContent = data.author;
+    fragment.querySelector(".db-article-id").textContent = "№" + number;
+    fragment.querySelector(".db-source-byline").textContent = data.time + " МСК · " + data.visibility;
+    fragment.querySelector(".db-message-text").textContent = data.quote;
+    return fragment;
+  }
+  for (const app of root.querySelectorAll(".db-app")) {
+    const viewButtons = [...app.querySelectorAll("[data-view]")];
+    const work = app.querySelector(".db-work");
+    const chat = app.querySelector(".db-source");
+    const chatToggle = app.querySelector(".db-chat-toggle");
+    const nav = chatToggle.closest(".db-nav");
+    const ticketMeta = app.querySelector(".db-ticket-meta");
+    const currentMeta = ticketMeta.textContent;
+    const settings = { compact: false };
+    let currentView = viewButtons[0].dataset.view;
+    let activeCitation;
+    let cited;
+
+    chat.append(chatTemplate.content.cloneNode(true));
+    const messages = chat.querySelector(".db-messages");
+    for (const [number, data] of Object.entries(sources)) {
+      messages.append(renderMessage(number, data));
+    }
+    work.append(viewTemplate.content.cloneNode(true));
+    const heading = work.querySelector(".db-work-head h3");
+    const snapshot = work.querySelector(".db-snapshot");
+    const snapshotSelect = snapshot.querySelector("select");
+    const record = work.querySelector(".db-record");
+
+    function setChatOpen(open) {
+      chat.hidden = !open;
+      chatToggle.setAttribute("aria-expanded", String(open));
+      activeCitation?.setAttribute("aria-pressed", String(open));
+    }
+
+    function centerCitation(behavior) {
+      const scrollport = messages.getBoundingClientRect();
+      const message = cited.getBoundingClientRect();
+      const top = messages.scrollTop + message.top - scrollport.top
+        - (messages.clientHeight - message.height) / 2;
+      messages.scrollTo({top, behavior});
+    }
+
+    function showCitation(button) {
+      activeCitation?.setAttribute("aria-pressed", "false");
+      cited?.removeAttribute("aria-current");
+      activeCitation = button;
+      cited = messages.querySelector(`[data-message="${button.dataset.source}"]`);
+      cited.setAttribute("aria-current", "true");
+      setChatOpen(true);
+      const behavior = reducedMotion.matches ? "auto" : "smooth";
+      if (narrow.matches) nav.scrollIntoView({block: "start", behavior});
+      cited.focus({preventScroll: true});
+      centerCitation(behavior);
+    }
+
+    function closeChat() {
+      setChatOpen(false);
+      const returnTo = activeCitation?.getClientRects().length ? activeCitation : chatToggle;
+      returnTo.focus();
+    }
+
+    chatToggle.addEventListener("click", () => {
+      setChatOpen(chat.hidden);
+      if (chat.hidden) return;
+      if (cited) centerCitation("auto");
+      else messages.scrollTop = messages.scrollHeight;
+    });
+    chat.querySelector(".db-chat-close").addEventListener("click", closeChat);
+    chat.addEventListener("keydown", event => {
+      if (event.key === "Escape") closeChat();
+    });
+
+    function fillRows(list, rows) {
+      for (const row of rows) {
+        const fragment = rowTemplate.content.cloneNode(true);
+        fragment.querySelector(".db-row").toggleAttribute("data-unread", Boolean(row.unread));
+        fragment.querySelector("strong").textContent = row.title;
+        const status = fragment.querySelector(".db-status");
+        status.textContent = row.status;
+        status.toggleAttribute("data-attention", Boolean(row.attention));
+        const meta = fragment.querySelector(".db-meta");
+        if (row.meta) meta.textContent = row.meta;
+        else meta.remove();
+        const citations = fragment.querySelector(".db-citations");
+        for (const number of row.sources) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.dataset.source = number;
+          button.setAttribute("aria-controls", chat.id);
+          button.setAttribute("aria-pressed", "false");
+          const reference = document.createElement("span");
+          reference.textContent = "№" + number;
+          button.append("Сообщение ", reference);
+          button.addEventListener("click", () => showCitation(button));
+          citations.append(button);
+        }
+        list.append(fragment);
+      }
+    }
+
+    function showView(name) {
+      currentView = name;
+      const isCard = name === "card";
+      const historical = isCard && snapshotSelect.value === "before-handoff";
+      const view = historical ? beforeHandoff : views[name];
+      heading.textContent = view.heading;
+      snapshot.hidden = !isCard;
+      ticketMeta.textContent = historical
+        ? "Иван Соколов · 19 нояб., 13:48 МСК, событие №17"
+        : currentMeta;
+
+      const list = document.createElement("ul");
+      fillRows(list, view.rows);
+      const groups = document.createElement("div");
+      groups.className = "db-sections";
+      for (const section of view.sections) {
+        const fragment = sectionTemplate.content.cloneNode(true);
+        fragment.querySelector(".db-section-name").textContent = section.title;
+        fragment.querySelector(".db-section-count").textContent = section.rows.length;
+        fillRows(fragment.querySelector("ul"), section.rows);
+        groups.append(fragment);
+      }
+      record.replaceChildren(list, groups);
+      if (cited) {
+        activeCitation = record.querySelector(`[data-source="${cited.dataset.message}"]`);
+        activeCitation?.setAttribute("aria-pressed", String(!chat.hidden));
+      }
+      for (const button of viewButtons) {
+        button.setAttribute("aria-pressed", String(button.dataset.view === currentView));
+      }
+    }
+    for (const button of viewButtons) {
+      button.addEventListener("click", () => showView(button.dataset.view));
+    }
+    snapshotSelect.addEventListener("change", () => showView(currentView));
+    showView(currentView);
+    if (globalThis.Tweak) {
+      const tweak = new Tweak({
+        container: app,
+        onChange: () => app.toggleAttribute("data-compact", settings.compact)
+      });
+      tweak.addToggle(settings, "compact", { label: "Компактные строки" });
+    }
+  }
+})();
+</script>
+<script>
+  (() => {
+    const layout = document.getElementById("prototype-layout");
+    const sections = document.querySelectorAll("#duebook-operator > [data-variant]");
+    function showLayout() {
+      for (const section of sections) section.hidden = section.dataset.variant !== layout.value;
+    }
+    layout.addEventListener("change", showLayout);
+    showLayout();
+  })();
+</script>
+</body>
+</html>
