@@ -32,6 +32,7 @@ from duebook.proposals import (
     AssertFact,
     CancelCommitment,
     MakeCommitment,
+    MakeConditional,
     ResolveCommitment,
     Verdict,
     Verification,
@@ -685,3 +686,47 @@ def test_replaying_stored_proposals_reproduces_the_verified_card_without_a_model
     t, refund, call, _ = received_with_a_callback_open(said("yes", "всё получила"))
     stored = [(e, decode_proposals(encode(list(p)))) for e, p in t.log]
     assert replay("T-1", stored, CAL) == t.card
+
+
+# --------------------------------------- a close aimed off the card (0006) ----
+
+
+def bonuses(t: Ticket) -> tuple[str, str]:
+    """The case of Round 10's test5 M0015: a promise of bonuses and a pending offer of them."""
+    t.assign(None, IVAN.id)
+    owed = promise(t, "Начислим вам компенсацию бонусами.", "Начислим вам компенсацию бонусами",
+                   "начислить компенсацию бонусами")  # fmt: skip
+    offer = "Если доставка задержится, начислим вам бонусы взамен"
+    t.say(IVAN, f"{offer}.", MakeConditional(Party.COMPANY, "начислить бонусы", offer,
+                                             "Если доставка задержится"))  # fmt: skip
+    return owed, t.card.conditionals[0].id
+
+
+def test_a_confirmation_aimed_at_an_offer_is_suggested_on_the_one_promise_it_fits():
+    t = Ticket()
+    owed, offer = bonuses(t)
+    out = t.say(ANNA, "Бонусы вижу, спасибо!",
+                ResolveCommitment(offer, "Бонусы вижу", "начислим вам бонусы взамен"))  # fmt: skip
+    assert reasons(out) == [Reason.UNKNOWN_TARGET]
+    c = t.card.commitment(owed)
+    assert c.state is CommitmentState.OPEN
+    assert [(h.kind, h.source.seq) for h in c.suggestions] == [(Closure.RESOLVED, t.card.last_seq)]
+
+
+def test_a_misaimed_confirmation_that_fits_no_promise_or_two_is_not_suggested():
+    t = Ticket()
+    delivery, case = two_refunds(t)
+    t.say(ANNA, "Деньги пришли, спасибо!", ResolveCommitment("nope", "Деньги пришли", "вернём"))
+    t.say(ANNA, "Бонусы вижу, спасибо!", ResolveCommitment("nope", "Бонусы вижу", "бонусы"))
+    assert all(not c.suggestions for c in t.card.commitments)
+
+
+def test_a_misaimed_confirmation_decided_before_0006_is_not_suggested():
+    t = Ticket()
+    _, offer = bonuses(t)
+    said = "Бонусы вижу"
+    event = MessagePosted(id="e9", ticket_id="T-1", seq=t.card.last_seq + 1, at=t.now,
+                          author=ANNA, text=said)
+    card = apply(t.card, event, [ResolveCommitment(offer, said, "начислим вам бонусы взамен")],
+                 CAL, guards=Guards(rules=5)).card  # fmt: skip
+    assert all(not c.suggestions for c in card.commitments)

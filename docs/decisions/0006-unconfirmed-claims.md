@@ -45,10 +45,29 @@ We take 3.
 - The brief lists such a claim among the urgent promises, in those words,
   with the message that claimed it.
 
+## A confirmation aimed off the card
+
+The same rule version keeps a second kind of evidence. In `test5` M0015
+seq 143, "Бонусы вижу, спасибо!" confirmed "Начислим вам компенсацию
+бонусами", but the model aimed the close at the pending offer "начислим вам
+бонусы взамен". The reducer refused it as not a commitment and kept nothing,
+so no person was asked.
+
+- When a close is refused because its target is not an open commitment (an
+  offer, an unknown handle, a settled promise), the reducer tries its words
+  against every open commitment of the other side, with the checks of a
+  close except the target's own span and the verifier's verdict, which are
+  about the wrong target.
+- If exactly one commitment passes, the usual suggestion is recorded on it
+  («возможно, выполнено по сообщению №N — подтвердите»). It never closes it.
+  If none or several pass, nothing is recorded.
+
 ## Consequences
 
 - A false claim is no longer silent: past the deadline a person is asked to
   look. A true claim the customer never confirms costs one notice.
+- A misaimed confirmation can now leave a suggestion; a person dismisses a
+  wrong one, as with any suggestion.
 - Events recorded under earlier rules keep a silent claim on replay. A
   claim records the rule it was made under (`Commitment.claim_checked`), and
   the store records rule version 6 for new events (migration 0010).
