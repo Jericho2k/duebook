@@ -14,12 +14,13 @@
    reads of Rounds 9 and 10) folded under rule versions 5 and 6 (decision 0006)
    must give exactly the metrics, and the tickets that changed, saved in
    ``round10/replay``.
-4. Round 10c: the live full-context record is scored again from its saved
+4. The Round 10 model comparison checks both readers' saved snapshots and paired scores.
+5. Round 10c: the live full-context record is scored again from its saved
    answers, beside Round 10's proposals and Round 4's frozen baselines, and must
    give the summary, timeliness and cost regimes it saved; every method's
    timeliness and regimes on ``test3`` and Round 10's on ``test5`` must equal
    ``round10c/timeliness``.
-5. Every full record of rounds 4-10 is scored again through the experiment runner,
+6. Every full record of rounds 4-10 is scored again through the experiment runner,
    its saved snapshots (``--frozen``) and its proposals folded under today's
    rules (``--replay``). These summaries differ from the saved ones where a
    later round changed the rules or the scorer, so with ``--against`` they
@@ -34,6 +35,7 @@ import argparse
 import json
 import sys
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 import duebook.bench.experiment as experiment
@@ -51,10 +53,13 @@ from duebook.store.codec import decode_proposals
 from duebook.temporal import WorkCalendar
 
 R = Path("results")
+MODEL_COMPARISON = "round10/model-comparison"
+MODEL_ARMS = ("deepseek", "glm")
 #: The full records, and the closing rules their round decided under.
 FULL = {"round4/test3": 1, "round5/test3": 2, "round5/dev3": 2, "round6/test3": 3,
         "round7/test3": 3, "round7/dev3": 3, "round7/dev4": 3, "round8/test4": 4,
-        "round8/dev5": 4, "round10/test5": 5, "round10/test3": 5}  # fmt: skip
+        "round8/dev5": 4, "round10/test5": 5, "round10/test3": 5,
+        **{f"{MODEL_COMPARISON}/{arm}": 5 for arm in MODEL_ARMS}}  # fmt: skip
 #: Targeted re-extractions: (record, split, what was replayed, the messages read
 #: again, in the order the rounds read them, and the records that hold those reads).
 R9_TEST4 = (["results/round9/reread.json"], ["round9/test4"])
@@ -247,6 +252,18 @@ def proposals_of(message: dict) -> list:
     return next(v for k, v in message.items() if k.endswith("_proposals"))
 
 
+def model_comparison_differ() -> list[str]:
+    """Check the paired scores against the two frozen model runs."""
+    runs = [
+        replace(run, method=arm)
+        for arm in MODEL_ARMS
+        for run in experiment.load_runs(R / MODEL_COMPARISON / f"{arm}.json")
+    ]
+    saved = load(f"{MODEL_COMPARISON}/comparison")["paired_comparison"]
+    now = to_json(experiment.summarise(SPLITS["dev-portability"].tickets(), runs))
+    return metrics_differ(MODEL_COMPARISON, saved, now)
+
+
 def scored_again(tmp: Path) -> dict:
     out = {}
     for name in FULL:
@@ -268,6 +285,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     client.ChatClient._post = no_model
     differ = [d for name, rules in FULL.items() for d in snapshots_differ(name, rules)]
+    differ += model_comparison_differ()
     with tempfile.TemporaryDirectory() as tmp:
         differ += round9(Path(tmp))
         saved = load("round10/replay")["records"]
