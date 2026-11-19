@@ -229,8 +229,16 @@ is the unbiased figure.
 | Status accuracy | **1.000** | 0.926 | 0.957 | 0.989 | 0.997 | 0.948 | 0.945 | 0.913 | 0.915 |
 | Breach-alert precision | **1.000** | 0.850 | 0.932 | 0.969 | 0.992 | 0.934 | 0.941 | 0.933 | 0.864 |
 | Breach-alert recall | **1.000** | 0.969 | 0.961 | 0.977 | 1.000 | 0.992 | 0.985 | 0.862 | 0.760 |
-| Cost per ticket | **$0.0154** | $0.0134 | $0.0110 | $0.0140 | $0.0140 | $0.0043 | $0.0530 | $0.1602 | $0.0956 |
-| Cost per 1,000 messages | **$0.088** | $0.077 | $0.064 | $0.081 | $0.081 | $0.025 | $0.304 | $0.908 | $0.532 |
+| Cost per ticket, answering at handoffs only | $0.0154 | $0.0134 | $0.0110 | $0.0140 | $0.0140 | **$0.0043** | $0.0530 | $0.1602 | $0.0956 |
+| Cost per 1,000 messages, at handoffs only | $0.088 | $0.077 | $0.064 | $0.081 | $0.081 | **$0.025** | $0.304 | $0.908 | $0.532 |
+| Cost per ticket, answer current after every message (Round 10c) | **$0.0154** m | $0.0134 m | $0.0110 m | $0.0140 m | $0.0140 m | $0.0651 m+p | $0.304 p | $0.325 p | $0.210 p |
+| Cost per 1,000 messages, live (Round 10c) | **$0.088** m | $0.077 m | $0.064 m | $0.081 m | $0.081 m | $0.374 m+p | $1.747 p | $1.842 p | $1.176 p |
+
+m: measured. p: projected. m+p: full context measured live on 3 tickets
+($0.0714 a ticket) and projected on the other 17. Our method reads every
+message in both regimes, so its two rows are the same measurement; a
+baseline's handoff-only cost is the price of answering about four times a
+ticket, which is what the first two cost rows show (Round 10c).
 
 Round 10's 95% intervals where they are not a point: commitment F1
 0.989–0.999, cost per ticket $0.0148–0.0159. Every other Round 10 interval
@@ -247,7 +255,7 @@ is a single point. Paired differences, other method minus Round 10:
 | Deadline accuracy | +0.000 [+0.000, +0.000] | +0.000 [+0.000, +0.000] | -0.065 [-0.093, -0.042] | -0.091 [-0.122, -0.062] | -0.068 [-0.120, -0.031] | -0.085 [-0.208, +0.000] |
 | Breach-alert precision | -0.008 [-0.024, +0.000] | -0.150 [-0.170, -0.133] | -0.066 [-0.111, -0.023] | -0.059 [-0.094, -0.025] | -0.067 [-0.133, +0.000] | -0.136 [-0.273, -0.048] |
 | Commitment F1 | -0.004 [-0.008, +0.000] | -0.005 [-0.012, +0.000] | +0.003 [-0.004, +0.009] | -0.004 [-0.013, +0.003] | -0.053 [-0.171, +0.003] | -0.196 [-0.476, -0.045] |
-| Cost per ticket | -0.0014 [-0.0015, -0.0011] | -0.0020 [-0.0022, -0.0018] | -0.0110 [-0.0115, -0.0105] | +0.0376 [+0.0354, +0.0397] | +0.1449 [+0.1259, +0.1575] | +0.0803 [+0.0354, +0.1064] |
+| Cost per ticket, baselines at handoffs only | -0.0014 [-0.0015, -0.0011] | -0.0020 [-0.0022, -0.0018] | -0.0110 [-0.0115, -0.0105] | +0.0376 [+0.0354, +0.0397] | +0.1449 [+0.1259, +0.1575] | +0.0803 [+0.0354, +0.1064] |
 
 
 - Against every baseline, Round 10 has more dispute recall, a lower
@@ -257,9 +265,11 @@ is a single point. Paired differences, other method minus Round 10:
 - It also has fewer false alerts. That interval excludes zero except
   against Graphiti, whose lower bound is 0.
 - On commitment F1, full context is level (+0.003 [−0.004, +0.009]) and
-  costs $0.011 less a ticket, answering at handoffs only (Round 10c prices
-  both regimes). Mem0 costs 3.4 times as much, Graphiti 10
-  times and the rolling summary 6 times.
+  costs $0.011 less a ticket, answering at handoffs only. Mem0 costs 3.4
+  times as much, Graphiti 10 times and the rolling summary 6 times. With an
+  answer current after every message (Round 10c), full context costs 4.2
+  times as much as Round 10, Mem0 20 times, Graphiti 21 times and the
+  rolling summary 14 times.
 - Against Round 7 every difference is within its interval of zero, except
   cost: Round 10 costs $0.0014 more a ticket.
 - **Four spurious promises,** all the writer's: "Как только что-то
@@ -1035,7 +1045,7 @@ count gives Round 5 15 rather than the 14 reported earlier).
 | Commitment F1 | 0.989 | 0.975 | 0.970 | **0.991** | 0.997 | 0.990 | 0.942 | 0.797 |
 | Status accuracy | 0.926 | 0.957 | 0.989 | **0.997** | 0.948 | 0.945 | 0.913 | 0.915 |
 | Breach-alert precision / recall | 0.850 / 0.969 | 0.932 / 0.961 | 0.969 / 0.977 | **0.992 / 1.000** | 0.934 / 0.992 | 0.941 / 0.984 | 0.933 / 0.862 | 0.864 / 0.760 |
-| Cost per ticket | $0.01337 | $0.01102 | $0.01401 | **$0.01399** | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
+| Cost per ticket (baselines answer at handoffs only; live: Round 10c) | $0.01337 | $0.01102 | $0.01401 | **$0.01399** | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
 
 Graphiti covers 10 tickets and the rolling summary four. Paired over tickets
 with Round 4: 1.05 fewer false alerts per ticket [1.00, 1.15],
@@ -1169,7 +1179,7 @@ the same tickets.
 | Commitment F1 | 0.989 | 0.975 | 0.970 | 0.997 | 0.990 | 0.942 | 0.797 |
 | Status accuracy | 0.926 | 0.957 | **0.989** | 0.948 | 0.945 | 0.913 | 0.915 |
 | Breach-alert precision / recall | 0.850 / 0.969 | 0.932 / 0.961 | 0.969 / 0.977 | 0.934 / 0.992 | 0.941 / 0.984 | 0.933 / 0.862 | 0.864 / 0.760 |
-| Cost per ticket | $0.01337 | $0.01102 | $0.01401 | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
+| Cost per ticket (baselines answer at handoffs only; live: Round 10c) | $0.01337 | $0.01102 | $0.01401 | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
 | Cost per incoming message | $0.0000769 | $0.0000635 | $0.0000807 | $0.0000249 | $0.000304 | $0.000911 | $0.000530 |
 
 Graphiti covers 10 tickets and the rolling summary four. Against Round 5,
@@ -1271,7 +1281,7 @@ a known synthetic set. All baselines were read from their frozen records.
 | Freshness error | 0.000 | 0.000 | 0.064 | 0.291 | 0.310 | 0.278 | 0.333 |
 | Dispute recall | 1.000 | 1.000 | 0.879 | 0.560 | 0.604 | 0.192 | 0.667 |
 | Failed-step precision | 1.000 | 1.000 | 0.776 | 0.792 | 0.771 | 0.771 | 0.963 |
-| Recorded model cost per ticket | $0.01337 | $0.01337 | $0.01102 | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
+| Recorded model cost per ticket (baselines at handoffs only; live: Round 10c) | $0.01337 | $0.01337 | $0.01102 | $0.00434 | $0.05299 | $0.16024 | $0.09563 |
 
 Graphiti covers 10 tickets and rolling summary covers four. The replay cost
 column carries the original calls' cost for comparison. The replay itself
@@ -1392,6 +1402,8 @@ Record: `results/round4/test3.json`; every charge: `results/round4/spend.jsonl`.
   ticket) and costs 12 times as much as the event memory.
 - **Cost.** Event memory $0.0134 a ticket, verifier included ($0.00095);
   full context $0.0043; Mem0 $0.053; rolling summary $0.096; Graphiti $0.160.
+  The baselines' figures are for answering at the handoffs and the end only;
+  Round 10c prices an answer after every message.
   The session charged **$3.47 of the $4.50 approved**.
 
 ### What was run
