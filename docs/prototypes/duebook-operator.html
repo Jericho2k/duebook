@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <title>duebook · Рабочее пространство оператора</title>
+  <title>Zammad · Тикет #1042</title>
   <style>
     body {
       max-width: 1024px;
@@ -23,23 +23,124 @@
     }
 
     .prototype-layout select { font: inherit; }
+
+    .prototype-layout[hidden] { display: none; }
+
+    #zammad-ticket {
+      --zm-border: color-mix(in srgb, CanvasText 15%, Canvas);
+      --zm-surface: color-mix(in srgb, CanvasText 4%, Canvas);
+      --zm-link: light-dark(#224faa, #acc8ff);
+      --db-muted: light-dark(#535e6e, #b7c2d2);
+      border: 1px solid var(--zm-border);
+      border-radius: 8px;
+      overflow: clip;
+    }
+
+    .zm-header,
+    .zm-title,
+    .zm-thread,
+    .zm-sidebar { padding: 16px 24px; }
+
+    .zm-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--zm-border);
+      background: var(--zm-surface);
+    }
+
+    .zm-header strong { font-size: 16px; }
+    .zm-header span,
+    .zm-ticket-id { color: var(--db-muted); font-size: 12px; }
+
+    .zm-title { border-bottom: 1px solid var(--zm-border); }
+    .zm-title h1 { margin: 4px 0 0; font-size: 24px; font-weight: 600; }
+    .zm-body { display: grid; }
+    .zm-body h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
+
+    .zm-sidebar {
+      border-bottom: 1px solid var(--zm-border);
+      background: var(--zm-surface);
+    }
+
+    .zm-sidebar dl { display: grid; gap: 12px; margin: 0; }
+    .zm-sidebar dt { color: var(--db-muted); font-size: 12px; }
+    .zm-sidebar dd { margin: 4px 0 0; }
+
+    .zm-launch {
+      padding-top: 12px;
+      border-top: 1px solid var(--zm-border);
+    }
+
+    .zm-launch a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--zm-border);
+      border-radius: 4px;
+      background: Canvas;
+      color: var(--zm-link);
+      font-weight: 500;
+      text-decoration: none;
+    }
+
+    .zm-launch a:hover { border-color: var(--zm-link); text-decoration: underline; }
+
+    .zm-recent { margin: 0; padding: 0; list-style: none; }
+    .zm-recent li { padding: 12px 0; border-top: 1px solid var(--zm-border); }
+
+    @media (min-width: 640px) {
+      .zm-body { grid-template-columns: minmax(0, 1fr) minmax(248px, 30%); }
+      .zm-thread { grid-area: 1 / 1; }
+      .zm-sidebar { grid-area: 1 / 2; border-inline-start: 1px solid var(--zm-border); border-bottom: 0; }
+    }
   </style>
 </head>
 <body>
-  <div class="prototype-layout">
+  <main id="zammad-ticket" aria-labelledby="zm-title">
+    <header class="zm-header">
+      <strong>Zammad</strong>
+      <span>Прототип</span>
+    </header>
+    <div class="zm-title">
+      <div class="zm-ticket-id">Тикет #1042</div>
+      <h1 id="zm-title">Возврат за установку</h1>
+    </div>
+    <div class="zm-body">
+      <aside class="zm-sidebar" aria-labelledby="zm-sidebar">
+        <h2 id="zm-sidebar">Тикет</h2>
+        <dl>
+          <div><dt>Ответственная</dt><dd>Ольга Миронова</dd></div>
+          <div><dt>Состояние</dt><dd>Открыт</dd></div>
+          <div class="zm-launch">
+            <dt>Duebook</dt>
+            <dd><a href="?view=duebook" target="_blank" rel="noopener" aria-label="Открыть карточку в Duebook в новой вкладке">Открыть карточку <span aria-hidden="true">↗</span></a></dd>
+          </div>
+        </dl>
+      </aside>
+      <section class="zm-thread" aria-labelledby="zm-thread">
+        <h2 id="zm-thread">Последние сообщения</h2>
+        <ol class="zm-recent"></ol>
+      </section>
+    </div>
+  </main>
+  <div class="prototype-layout" hidden>
     <label for="prototype-layout">Сценарий прототипа</label>
     <select id="prototype-layout">
       <option value="Ticket workspace">Карточка тикета</option>
       <option value="Handoff first">Передача смены</option>
     </select>
   </div>
-<div id="duebook-operator" class="viz-carousel" aria-label="Duebook operator workflows">
+<main id="duebook-operator" class="viz-carousel" aria-label="Рабочее пространство Duebook" hidden>
   <section data-variant="Ticket workspace" aria-label="Ticket workspace">
     <article class="db-app" lang="ru" aria-label="Рабочее пространство">
       <header class="db-brand">
         <div class="db-lockup">
           <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
         </div>
+        <div class="db-access"><span>Только чтение</span><a href="?view=zammad">Вернуться в Zammad</a></div>
       </header>
       <div class="db-ticket">
         <div class="db-context">Тикет #1042</div>
@@ -63,6 +164,7 @@
         <div class="db-lockup">
           <span class="db-arch" aria-hidden="true"></span><span class="db-parent">Arch</span><span class="db-wordmark">duebook</span>
         </div>
+        <div class="db-access"><span>Только чтение</span><a href="?view=zammad">Вернуться в Zammad</a></div>
       </header>
       <div class="db-ticket">
         <div class="db-context">Тикет #1042</div>
@@ -120,7 +222,7 @@
       <p class="db-message-text"></p>
     </li>
   </template>
-</div>
+</main>
 <style>
   @import url("https://fonts.googleapis.com/css2?family=Golos+Text:wght@400..700&family=Literata:opsz,wght@7..72,400..600&display=swap");
 
@@ -158,8 +260,27 @@
   }
 
   #duebook-operator .db-brand {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px 24px;
     padding-block: 12px;
     border-bottom: 1px solid var(--db-hairline);
+  }
+
+  #duebook-operator .db-access {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    color: var(--db-muted);
+    font-size: 12px;
+  }
+
+  #duebook-operator .db-access a {
+    color: var(--db-index);
+    text-underline-offset: 3px;
   }
 
   #duebook-operator .db-lockup {
@@ -203,8 +324,7 @@
   }
 
   #duebook-operator .db-ticket p,
-  #duebook-operator .db-meta,
-  #duebook-operator .db-source-byline {
+  #duebook-operator .db-meta {
     color: var(--db-muted);
     font-size: 12px;
   }
@@ -494,7 +614,7 @@
     outline-offset: -1px;
   }
 
-  #duebook-operator .db-message-header {
+  :is(#duebook-operator, #zammad-ticket) .db-message-header {
     display: flex;
     flex-wrap: wrap;
     justify-content: space-between;
@@ -503,11 +623,15 @@
     font-size: 11px;
   }
 
-  #duebook-operator .db-message-header strong { font-weight: 600; }
+  :is(#duebook-operator, #zammad-ticket) .db-message-header strong { font-weight: 600; }
   #duebook-operator .db-message[aria-current="true"] .db-message-header { color: var(--db-index); }
-  #duebook-operator .db-source-byline { margin: 0 0 4px; font-size: 11px; }
+  :is(#duebook-operator, #zammad-ticket) .db-source-byline {
+    margin: 0 0 4px;
+    color: var(--db-muted);
+    font-size: 11px;
+  }
 
-  #duebook-operator .db-message-text {
+  :is(#duebook-operator, #zammad-ticket) .db-message-text {
     margin: 0;
     overflow-wrap: anywhere;
     font-size: 13px;
@@ -557,6 +681,12 @@
 <script>
 (() => {
   const root = document.getElementById("duebook-operator");
+  const zammad = document.getElementById("zammad-ticket");
+  const view = new URLSearchParams(location.search).get("view");
+  const compare = view === "layouts";
+  zammad.hidden = view === "duebook" || compare;
+  root.hidden = !zammad.hidden;
+
   const sources = {
     3: { author: "Иван Соколов", time: "18 нояб., 09:23", visibility: "Публичный ответ", quote: "Запрошу у банка копию квитанции." },
     4: { author: "Анна Крылова", time: "18 нояб., 09:27", visibility: "Публичный ответ", quote: "Пришлю скриншот оплаты завтра до 12:00." },
@@ -678,6 +808,15 @@
     fragment.querySelector(".db-message-text").textContent = data.quote;
     return fragment;
   }
+  if (!zammad.hidden) {
+    const recent = zammad.querySelector(".zm-recent");
+    for (const [number, data] of Object.entries(sources).slice(-4)) {
+      recent.append(renderMessage(number, data));
+    }
+    return;
+  }
+
+  document.title = "Duebook · Тикет #1042";
   for (const app of root.querySelectorAll(".db-app")) {
     const viewButtons = [...app.querySelectorAll("[data-view]")];
     const work = app.querySelector(".db-work");
@@ -818,18 +957,17 @@
       tweak.addToggle(settings, "compact", { label: "Компактные строки" });
     }
   }
-})();
-</script>
-<script>
-  (() => {
+  if (compare) {
     const layout = document.getElementById("prototype-layout");
-    const sections = document.querySelectorAll("#duebook-operator > [data-variant]");
+    const sections = root.querySelectorAll("[data-variant]");
     function showLayout() {
       for (const section of sections) section.hidden = section.dataset.variant !== layout.value;
     }
+    layout.closest(".prototype-layout").hidden = false;
     layout.addEventListener("change", showLayout);
     showLayout();
-  })();
+  }
+})();
 </script>
 </body>
 </html>
