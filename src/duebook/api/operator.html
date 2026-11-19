@@ -215,6 +215,14 @@
     </div>
     <ol class="db-messages" tabindex="0" aria-label="Сообщения тикета"></ol>
   </template>
+  <template id="db-zammad-access">
+    <form class="db-zammad-access" method="post">
+      <label for="db-zammad-token">Токен Zammad</label>
+      <input id="db-zammad-token" type="password" autocomplete="off" required>
+      <button type="submit">Загрузить переписку</button>
+    </form>
+    <p class="db-zammad-status" role="status"></p>
+  </template>
   <template id="db-message">
     <li class="db-message" tabindex="-1">
       <div class="db-message-header"><strong></strong><span class="db-article-id"></span></div>
@@ -356,6 +364,8 @@
     border-block: 1px solid var(--db-hairline);
   }
 
+  #duebook-operator .db-nav[hidden] { display: none; }
+
   #duebook-operator .db-app button { font: inherit; color: inherit; }
 
   #duebook-operator .db-nav button[data-view] {
@@ -408,6 +418,32 @@
     min-width: 0;
     padding: 21px var(--db-gutter) 24px;
   }
+
+  #duebook-operator .db-zammad-access {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+
+  #duebook-operator .db-zammad-access[hidden] { display: none; }
+
+  #duebook-operator .db-zammad-access input,
+  #duebook-operator .db-zammad-access button {
+    box-sizing: border-box;
+    max-width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--db-divider);
+    border-radius: 3px;
+    background: var(--db-surface);
+    color: var(--db-ink);
+    font: inherit;
+  }
+
+  #duebook-operator .db-zammad-access button { color: var(--db-index); }
+  #duebook-operator .db-zammad-status:empty { margin: 0; }
+  #duebook-operator .db-work > .db-source { margin: 0; }
+  #duebook-operator .db-work > .db-source .db-messages { max-height: min(68dvh, 680px); }
 
   #duebook-operator .db-work h3,
   #duebook-operator .db-source h3 {
@@ -634,6 +670,7 @@
   :is(#duebook-operator, #zammad-ticket) .db-message-text {
     margin: 0;
     overflow-wrap: anywhere;
+    white-space: pre-wrap;
     font-size: 13px;
   }
 
@@ -682,10 +719,109 @@
 (() => {
   const root = document.getElementById("duebook-operator");
   const zammad = document.getElementById("zammad-ticket");
+  const live = /\/zammad\/tickets\/[0-9]+\/?$/.test(location.pathname);
   const view = new URLSearchParams(location.search).get("view");
   const compare = view === "layouts";
-  zammad.hidden = view === "duebook" || compare;
+  zammad.hidden = live || view === "duebook" || compare;
   root.hidden = !zammad.hidden;
+
+  const chatTemplate = root.querySelector("#db-chat");
+  const messageTemplate = root.querySelector("#db-message");
+
+  function renderMessage(number, data) {
+    const fragment = messageTemplate.content.cloneNode(true);
+    fragment.querySelector(".db-message").dataset.message = number;
+    fragment.querySelector(".db-message-header strong").textContent = data.author;
+    fragment.querySelector(".db-article-id").textContent = "№" + number;
+    const time = live ? data.time : data.time + " МСК";
+    fragment.querySelector(".db-source-byline").textContent = time + " · " + data.visibility;
+    fragment.querySelector(".db-message-text").textContent = data.quote;
+    return fragment;
+  }
+
+  function showLiveTicket() {
+    const app = root.querySelector(".db-app");
+    const work = app.querySelector(".db-work");
+    const title = app.querySelector(".db-ticket h2");
+    const number = app.querySelector(".db-context");
+    const owner = app.querySelector(".db-ticket-meta");
+    const returnLink = app.querySelector(".db-access a");
+    document.title = "Duebook · Zammad";
+    title.textContent = "Переписка Zammad";
+    number.hidden = owner.hidden = returnLink.hidden = true;
+    app.querySelector(".db-nav").hidden = true;
+    work.append(root.querySelector("#db-zammad-access").content.cloneNode(true));
+    const form = work.querySelector("form");
+    const input = form.querySelector("input");
+    const submit = form.querySelector("button");
+    const status = work.querySelector(".db-zammad-status");
+
+    if (!window.isSecureContext) {
+      form.hidden = true;
+      status.textContent = "Откройте эту страницу по HTTPS, чтобы загрузить переписку.";
+      return;
+    }
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      submit.disabled = true;
+      status.textContent = "Загружаем переписку…";
+      const token = input.value.trim();
+      input.value = "";
+      try {
+        const response = await fetch(location.pathname.replace(/\/$/, "") + "/conversation", {
+          headers: {Authorization: "Bearer " + token},
+          cache: "no-store"
+        });
+        if (response.status === 401) {
+          status.textContent = "Zammad не принял токен. Проверьте его и попробуйте снова.";
+          input.focus();
+        } else if (response.status === 403 || response.status === 404) {
+          status.textContent = "Тикет недоступен с этим токеном Zammad.";
+        } else if (!response.ok) {
+          throw new Error("Zammad request failed");
+        } else {
+          const ticket = await response.json();
+          document.title = "Duebook · Тикет #" + ticket.number;
+          number.textContent = "Тикет #" + ticket.number;
+          title.textContent = ticket.title;
+          owner.textContent = ticket.owner && ticket.owner !== "-" ? ticket.owner : "";
+          returnLink.href = ticket.url;
+          number.hidden = returnLink.hidden = false;
+          owner.hidden = !owner.textContent;
+          form.hidden = true;
+          status.textContent = ticket.messages.length ? "" : "В тикете пока нет сообщений.";
+          if (!ticket.messages.length) return;
+
+          const chat = app.querySelector(".db-source");
+          chat.append(chatTemplate.content.cloneNode(true));
+          chat.querySelector(".db-chat-close").remove();
+          const messages = chat.querySelector(".db-messages");
+          for (const message of ticket.messages) {
+            messages.append(renderMessage(message.id, {
+              author: message.author,
+              time: message.time,
+              visibility: message.internal ? "Внутреннее сообщение" : "Публичное сообщение",
+              quote: message.body
+            }));
+          }
+          work.append(chat);
+          chat.hidden = false;
+          messages.scrollTop = messages.scrollHeight;
+          messages.focus({preventScroll: true});
+        }
+      } catch {
+        status.textContent = "Не удалось загрузить переписку. Попробуйте ещё раз.";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  }
+
+  if (live) {
+    showLiveTicket();
+    return;
+  }
 
   const sources = {
     3: { author: "Иван Соколов", time: "18 нояб., 09:23", visibility: "Публичный ответ", quote: "Запрошу у банка копию квитанции." },
@@ -795,19 +931,8 @@
   const viewTemplate = root.querySelector("#db-view");
   const rowTemplate = root.querySelector("#db-row");
   const sectionTemplate = root.querySelector("#db-section");
-  const chatTemplate = root.querySelector("#db-chat");
-  const messageTemplate = root.querySelector("#db-message");
   const narrow = window.matchMedia("(max-width: 760px)");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-  function renderMessage(number, data) {
-    const fragment = messageTemplate.content.cloneNode(true);
-    fragment.querySelector(".db-message").dataset.message = number;
-    fragment.querySelector(".db-message-header strong").textContent = data.author;
-    fragment.querySelector(".db-article-id").textContent = "№" + number;
-    fragment.querySelector(".db-source-byline").textContent = data.time + " МСК · " + data.visibility;
-    fragment.querySelector(".db-message-text").textContent = data.quote;
-    return fragment;
-  }
   if (!zammad.hidden) {
     const recent = zammad.querySelector(".zm-recent");
     for (const [number, data] of Object.entries(sources).slice(-4)) {

@@ -43,6 +43,7 @@ from ..settings import Settings
 from ..store import Conflict, Store
 from ..store.codec import encode
 from .validation import Invalid, read_event
+from .zammad import zammad_router
 
 #: The largest webhook body accepted. One ticket event is a few kilobytes; a
 #: limit keeps a misbehaving sender from filling memory or the append-only log.
@@ -77,6 +78,8 @@ def create_app(
 
     app = FastAPI(title="duebook", version="0.1.0", lifespan=lifespan)
     app.state.pool = pool
+    if settings.zammad_url:
+        app.include_router(zammad_router(settings.zammad_url, settings.timezone))
 
     @contextmanager
     def store(timeout: float = 5.0) -> Iterator[Store]:

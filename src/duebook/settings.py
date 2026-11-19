@@ -44,6 +44,7 @@ class Settings:
     webhook_secret: str = ""
     #: When set, read endpoints require ``Authorization: Bearer <key>``.
     api_key: str = ""
+    zammad_url: str = ""
     #: "log" writes alerts to stdout as JSON lines; "webhook" POSTs them to ``alert_url``.
     alert_channel: str = "log"
     alert_url: str = ""
@@ -118,6 +119,7 @@ class Settings:
             openrouter_api_key=get("OPENROUTER_API_KEY"),
             webhook_secret=get("WEBHOOK_SECRET"),
             api_key=get("API_KEY"),
+            zammad_url=get("ZAMMAD_URL"),
             alert_channel=get("ALERT_CHANNEL", "log").lower(),
             alert_url=get("ALERT_URL"),
             alert_secret=get("ALERT_SECRET"),

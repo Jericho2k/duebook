@@ -475,6 +475,26 @@ The core library does not need the web stack: `pip install duebook[store]`
 is enough for the event store, `[service]` adds FastAPI, uvicorn and the
 connection pool.
 
+### Zammad ticket workspace
+
+Set `DUEBOOK_ZAMMAD_URL` to the Zammad base URL and start `duebook serve`.
+In Zammad's Object Manager, add an agent-visible ticket text field named
+**Duebook**. Its link template points to the Duebook ticket page:
+
+    https://duebook.example.com/zammad/tickets/#{ticket.id}
+
+For a local pilot use `http://127.0.0.1:8000` and bind Duebook to
+`127.0.0.1`. Populate the field on the pilot ticket and save it to show
+the link icon. The URL uses the ticket's internal ID from the Zammad
+address bar. The page displays the ticket's public-facing number.
+
+Enter your own Zammad personal access token with ticket read access in
+the workspace. The service uses it for that request and Zammad decides
+which articles the viewer can read, including internal notes. The view
+shows message text in order and links back to the original ticket for
+native formatting and attachments. Reads bypass extraction and storage.
+Deploy the workspace over HTTPS outside localhost.
+
 ### Endpoints
 
 | Method and path | Returns |
