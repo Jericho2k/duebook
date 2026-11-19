@@ -1,0 +1,1 @@
+{"at": "2026-11-19T09:52:42.817597+00:00", "split": "test3", "what": "cost projection only", "methods": "event_memory,full_context_live", "label": "live full context: projection from 20 events", "usd": 0.0017166744, "reused_usd": 0.0}
