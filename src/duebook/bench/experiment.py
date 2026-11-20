@@ -1013,6 +1013,12 @@ def _fmt(x: float) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "real":
+        from .real import main as real_main
+
+        real_main(argv[1:])
+        return
     parser = argparse.ArgumentParser(prog="python -m duebook.bench.experiment")
     parser.add_argument("--split", choices=sorted(SPLITS), default="dev2")
     parser.add_argument("--methods", default=",".join(METHODS),
