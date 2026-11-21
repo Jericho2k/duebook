@@ -33,16 +33,25 @@ root=.cache/real-world
 python scripts/label_twcs.py "$root/twcs.json" "$root/twcs-annotations.json"
 ```
 
-Open [the local labeling page](http://127.0.0.1:8765). If the frozen files are in another checkout, pass their full paths. The page reads the frozen transcript and writes the existing JSON label format. It validates each save. Use **Save thread** before switching threads. An existing sheet resumes at the first unfinished thread.
+Open [the local labeling page](http://127.0.0.1:8765). If the frozen files are in another checkout, pass their full paths. The review copy comes pre-filled with the blind `codex-gpt` draft. Enter your name, accept or correct the labels, and tick **Mark thread reviewed** yourself. Use **Save thread** before switching threads. The page validates each save and resumes at the first unfinished thread.
 
-- Label every thread before viewing model output. Enter your name and mark the thread reviewed even if it has no promises.
+- Review before viewing any Duebook model output. Mark a thread reviewed even if it has no promises.
 - Promises commit a side to an action. “I'll call you tomorrow,” “I'll send the screenshot tonight,” and “Our finance team will refund the overcharge” qualify. Delegated work is owed by the company.
 - “The refund was sent” is a status report, “The email should arrive soon” is a prediction, and “Please send the screenshot” is a request. Use **Add ambiguity** for conditional offers and unresolved ownership or identity.
 - For each distinct promise, enter a short action plus its object and choose the owing side. Select the earliest message and quote for the opening. Add later restatements as further evidence. For a signed agent, the optional owner ID has the form `account:INITIALS`.
 - Highlight text in a message and use **Use selection** in the relevant quote row. You can also choose the message ID and enter the literal quote directly.
 - Set the deadline to absent, ambiguous, or exact. For a stated deadline, quote the time phrase. An exact deadline needs an ISO 8601 timestamp with offset. Use ambiguous if the calendar or timezone is unresolved.
 - Choose the observed outcome. Cite the message supporting a known outcome. A debtor's report supports claimed, and confirmation from the other side supports fulfilled. Use unknown when the outcome remains unclear at the end of the transcript.
-- Allow about five minutes per thread. If a second reader is available, have them independently label 10 TWCS threads and report agreement on promise anchors.
+- Start with the 10-thread owner review sample, drawn with Python's `random.Random(1710)` from the sorted frozen thread IDs. The paid-run approval gate uses the full reviewed sheet.
+
+Keep the baseline `twcs-annotations-draft.json` and its `.sha256` sidecar together. The free comparison works during review and verifies the draft checksum.
+
+```bash
+python -m duebook.bench.experiment real compare-labels "$root/twcs.json" \
+  --draft-labels "$root/twcs-annotations-draft.json" --labels "$root/twcs-annotations.json"
+```
+
+It lists added, removed and changed promises on threads you marked reviewed. Anchor agreement divides the number of shared opening-message IDs by their union, counting once for each promise. Labels on the same message are paired by preserved ID first. Edits to side, action, deadline or outcome can agree on the anchor. A sample without anchors has no agreement percentage.
 
 ## Reproduce the draw and estimate
 
@@ -67,9 +76,10 @@ python -m duebook.bench.experiment real run "$root/twcs.json" \
   --max-usd 0.40 --out "$root/twcs-run.json"
 python -m duebook.bench.experiment real report "$root/twcs.json" \
   --labels "$root/twcs-annotations.json" --run "$root/twcs-run.json" \
+  --draft-labels "$root/twcs-annotations-draft.json" \
   --out "$root/twcs-report.md"
 ```
 
 The runner uses the existing reader, escalation, verifier, reducer, and per-call ledger. The ledger stops new calls once charges reach the cap. An in-flight call, internal retry, or missing usage after a timeout can affect the final bill. An interrupted run leaves a journal with partial results and charges. Review remaining spend before retrying.
 
-Use the synthetic benchmark's source-message and owing-side matching and one-minute deadline tolerance. Check the action of every matched promise by hand. Report judgeable deadlines and outcomes with their denominators, false closes, false alerts for deadlines that pass within the observation window, and inheritance after handoffs. The public transcript can leave an outcome unknown. Report every missing or false item with its source and the stage where the error occurred. Keep the English, public-channel, 30-thread author-labeled sample in view when interpreting the results. [Historical synthetic test5 record](../results/round10/test5.json).
+Use the synthetic benchmark's source-message and owing-side matching and one-minute deadline tolerance. Check the action of every matched promise by hand. Report judgeable deadlines and outcomes with their denominators, false closes, false alerts for deadlines that pass within the observation window, and inheritance after handoffs. The public transcript can leave an outcome unknown. Report every missing or false item with its source and the stage where the error occurred. Include the owner's review count, promise-anchor agreement with the blind draft, and counts of labels added, removed and changed. Keep the English, public-channel, 30-thread sample and the labeling process in view when interpreting the results. [Historical synthetic test5 record](../results/round10/test5.json).

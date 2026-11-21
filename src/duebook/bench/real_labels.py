@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
+from itertools import zip_longest
 
 from ..card import Party
 from ..events import MessagePosted
@@ -13,9 +14,10 @@ from .score import Counts, match, same_deadline
 
 STATES = {"open_observed", "claimed", "fulfilled", "cancelled", "superseded", "unknown"}
 UNCLEAR = {"identity", "ownership", "conditional", "other"}
+DRAFT_ANNOTATOR = "codex-gpt"
 
 
-def reviewed(bundle, labels, bundle_sha):
+def index_labels(bundle, labels, bundle_sha):
     if labels["bundle_sha256"] != bundle_sha:
         raise ValueError("annotation was made for another bundle")
     by_ticket = {entry["ticket_id"]: entry for entry in labels["tickets"]}
@@ -23,6 +25,11 @@ def reviewed(bundle, labels, bundle_sha):
         case["id"] for case in bundle["cases"]
     }:
         raise ValueError("annotation must cover every frozen ticket exactly once")
+    return by_ticket
+
+
+def reviewed(bundle, labels, bundle_sha):
+    by_ticket = index_labels(bundle, labels, bundle_sha)
     for case in bundle["cases"]:
         label = by_ticket[case["id"]]
         if label["review"] != "complete" or not label["annotator"].strip():
@@ -86,6 +93,84 @@ def validate(case, label):
         if item["kind"] not in UNCLEAR or not item["evidence"] or not item["note"].strip():
             raise ValueError(f"invalid ambiguity for {case['id']}")
         evidence(item["evidence"])
+
+
+def promise_anchors(label):
+    anchors = defaultdict(dict)
+    for promise in label["commitments"]:
+        anchors[promise["opening"][0]["message_id"]][promise["id"]] = promise
+    return anchors
+
+
+def anchor_pairs(draft, owner):
+    for message_id in sorted(draft.keys() | owner.keys()):
+        before, after = draft.get(message_id, {}), owner.get(message_id, {})
+        for key in before:
+            if key in after:
+                yield message_id, before[key], after[key]
+        left = (value for key, value in before.items() if key not in after)
+        right = (value for key, value in after.items() if key not in before)
+        for earlier, later in zip_longest(left, right):
+            yield message_id, earlier, later
+
+
+def promise_fields(promise):
+    deadline = promise["deadline"]
+    return {
+        "action": promise["action"],
+        "side": promise["owner_side"],
+        "deadline": {
+            "kind": deadline["kind"],
+            "at": instant(deadline["at"]).isoformat() if deadline["at"] else None,
+        },
+        "outcome": promise["fulfillment"]["state"],
+    }
+
+
+def compare_review(bundle, draft, owner, bundle_sha):
+    """Compare human edits on completed threads, with one anchor per promise."""
+    before = index_labels(bundle, draft, bundle_sha)
+    after = index_labels(bundle, owner, bundle_sha)
+    added, removed, changed = [], [], []
+    shared = reviewed_threads = 0
+    for case in bundle["cases"]:
+        ticket_id = case["id"]
+        old, new = before[ticket_id], after[ticket_id]
+        if new["review"] != "complete":
+            continue
+        reviewed_threads += 1
+        validate(case, old)
+        validate(case, new)
+        for message_id, prior, current in anchor_pairs(promise_anchors(old), promise_anchors(new)):
+            source = {"ticket_id": ticket_id, "message_id": message_id}
+            if prior is None:
+                added.append(source | {"promise_id": current["id"]} | promise_fields(current))
+            elif current is None:
+                removed.append(source | {"promise_id": prior["id"]} | promise_fields(prior))
+            else:
+                shared += 1
+                earlier, later = promise_fields(prior), promise_fields(current)
+                edits = {
+                    key: {"draft": value, "reviewed": later[key]}
+                    for key, value in earlier.items()
+                    if value != later[key]
+                }
+                if edits:
+                    changed.append(
+                        source
+                        | {"draft_id": prior["id"], "reviewed_id": current["id"], "fields": edits}
+                    )
+    union = shared + len(added) + len(removed)
+    return {
+        "reviewed_threads": reviewed_threads,
+        "total_threads": len(after),
+        "shared_anchors": shared,
+        "union_anchors": union,
+        "anchor_agreement_percent": 100 * shared / union if union else None,
+        "added": added,
+        "removed": removed,
+        "changed": changed,
+    }
 
 
 def compare(case, label, snapshot):

@@ -13,7 +13,7 @@ import pytest
 
 from duebook.bench import real
 from duebook.bench.experiment import make_methods
-from duebook.bench.real_labels import compare, reviewed, validate
+from duebook.bench.real_labels import DRAFT_ANNOTATOR, compare, reviewed, validate
 from duebook.bench.real_sources import (
     digest,
     draw,
@@ -260,8 +260,7 @@ def test_labeling_page_writes_the_validated_annotation_sheet(tmp_path):
     assert "model_output" not in initial
     (original,) = initial["labels"]["tickets"]
     ticket = original | {
-        "review": "complete",
-        "annotator": "Test reviewer",
+        "annotator": DRAFT_ANNOTATOR,
         "commitments": [{
             "id": "P1",
             "action": "check",
@@ -280,10 +279,72 @@ def test_labeling_page_writes_the_validated_annotation_sheet(tmp_path):
         }],
     }
     page.save(original, ticket)
-    updated = ticket | {"annotator": "Reviewer"}
     reopened = Labels(bundle_path, labels_path)
+    assert reopened.data()["labels"]["tickets"] == [ticket]
+    with pytest.raises(ValueError, match="Enter your name"):
+        reopened.save(ticket, ticket | {"review": "complete"})
+    updated = ticket | {"annotator": "Reviewer", "review": "complete"}
     reopened.save(ticket, updated)
     assert reviewed(bundle, read(labels_path), digest(bundle_path)) == {"twcs:1": updated}
+
+
+def test_compare_labels_reports_edits_only_on_owner_reviewed_anchors(tmp_path, capsys):
+    conversation = case()
+    conversation["messages"][0]["text"] = "I'll send a screenshot."
+    conversation["messages"].append(
+        conversation["messages"][1] | {"id": "3", "text": "I'll send it today."}
+    )
+    pending = conversation | {"id": "twcs:4"}
+    bundle = {"schema": 1, "cases": [conversation, pending]}
+    bundle_path = tmp_path / "twcs.json"
+    write(bundle_path, bundle)
+    draft = real.annotation_sheet(bundle, digest(bundle_path))
+
+    def promise(key, message_id, quote):
+        return {
+            "id": key,
+            "action": "draft action",
+            "owner_side": "customer",
+            "owner_actor_id": None,
+            "opening": [{"message_id": message_id, "quote": quote}],
+            "deadline": {"kind": "absent", "at": None, "evidence": []},
+            "fulfillment": {"state": "unknown", "evidence": []},
+        }
+
+    removed = promise("P1", "1", "I'll send a screenshot.")
+    common = promise("P2", "2", "I'll check.")
+    added = promise("P3", "3", "I'll send it today.")
+    draft["tickets"][0]["commitments"] = [removed, common]
+    draft["tickets"][1]["commitments"] = [removed]
+    changed = common | {
+        "owner_side": "company",
+        "deadline": {"kind": "exact", "at": "2017-11-03T00:00:00Z", "evidence": common["opening"]},
+        "fulfillment": {"state": "claimed", "evidence": added["opening"]},
+    }
+    owner = real.annotation_sheet(bundle, digest(bundle_path))
+    owner["tickets"][0].update(review="complete", annotator="Owner", commitments=[changed, added])
+    draft_path, review_path = tmp_path / "draft.json", tmp_path / "review.json"
+    write(draft_path, draft)
+    write(review_path, owner)
+    checksum_path = tmp_path / "draft.json.sha256"
+    checksum_path.write_text(digest(draft_path), encoding="ascii")
+    args = [
+        "compare-labels", str(bundle_path), "--draft-labels", str(draft_path),
+        "--labels", str(review_path),
+    ]
+    real.main(args)
+    summary = json.loads(capsys.readouterr().out)
+    assert (summary["reviewed_threads"], summary["total_threads"]) == (1, 2)
+    assert summary["anchor_agreement_percent"] == pytest.approx(100 / 3)
+    assert [item["message_id"] for item in summary["removed"]] == ["1"]
+    assert [item["message_id"] for item in summary["added"]] == ["3"]
+    (edit,) = summary["changed"]
+    assert edit["message_id"] == "2"
+    assert edit["fields"].keys() == {"side", "deadline", "outcome"}
+    checksum_path.write_text("wrong digest", encoding="ascii")
+    with pytest.raises(SystemExit, match="2"):
+        real.main(args)
+    assert "draft labels do not match the recorded SHA-256" in capsys.readouterr().err
 
 
 def test_live_preflight_precedes_any_request_and_reuses_the_meters_and_report(
@@ -333,7 +394,14 @@ def test_live_preflight_precedes_any_request_and_reuses_the_meters_and_report(
     assert all(not r["provider"]["allow_fallbacks"] for r in requests)
     record = read(out)
     assert record["spend_usd"] == pytest.approx(0.003)
-    rendered = real.report(bundle, {"twcs:1": labels["tickets"][0]}, record,
-                           read(Path("results/round10/test5.json")))  # fmt: skip
+    annotation_review = real.compare_review(bundle, labels, labels, "source-sha") | {
+        "draft_sha256": "draft-file-sha"
+    }
+    rendered = real.report(
+        bundle, {"twcs:1": labels["tickets"][0]}, record, read(Path("results/round10/test5.json")),
+        annotation_review=annotation_review,
+    )
     assert "twcs / random" in rendered and "0 / 0 / 0" in rendered
     assert "Historical synthetic `test5`" in rendered
+    assert "Owner reviewed 1 of 1 threads." in rendered
+    assert "Promise-anchor agreement on those threads was unavailable (no anchors)." in rendered

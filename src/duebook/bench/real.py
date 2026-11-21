@@ -20,7 +20,7 @@ from ..extract.cost import PRICES, Usage
 from ..temporal import WorkCalendar
 from .experiment import make_methods, run_all, run_of, saved
 from .meter import Ledger
-from .real_labels import compare, reviewed
+from .real_labels import compare, compare_review, reviewed
 from .real_sources import (
     digest,
     draw,
@@ -186,7 +186,36 @@ def baseline(record):
     )
 
 
-def report(bundle, labels, record, synthetic):
+def draft_comparison(bundle, bundle_sha, draft_path, owner):
+    draft, draft_sha = read_frozen(draft_path)
+    checksum_path = draft_path.with_name(draft_path.name + ".sha256")
+    checksum = checksum_path.read_text(encoding="ascii").split(maxsplit=1)
+    if not checksum or checksum[0] != draft_sha:
+        raise ValueError("draft labels do not match the recorded SHA-256")
+    return {"draft_sha256": draft_sha} | compare_review(bundle, draft, owner, bundle_sha)
+
+
+def review_section(review):
+    percent = review["anchor_agreement_percent"]
+    agreement = "unavailable (no anchors)" if percent is None else (
+        f"{percent:.1f}% ({review['shared_anchors']} of {review['union_anchors']})"
+    )
+    edits = Counter(field for change in review["changed"] for field in change["fields"])
+    return [
+        "",
+        "## Owner review of the blind draft",
+        "",
+        f"Owner reviewed {review['reviewed_threads']} of {review['total_threads']} threads.",
+        f"Promise-anchor agreement on those threads was {agreement}.",
+        f"The owner added {len(review['added'])}, removed {len(review['removed'])}, "
+        f"and changed {len(review['changed'])} promise labels.",
+        f"Field changes included {edits['side']} sides, {edits['deadline']} deadlines, "
+        f"{edits['outcome']} outcomes, and {edits['action']} actions.",
+        f"Frozen draft SHA-256: `{review['draft_sha256']}`.",
+    ]
+
+
+def report(bundle, labels, record, synthetic, *, annotation_review=None):
     cases = {case["id"]: case for case in bundle["cases"]}
     runs = {run["ticket"]: run for run in record["runs"]}
     if set(runs) != set(cases) or len(runs) != len(record["runs"]) or record["route"] != ROUTE:
@@ -216,6 +245,8 @@ def report(bundle, labels, record, synthetic):
         f"Source frame counts `{json.dumps(bundle['frame_counts'], sort_keys=True)}`. "
         f"Seed {bundle['seed']}. Scores use the last observed message in each ticket.",
     ]
+    if annotation_review is not None:
+        lines.extend(review_section(annotation_review))
     for (source, cohort), rows in sorted(sections.items()):
         total, fields, kinds, examples = Counts(), Counter(), Counter(), defaultdict(list)
         costs, times, pods, usage = [], [], Counter(), Usage()
@@ -294,13 +325,15 @@ def main(argv: Sequence[str]) -> None:
     prepare.add_argument("--challenge", type=int)
     prepare.add_argument("--manifest", type=Path, help="TWCS link-level manifest output")
     prepare.add_argument("--exclude", type=Path, help="JSON mapping case IDs to review reasons")
-    for command in ("prepare", "estimate", "annotations", "run", "report"):
+    for command in ("prepare", "estimate", "annotations", "compare-labels", "run", "report"):
         sub = prepare if command == "prepare" else cmds.add_parser(command)
         sub.add_argument("bundle", type=Path)
         if command in ("annotations", "report", "run"):
             sub.add_argument("--out", required=True, type=Path)
-        if command in ("run", "report"):
+        if command in ("compare-labels", "run", "report"):
             sub.add_argument("--labels", required=True, type=Path)
+        if command in ("compare-labels", "report"):
+            sub.add_argument("--draft-labels", required=command == "compare-labels", type=Path)
         if command == "report":
             sub.add_argument("--run", required=True, type=Path)
             sub.add_argument("--synthetic", type=Path, default=SYNTHETIC)
@@ -354,6 +387,9 @@ def main(argv: Sequence[str]) -> None:
             print(json.dumps(estimate(bundle), indent=2))
         elif args.cmd == "annotations":
             write(args.out, annotation_sheet(bundle, bundle_sha))
+        elif args.cmd == "compare-labels":
+            comparison = draft_comparison(bundle, bundle_sha, args.draft_labels, read(args.labels))
+            print(json.dumps(comparison, indent=2, ensure_ascii=False))
         elif args.cmd == "run":
             live(bundle, args.labels, bundle_sha, read(args.approval), args.max_usd, args.out)
         else:
@@ -362,7 +398,14 @@ def main(argv: Sequence[str]) -> None:
             if record["bundle_sha256"] != bundle_sha or record["labels_sha256"] != labels_sha:
                 raise ValueError("results were produced against a different bundle or labels")
             labels = reviewed(bundle, label_data, bundle_sha)
-            formatted = report(bundle, labels, record, read(args.synthetic))
+            annotation_review = (
+                draft_comparison(bundle, bundle_sha, args.draft_labels, label_data)
+                if args.draft_labels
+                else None
+            )
+            formatted = report(
+                bundle, labels, record, read(args.synthetic), annotation_review=annotation_review
+            )
             with args.out.open("x", encoding="utf-8") as stream:
                 stream.write(formatted)
     except (ValueError, KeyError, OSError) as error:

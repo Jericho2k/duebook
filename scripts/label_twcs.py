@@ -5,9 +5,10 @@ import json
 from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from stat import S_IWUSR
 
 from duebook.bench.real import annotation_sheet
-from duebook.bench.real_labels import STATES, UNCLEAR, validate
+from duebook.bench.real_labels import DRAFT_ANNOTATOR, STATES, UNCLEAR, validate
 from duebook.bench.real_sources import digest, read_frozen, write
 
 PAGE = r"""<!doctype html>
@@ -39,7 +40,7 @@ PAGE = r"""<!doctype html>
     <h2>Annotations</h2>
     <p>Highlight text in a message, then choose <strong>Use selection</strong> in a quote row.</p>
     <form id="editor">
-      <label>Annotator <input id="annotator" autocomplete="off"></label>
+      <label>Your name <input id="annotator" autocomplete="off"></label>
       <label><input id="complete" type="checkbox"> Mark thread reviewed</label>
       <div id="commitments"></div><button type="button" id="promise">Add promise</button>
       <div id="ambiguities"></div><button type="button" id="unclear">Add ambiguity</button>
@@ -208,7 +209,7 @@ function show(id) {
     byId("messages").append(article);
   }
   byId("messages").scrollTop = 0;
-  byId("annotator").value = original.annotator;
+  byId("annotator").value = original.annotator === data.draft_annotator ? "" : original.annotator;
   byId("complete").checked = original.review === "complete";
   for (const [id, kind, entries] of [
     ["commitments", "commitment", original.commitments],
@@ -248,7 +249,7 @@ byId("unclear").onclick = () => {
 byId("editor").onsubmit = async event => {
   event.preventDefault();
   const ticket = {
-    ...original, annotator: byId("annotator").value.trim(),
+    ...original, annotator: byId("annotator").value.trim() || original.annotator,
     review: byId("complete").checked ? "complete" : "pending",
     commitments: rows("commitments"), ambiguous: rows("ambiguities"),
   };
@@ -298,6 +299,8 @@ class Labels:
         self.sheet = annotation_sheet(bundle, bundle_sha)
         self.saved_sha = None
         if path.exists():
+            if not path.stat().st_mode & S_IWUSR:
+                raise ValueError("This label file is read-only. Open the review copy.")
             sheet, self.saved_sha = read_frozen(path)
             if (
                 sheet.keys() != self.sheet.keys()
@@ -320,6 +323,7 @@ class Labels:
             "labels": self.sheet,
             "states": sorted(STATES),
             "unclear": sorted(UNCLEAR),
+            "draft_annotator": DRAFT_ANNOTATOR,
         }
 
     def save(self, original, ticket):
@@ -331,8 +335,8 @@ class Labels:
             raise ValueError("Labels changed on disk or in another tab. Reload before saving.")
         if ticket.keys() != current.keys() or ticket["review"] not in ("pending", "complete"):
             raise ValueError("Invalid thread review.")
-        if ticket["review"] == "complete" and not ticket["annotator"].strip():
-            raise ValueError("Enter an annotator before marking the thread reviewed.")
+        if ticket["review"] == "complete" and ticket["annotator"].strip() in ("", DRAFT_ANNOTATOR):
+            raise ValueError("Enter your name before marking the thread reviewed.")
         validate(case, ticket)
         updated = self.sheet["tickets"].copy()
         updated[index] = ticket
