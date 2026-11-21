@@ -314,6 +314,10 @@ python -m duebook.bench.report results/round2/test2.json --dev results/round2/de
 python -m duebook.bench.review --split test2  # regenerate the human spot-check
 ```
 
+[Evaluator V2](docs/evaluator-v2.md) is an optional offline scorer for human-adjudicated
+semantic identities, lifecycle episodes, and deadline-clock alerts. The existing benchmark
+commands use V1.
+
 `duebook.bench` builds simulated tickets the other way round: the events are
 planted first and the conversation is written around them, so the labels are
 true by construction. A ticket has 50-64 messages (200-230 with the `long`
