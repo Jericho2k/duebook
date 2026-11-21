@@ -366,7 +366,7 @@ def main(argv: Sequence[str]) -> None:
             if args.manifest and not (is_twitter or is_jira):
                 raise ValueError("--manifest is only available for TWCS or Jira preparation")
             if is_jira and any(v is not None for v in (args.random, args.challenge, args.exclude)):
-                raise ValueError("Jira uses the fixed 15-issue draw and project caps")
+                raise ValueError("Jira uses the budgeted draw and project caps")
             exclusions = read(args.exclude) if args.exclude else None
             if is_twitter:
                 source = args.twcs_csv
@@ -381,7 +381,7 @@ def main(argv: Sequence[str]) -> None:
                     raise ValueError("source snapshot changed during the draw")
             elif is_jira:
                 snapshot, source_sha = read_frozen(args.jira_snapshot)
-                result = draw_jira(snapshot, args.seed)
+                result = draw_jira(snapshot, args.seed, estimate)
             else:
                 source = args.github_frame
                 source_sha = digest(source)
