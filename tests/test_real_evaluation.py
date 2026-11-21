@@ -13,7 +13,7 @@ import pytest
 
 from duebook.bench import real
 from duebook.bench.experiment import make_methods
-from duebook.bench.real_labels import compare, validate
+from duebook.bench.real_labels import compare, reviewed, validate
 from duebook.bench.real_sources import (
     digest,
     draw,
@@ -28,6 +28,7 @@ from duebook.card import Party
 from duebook.events import AssigneeChanged, MessagePosted, Role, Side
 from duebook.proposals import MakeCommitment
 from duebook.reducer import replay
+from scripts.label_twcs import Labels
 
 
 def case():
@@ -137,7 +138,7 @@ def test_twitter_signoff_change_precedes_reply_and_preserves_message_anchor():
         ]
     )
     ticket = to_ticket(conversation)
-    first, handoff, reply = ticket.events[1], ticket.events[3], ticket.events[4]
+    first, _, handoff, reply = ticket.events[2:]
     assert first.author.id == "2:JS"
     assert isinstance(handoff, AssigneeChanged)
     assert (handoff.id, handoff.previous, handoff.current) == ("twcs:4:handoff", "2:JS", "2:KM")
@@ -152,12 +153,26 @@ def test_twitter_signoff_change_precedes_reply_and_preserves_message_anchor():
               "deadline": {"kind": "absent", "at": None, "evidence": []},
               "fulfillment": {"state": "unknown", "evidence": []}}], "ambiguous": []}  # fmt: skip
     validate(conversation, label)
-    snap = Snapshot(checkpoints(ticket)[-1], (Promise(Side.COMPANY, 5, "get back to you", None),))
+    snap = Snapshot(
+        checkpoints(ticket)[-1], (Promise(Side.COMPANY, reply.seq, "get back to you", None),)
+    )
     counts, _, _ = compare(conversation, label, snap)
     assert counts.tp == 1
 
 
-def test_twitter_unsigned_company_reply_breaks_signoff_adjacency():
+def test_twitter_first_signer_is_assigned_before_reply():
+    conversation = case()
+    conversation["messages"][1]["text"] = "I'll check. ^JS"
+    opener, assignment, reply = to_ticket(conversation).events
+    assert isinstance(assignment, AssigneeChanged)
+    assert (assignment.previous, assignment.current) == (None, "2:JS")
+    assert assignment.seq + 1 == reply.seq and assignment.at == reply.at
+    proposal = MakeCommitment(Party.COMPANY, "check", "I'll check")
+    card = replay(conversation["id"], [(opener, ()), (assignment, ()), (reply, (proposal,))])
+    assert card.commitments[0].responsible == "2:JS"
+
+
+def test_twitter_handoff_keeps_last_signer_across_unsigned_company_replies():
     conversation = case()
     company = conversation["messages"][1]
     company["text"] = "I'll check. ^JS"
@@ -167,7 +182,11 @@ def test_twitter_unsigned_company_reply_breaks_signoff_adjacency():
             company | {"id": "4", "text": "I'll get back to you. -AB"},
         ]
     )
-    assert all(isinstance(event, MessagePosted) for event in to_ticket(conversation).events)
+    _, _, _, unsigned, handoff, reply = to_ticket(conversation).events
+    assert isinstance(unsigned, MessagePosted) and unsigned.author.id == "2"
+    assert isinstance(handoff, AssigneeChanged)
+    assert (handoff.previous, handoff.current) == ("2:JS", "2:AB")
+    assert (unsigned.seq + 1, reply.seq - 1) == (handoff.seq, handoff.seq)
 
 
 def test_github_reporter_role_is_stable_even_with_team_association(tmp_path):
@@ -223,6 +242,48 @@ def test_unknown_fulfillment_is_unjudged_and_quotes_must_be_verbatim():
     label["commitments"][0]["opening"][0]["quote"] = "invented quote"
     with pytest.raises(ValueError, match="invalid evidence"):
         validate(conversation, label)
+
+
+def test_labeling_page_writes_the_validated_annotation_sheet(tmp_path):
+    conversation = case()
+    promise, confirmation = "I'll check today.", "I got the update."
+    conversation["messages"][1]["text"] = promise
+    conversation["messages"].append(
+        conversation["messages"][0]
+        | {"id": "3", "at": conversation["messages"][1]["at"], "text": confirmation}
+    )
+    bundle = {"schema": 1, "cases": [conversation], "model_output": "ignored"}
+    bundle_path, labels_path = tmp_path / "twcs.json", tmp_path / "labels.json"
+    write(bundle_path, bundle)
+    page = Labels(bundle_path, labels_path)
+    initial = page.data()
+    assert "model_output" not in initial
+    (original,) = initial["labels"]["tickets"]
+    ticket = original | {
+        "review": "complete",
+        "annotator": "Test reviewer",
+        "commitments": [{
+            "id": "P1",
+            "action": "check",
+            "owner_side": "company",
+            "owner_actor_id": "2",
+            "opening": [{"message_id": "2", "quote": promise}],
+            "deadline": {
+                "kind": "exact",
+                "at": "2017-11-02T23:59:00+00:00",
+                "evidence": [{"message_id": "2", "quote": "today"}],
+            },
+            "fulfillment": {
+                "state": "fulfilled",
+                "evidence": [{"message_id": "3", "quote": confirmation}],
+            },
+        }],
+    }
+    page.save(original, ticket)
+    updated = ticket | {"annotator": "Reviewer"}
+    reopened = Labels(bundle_path, labels_path)
+    reopened.save(ticket, updated)
+    assert reviewed(bundle, read(labels_path), digest(bundle_path)) == {"twcs:1": updated}
 
 
 def test_live_preflight_precedes_any_request_and_reuses_the_meters_and_report(

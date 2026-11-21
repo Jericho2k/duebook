@@ -26,6 +26,7 @@ TWCS_PROMISE = re.compile(
     re.IGNORECASE,
 )
 SIGN_OFF = re.compile(r"[*^-]([A-Z]{2,4})\s*$")
+TWCS_ASSIGNMENT_RULE = "first sign-off assigns and later sign-offs transfer across unsigned replies"
 TWCS_FILTERS = ("fewer_than_six_messages", "fewer_than_two_per_side", "no_company_promise_wording")
 
 
@@ -43,8 +44,8 @@ def read_frozen(path: Path):
     return json.loads(data), hashlib.sha256(data).hexdigest()
 
 
-def write(path: Path, value) -> None:
-    # Write once and atomically publish the complete file. A failed run leaves no partial JSON.
+def write(path: Path, value, *, overwrite: bool = False) -> None:
+    # Atomically publish the complete file. A failed write leaves no partial JSON.
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
@@ -54,10 +55,13 @@ def write(path: Path, value) -> None:
             temporary = Path(stream.name)
             json.dump(value, stream, indent=2, ensure_ascii=False)
             stream.write("\n")
-        path.hardlink_to(temporary)
+        if overwrite:
+            temporary.replace(path)
+        else:
+            path.hardlink_to(temporary)
     finally:
         if temporary is not None:
-            temporary.unlink()
+            temporary.unlink(missing_ok=True)
 
 
 def instant(value: str) -> datetime:
@@ -289,6 +293,7 @@ def draw_twitter(csv_path, hasher, seed, count, exclusions=None):
     return {
         "seed": seed,
         "frame_counts": dict(counts),
+        "assignment_rule": TWCS_ASSIGNMENT_RULE,
         **({"local_review_exclusions": exclusions} if exclusions else {}),
         "cases": selected,
     }
@@ -344,18 +349,18 @@ def to_ticket(case) -> SimTicket:
             if sign_off:
                 initials = sign_off[1]
                 actor = Actor(f"{actor.id}:{initials}", role, initials)
-                if previous_signer and previous_signer.name != initials:
+                if previous_signer != actor:
                     events.append(
                         AssigneeChanged(
                             id=f"{event_id}:handoff",
                             ticket_id=case["id"],
                             seq=len(events) + 1,
                             at=at,
-                            previous=previous_signer.id,
+                            previous=previous_signer.id if previous_signer else None,
                             current=actor.id,
                         )
                     )
-            previous_signer = actor if sign_off else None
+                previous_signer = actor
         events.append(
             MessagePosted(
                 id=event_id,
@@ -385,7 +390,7 @@ def source_messages(case, ticket):
 def twitter_manifest(bundle, bundle_sha):
     selected = []
     for case in bundle["cases"]:
-        handoffs = sum(isinstance(e, AssigneeChanged) for e in to_ticket(case).events)
+        changes = [e for e in to_ticket(case).events if isinstance(e, AssigneeChanged)]
         messages = case["messages"]
         selected.append(
             {
@@ -393,7 +398,8 @@ def twitter_manifest(bundle, bundle_sha):
                 "tweet_ids": [m["id"] for m in messages],
                 "brand_ids": sorted({m["actor_id"] for m in messages if m["role"] == Role.AGENT}),
                 "messages": len(messages),
-                "handoffs": handoffs,
+                "initial_assignment": any(e.previous is None for e in changes),
+                "handoffs": sum(e.previous is not None for e in changes),
             }
         )
     return {
@@ -402,6 +408,8 @@ def twitter_manifest(bundle, bundle_sha):
         "bundle_sha256": bundle_sha,
         "seed": bundle["seed"],
         "frame_counts": bundle["frame_counts"],
+        "assignment_rule": bundle["assignment_rule"],
+        "threads_with_initial_assignment": sum(t["initial_assignment"] for t in selected),
         "threads_with_handoffs": sum(thread["handoffs"] > 0 for thread in selected),
         "selected": selected,
     }
