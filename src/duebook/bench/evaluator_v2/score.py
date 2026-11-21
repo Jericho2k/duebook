@@ -10,7 +10,7 @@ from ...card import Party
 from ...events import MessagePosted
 from ...lifecycle import AlertPolicy, NoticeKind, notices
 from ..score import TOLERANCE, Counts, same_deadline
-from .labels import Expected, Labels, Obligation, require
+from .labels import AlertWindow, Expected, Labels, Obligation, require
 from .replay import Frame, Prediction, Trace, logical_id, predictions
 
 TERMINAL = {"fulfilled", "cancelled", "superseded", "lapsed"}
@@ -292,47 +292,54 @@ def _observe_notices(frame, paired, policy, first_alerts):
     return active
 
 
+def _in_window(alert: dict, window: AlertWindow) -> bool:
+    return (
+        alert["gold"] == window.gold and alert["kind"] == window.kind and window.covers(alert["at"])
+    )
+
+
+def _alert_order(alert: dict) -> tuple:
+    return alert["at"], alert["seq"], alert["key"]
+
+
 def alert_exposure(labels, frame, active, first_alerts):
     findings = []
-    for a in active:
-        windows = [
-            w
-            for w in labels.alerts
-            if w.gold == a["gold"] and w.kind == a["kind"] and w.start <= frame.at < w.end
-        ]
-        for w in windows:
-            if w.expected_at is None:
-                findings.append(Finding("false_alert_eligibility", w.gold, (), a["key"]))
+    for window in labels.alerts:
+        if not window.start <= frame.at < window.end:
+            continue
+        first = min(
+            (a for a in first_alerts.values() if _in_window(a, window)),
+            key=_alert_order,
+            default=None,
+        )
+        expected = window.expected_at
+        if expected is not None and expected <= frame.at and first is None:
+            findings.append(Finding("expected_alert_wait", window.gold, (), window.kind))
+        for alert in (a for a in active if _in_window(a, window)):
+            emission = first_alerts[alert["key"]]
+            if expected is None or (_in_window(emission, window) and first is not emission):
+                findings.append(Finding("false_alert_eligibility", window.gold, (), alert["key"]))
             elif (
-                w.covers(first_alerts[a["key"]]["at"])
-                and first_alerts[a["key"]]["at"] < w.expected_at - TOLERANCE
-                and frame.at < w.expected_at
+                first is emission and emission["at"] < expected - TOLERANCE and frame.at < expected
             ):
-                findings.append(Finding("premature_alert_eligibility", w.gold, (), a["key"]))
-        if a["known_extra"]:
-            findings.append(Finding("false_alert_eligibility", a["prediction"], (), a["key"]))
-    for w in labels.alerts:
-        if (
-            w.expected_at is not None
-            and w.expected_at <= frame.at < w.end
-            and not any(
-                a["gold"] == w.gold and a["kind"] == w.kind and w.covers(a["at"])
-                for a in first_alerts.values()
-            )
-        ):
-            findings.append(Finding("expected_alert_wait", w.gold, (), w.kind))
+                findings.append(
+                    Finding("premature_alert_eligibility", window.gold, (), alert["key"])
+                )
+    findings.extend(
+        Finding("false_alert_eligibility", a["prediction"], (), a["key"])
+        for a in active
+        if a["known_extra"]
+    )
     return findings
 
 
 def score_alerts(labels: Labels, observed: list[dict]) -> dict:
-    observed = sorted(observed, key=lambda a: (a["at"], a["seq"], a["key"]))
+    observed = sorted(observed, key=_alert_order)
     totals: Counter = Counter()
     assigned = set()
     rows = []
     for w in labels.alerts:
-        eligible = [
-            a for a in observed if a["gold"] == w.gold and a["kind"] == w.kind and w.covers(a["at"])
-        ]
+        eligible = [a for a in observed if _in_window(a, w)]
         totals["windows_judged"] += 1
         if w.expected_at is not None:
             totals["expected"] += 1

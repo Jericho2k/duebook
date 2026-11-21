@@ -11,7 +11,14 @@ from duebook.bench.evaluator_v2.__main__ import main, read
 from duebook.bench.evaluator_v2.attribution import attribute
 from duebook.bench.evaluator_v2.labels import Labels, time_of
 from duebook.bench.evaluator_v2.replay import Frame, Trace, predictions
-from duebook.bench.evaluator_v2.score import Durations, Finding, evaluate, match_identities
+from duebook.bench.evaluator_v2.score import (
+    Durations,
+    Finding,
+    alert_exposure,
+    evaluate,
+    match_identities,
+    score_alerts,
+)
 from duebook.bench.experiment import run_of, to_json
 from duebook.bench.generate import SPLITS, Gold, SimTicket
 from duebook.bench.rewrite import with_rewritten_text
@@ -154,6 +161,21 @@ def test_clock_scores_alerts_between_messages_and_genuine_renegotiation():
     assert any(r["gold"] == "postage" and r["expected"] == "superseded" and r["result"] == "correct"
                for r in changes)  # fmt: skip
     assert "invented_deadline" in result["lifecycle"]["by_kind"]
+
+
+def test_second_alert_key_in_one_judged_window_is_false_with_exposure():
+    trace, labels, _ = example(1)
+    only_call = replace(labels, alerts=tuple(w for w in labels.alerts if w.gold == "call"))
+    original = next(r for r in evaluate(trace, labels)["alerts"]["occurrences"]
+                    if r["result"] == "premature")  # fmt: skip
+    at = time_of("2026-01-01T12:10:00+00:00")
+    duplicate = dict(original, key="repeat", at=at)
+    counted = score_alerts(only_call, [duplicate, original])
+    assert counted["counts"]["premature"] == counted["counts"]["false"] == 1
+    frame = Frame(8, at, "clock", trace.cards[8])
+    assert alert_exposure(
+        only_call, frame, [duplicate], {r["key"]: r for r in (duplicate, original)}
+    ) == [Finding("false_alert_eligibility", "call", (), "repeat")]
 
 
 def test_attribution_records_stage_evidence_and_leaves_unadjudicated_causes_open():
