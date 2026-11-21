@@ -1,0 +1,50 @@
+{
+  "source_snapshot_sha256": "42a1a0d64e9f1a2911c34bdeab286f8ac19925fabedf22a4b50fd858008ca720",
+  "seed": 7373,
+  "frame_counts": {
+    "fewer_than_50_comments": 178,
+    "snapshot_unavailable": 0,
+    "no_assignee_change": 4,
+    "span_under_two_weeks": 0,
+    "without_company_undertaking": 59,
+    "eligible_100_plus": 64,
+    "eligible_50_to_99": 4,
+    "missing_text_from_both_sides": 10
+  },
+  "search_projects": [
+    "atlassian:JRACLOUD",
+    "atlassian:CONFCLOUD",
+    "atlassian:JSDCLOUD",
+    "atlassian:BCLOUD",
+    "redhat:JBIDE",
+    "redhat:WFLY",
+    "redhat:JBEAP",
+    "redhat:RHEL",
+    "redhat:OCPBUGS",
+    "redhat:RESTEASY",
+    "redhat:ENTESB",
+    "redhat:TEIID",
+    "redhat:QUARKUS"
+  ],
+  "per_project": 20,
+  "comment_floor": 100,
+  "bundle_sha256": "d273b35d96cd6ec271c1d1217b7e658ebec88a907f676f4d3035186cd16878e9",
+  "below_100_comments": 0,
+  "selected": [
+    {"issue": "BCLOUD-13021", "url": "https://jira.atlassian.com/browse/BCLOUD-13021", "tracker": "atlassian", "project": "BCLOUD", "comments": 223, "handoffs": 2, "status_changes": 13, "undertaking_comments": 1, "span_days": 1679.2, "comment_bytes": 38535, "code_log_bytes": 0, "code_log_lines": 0, "code_log_comments": 0},
+    {"issue": "JBIDE-2720", "url": "https://redhat.atlassian.net/browse/JBIDE-2720", "tracker": "redhat", "project": "JBIDE", "comments": 117, "handoffs": 6, "status_changes": 9, "undertaking_comments": 0, "span_days": 3178.94, "comment_bytes": 37053, "code_log_bytes": 210, "code_log_lines": 9, "code_log_comments": 1},
+    {"issue": "JSDCLOUD-8389", "url": "https://jira.atlassian.com/browse/JSDCLOUD-8389", "tracker": "atlassian", "project": "JSDCLOUD", "comments": 304, "handoffs": 2, "status_changes": 4, "undertaking_comments": 1, "span_days": 2035.01, "comment_bytes": 56368, "code_log_bytes": 0, "code_log_lines": 0, "code_log_comments": 0},
+    {"issue": "JRACLOUD-96247", "url": "https://jira.atlassian.com/browse/JRACLOUD-96247", "tracker": "atlassian", "project": "JRACLOUD", "comments": 451, "handoffs": 3, "status_changes": 1, "undertaking_comments": 1, "span_days": 69.94, "comment_bytes": 184785, "code_log_bytes": 1483, "code_log_lines": 15, "code_log_comments": 5},
+    {"issue": "BCLOUD-13452", "url": "https://jira.atlassian.com/browse/BCLOUD-13452", "tracker": "atlassian", "project": "BCLOUD", "comments": 212, "handoffs": 2, "status_changes": 3, "undertaking_comments": 1, "span_days": 2073.57, "comment_bytes": 50119, "code_log_bytes": 1164, "code_log_lines": 34, "code_log_comments": 3},
+    {"issue": "JSDCLOUD-270", "url": "https://jira.atlassian.com/browse/JSDCLOUD-270", "tracker": "atlassian", "project": "JSDCLOUD", "comments": 539, "handoffs": 2, "status_changes": 8, "undertaking_comments": 1, "span_days": 2053.93, "comment_bytes": 226812, "code_log_bytes": 2566, "code_log_lines": 67, "code_log_comments": 2},
+    {"issue": "JRACLOUD-63150", "url": "https://jira.atlassian.com/browse/JRACLOUD-63150", "tracker": "atlassian", "project": "JRACLOUD", "comments": 1181, "handoffs": 5, "status_changes": 6, "undertaking_comments": 1, "span_days": 3440.18, "comment_bytes": 268313, "code_log_bytes": 5598, "code_log_lines": 229, "code_log_comments": 4},
+    {"issue": "BCLOUD-5814", "url": "https://jira.atlassian.com/browse/BCLOUD-5814", "tracker": "atlassian", "project": "BCLOUD", "comments": 291, "handoffs": 5, "status_changes": 1, "undertaking_comments": 1, "span_days": 3837.38, "comment_bytes": 36423, "code_log_bytes": 1140, "code_log_lines": 34, "code_log_comments": 4},
+    {"issue": "JRACLOUD-37520", "url": "https://jira.atlassian.com/browse/JRACLOUD-37520", "tracker": "atlassian", "project": "JRACLOUD", "comments": 315, "handoffs": 12, "status_changes": 4, "undertaking_comments": 1, "span_days": 3120.27, "comment_bytes": 49035, "code_log_bytes": 0, "code_log_lines": 0, "code_log_comments": 0},
+    {"issue": "JRACLOUD-88861", "url": "https://jira.atlassian.com/browse/JRACLOUD-88861", "tracker": "atlassian", "project": "JRACLOUD", "comments": 232, "handoffs": 3, "status_changes": 5, "undertaking_comments": 1, "span_days": 1752.57, "comment_bytes": 51047, "code_log_bytes": 0, "code_log_lines": 0, "code_log_comments": 0},
+    {"issue": "CONFCLOUD-2853", "url": "https://jira.atlassian.com/browse/CONFCLOUD-2853", "tracker": "atlassian", "project": "CONFCLOUD", "comments": 133, "handoffs": 2, "status_changes": 2, "undertaking_comments": 0, "span_days": 6997.75, "comment_bytes": 29667, "code_log_bytes": 0, "code_log_lines": 0, "code_log_comments": 0},
+    {"issue": "CONFCLOUD-58656", "url": "https://jira.atlassian.com/browse/CONFCLOUD-58656", "tracker": "atlassian", "project": "CONFCLOUD", "comments": 300, "handoffs": 4, "status_changes": 7, "undertaking_comments": 0, "span_days": 2644.29, "comment_bytes": 114025, "code_log_bytes": 1379, "code_log_lines": 20, "code_log_comments": 5},
+    {"issue": "CONFCLOUD-78513", "url": "https://jira.atlassian.com/browse/CONFCLOUD-78513", "tracker": "atlassian", "project": "CONFCLOUD", "comments": 225, "handoffs": 4, "status_changes": 4, "undertaking_comments": 0, "span_days": 2529.24, "comment_bytes": 65088, "code_log_bytes": 1065, "code_log_lines": 24, "code_log_comments": 1},
+    {"issue": "JSDCLOUD-5878", "url": "https://jira.atlassian.com/browse/JSDCLOUD-5878", "tracker": "atlassian", "project": "JSDCLOUD", "comments": 493, "handoffs": 6, "status_changes": 6, "undertaking_comments": 0, "span_days": 2621.26, "comment_bytes": 112403, "code_log_bytes": 569, "code_log_lines": 7, "code_log_comments": 3},
+    {"issue": "CONFCLOUD-3191", "url": "https://jira.atlassian.com/browse/CONFCLOUD-3191", "tracker": "atlassian", "project": "CONFCLOUD", "comments": 107, "handoffs": 3, "status_changes": 1, "undertaking_comments": 0, "span_days": 7700.82, "comment_bytes": 40324, "code_log_bytes": 0, "code_log_lines": 0, "code_log_comments": 0}
+  ]
+}
