@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -20,7 +21,18 @@ from ..temporal import WorkCalendar
 from .experiment import make_methods, run_all, run_of, saved
 from .meter import Ledger
 from .real_labels import compare, reviewed
-from .real_sources import digest, draw, github, read, read_frozen, to_ticket, twitter, write
+from .real_sources import (
+    digest,
+    draw,
+    draw_twitter,
+    github,
+    read,
+    read_frozen,
+    source_messages,
+    to_ticket,
+    twitter_manifest,
+    write,
+)
 from .result import checkpoints
 from .score import Counts
 
@@ -183,10 +195,14 @@ def report(bundle, labels, record, synthetic):
     for raw in record["runs"]:
         run = run_of(raw)
         case = cases[run.ticket_id]
-        (snap,) = run.snapshots
-        if run.method != "event_memory" or (snap.checkpoint,) != checkpoints(to_ticket(case)):
-            raise ValueError(f"unexpected snapshot for {run.ticket_id}")
-        sections[case["source"], case["cohort"]].append((case, run, snap))
+        ticket = to_ticket(case)
+        if run.method != "event_memory" or tuple(
+            snap.checkpoint for snap in run.snapshots
+        ) != checkpoints(ticket):
+            raise ValueError(f"unexpected snapshots for {run.ticket_id}")
+        sections[case["source"], case["cohort"]].append(
+            (case, run, run.snapshots[-1], source_messages(case, ticket))
+        )
     lines = [
         "# Duebook real-world evaluation results",
         "",
@@ -198,13 +214,13 @@ def report(bundle, labels, record, synthetic):
         f"stress projection ${record['estimate']['stress_usd']:.4f}.",
         "",
         f"Source frame counts `{json.dumps(bundle['frame_counts'], sort_keys=True)}`. "
-        f"Seed {bundle['seed']}. One checkpoint per ticket at the last observed message.",
+        f"Seed {bundle['seed']}. Scores use the last observed message in each ticket.",
     ]
     for (source, cohort), rows in sorted(sections.items()):
         total, fields, kinds, examples = Counts(), Counter(), Counter(), defaultdict(list)
         costs, times, pods, usage = [], [], Counter(), Usage()
         failed = unread = messages = 0
-        for case, run, snap in rows:
+        for case, run, snap, messages_by_seq in rows:
             score, metrics, errors = compare(case, labels[run.ticket_id], snap)
             total += score
             fields.update(metrics)
@@ -224,10 +240,10 @@ def report(bundle, labels, record, synthetic):
                 kinds[kind] += 1
                 if len(examples[kind]) < 3:
                     links = [
-                        f"[message {s}]({case['messages'][s - 1]['url']})"
-                        if case["messages"][s - 1].get("url")
-                        else f"tweet ID `{case['messages'][s - 1]['id']}`"
-                        for s in seqs
+                        f"[message {s}]({messages_by_seq[s]['url']})"
+                        if messages_by_seq[s].get("url")
+                        else f"tweet ID `{messages_by_seq[s]['id']}`"
+                        for s in seqs if s in messages_by_seq
                     ]
                     examples[kind].append(", ".join(links) or f"[{case['id']}]({case['url']})")
         lines.extend(
@@ -274,8 +290,9 @@ def main(argv: Sequence[str]) -> None:
     sources.add_argument("--twcs-csv", type=Path)
     prepare.add_argument("--github-comments", type=Path)
     prepare.add_argument("--seed", type=int, default=7373)
-    prepare.add_argument("--random", type=int, default=40)
-    prepare.add_argument("--challenge", type=int, default=10)
+    prepare.add_argument("--random", type=int)
+    prepare.add_argument("--challenge", type=int)
+    prepare.add_argument("--manifest", type=Path, help="TWCS link-level manifest output")
     prepare.add_argument("--exclude", type=Path, help="JSON mapping case IDs to review reasons")
     for command in ("prepare", "estimate", "annotations", "run", "report"):
         sub = prepare if command == "prepare" else cmds.add_parser(command)
@@ -293,18 +310,42 @@ def main(argv: Sequence[str]) -> None:
     args = parser.parse_args(argv)
     try:
         if args.cmd == "prepare":
-            if min(args.random, args.challenge) < 0 or args.random + args.challenge == 0:
+            is_twitter = args.twcs_csv is not None
+            random_count = args.random if args.random is not None else (30 if is_twitter else 40)
+            challenge_count = (
+                args.challenge if args.challenge is not None else (0 if is_twitter else 10)
+            )
+            if min(random_count, challenge_count) < 0 or random_count + challenge_count == 0:
                 raise ValueError("cohort sizes must be nonnegative and select at least one case")
             if bool(args.github_frame) != bool(args.github_comments):
                 raise ValueError("GitHub preparation requires a frame and comment snapshots")
-            source = args.github_frame or args.twcs_csv
-            source_sha = digest(source)
-            cases = github(source, args.github_comments) if args.github_frame else twitter(source)
+            if is_twitter and challenge_count:
+                raise ValueError("TWCS only supports a random cohort")
+            if args.manifest and not is_twitter:
+                raise ValueError("--manifest is only available for TWCS preparation")
             exclusions = read(args.exclude) if args.exclude else None
-            result = draw(cases, args.seed, args.random, args.challenge, exclusions)
-            if digest(source) != source_sha:
-                raise ValueError("source snapshot changed during the draw")
-            write(args.bundle, result | {"schema": 1, "source_snapshot_sha256": source_sha})
+            if is_twitter:
+                source = args.twcs_csv
+                before = source.stat()
+                hasher = hashlib.sha256()
+                result = draw_twitter(source, hasher, args.seed, random_count, exclusions)
+                source_sha = hasher.hexdigest()
+                after = source.stat()
+                if (before.st_ino, before.st_size, before.st_mtime_ns) != (
+                    after.st_ino, after.st_size, after.st_mtime_ns
+                ):
+                    raise ValueError("source snapshot changed during the draw")
+            else:
+                source = args.github_frame
+                source_sha = digest(source)
+                cases = github(source, args.github_comments)
+                result = draw(cases, args.seed, random_count, challenge_count, exclusions)
+                if digest(source) != source_sha:
+                    raise ValueError("source snapshot changed during the draw")
+            bundle = result | {"schema": 1, "source_snapshot_sha256": source_sha}
+            write(args.bundle, bundle)
+            if args.manifest:
+                write(args.manifest, twitter_manifest(bundle, digest(args.bundle)))
             return
         bundle, bundle_sha = read_frozen(args.bundle)
         if bundle["schema"] != 1:

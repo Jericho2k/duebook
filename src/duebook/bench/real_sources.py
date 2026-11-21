@@ -4,18 +4,29 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import io
 import json
 import random
+import re
+import sqlite3
 from collections import Counter, defaultdict
+from contextlib import closing
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
-from ..events import Actor, MessagePosted, Role
+from ..events import Actor, AssigneeChanged, MessagePosted, Role
 from .generate import Gold, SimTicket
 
 TWCS = "https://www.kaggle.com/datasets/thoughtvector/customer-support-on-twitter"
 TEAM = {"OWNER", "MEMBER", "COLLABORATOR"}
+TWCS_PROMISE = re.compile(
+    r"\b(?:(?:we|i)['’]ll|(?:we|i)\s+will|follow[\s-]+up|get back to you|within|"
+    r"by tomorrow|24 hours?|business days?|refund|replace|send)\b",
+    re.IGNORECASE,
+)
+SIGN_OFF = re.compile(r"[*^-]([A-Z]{2,4})\s*$")
+TWCS_FILTERS = ("fewer_than_six_messages", "fewer_than_two_per_side", "no_company_promise_wording")
 
 
 def digest(path: Path) -> str:
@@ -117,9 +128,46 @@ def github(frame: Path, comments: Path):
         yield case, None
 
 
-def twitter(csv_path: Path):
-    # Keep source-local reply IDs, including edges whose endpoints are missing from the export.
-    rows, parents = {}, {}
+class _HashedCSV(io.FileIO):
+    def __init__(self, path, hasher):
+        super().__init__(path)
+        self.hasher = hasher
+
+    def readinto(self, buffer):
+        size = super().readinto(buffer)
+        self.hasher.update(memoryview(buffer)[:size])
+        return size
+
+
+def twitter(csv_path: Path, hasher, seed: int):
+    # Spill text to disk so only IDs and reply components scale with the corpus in RAM.
+    fields = (
+        "author_id", "inbound", "created_at", "text",
+        "response_tweet_id", "in_response_to_tweet_id",
+    )  # fmt: skip
+    with TemporaryDirectory() as scratch, closing(sqlite3.connect(Path(scratch) / "twcs.db")) as db:
+        db.execute(
+            "CREATE TABLE tweets (id INTEGER PRIMARY KEY, actor TEXT, inbound TEXT, "
+            "created TEXT, body TEXT, replies TEXT, parent TEXT)"
+        )
+        try:
+            with io.TextIOWrapper(
+                io.BufferedReader(_HashedCSV(csv_path, hasher)), encoding="utf-8-sig", newline=""
+            ) as stream:
+                db.executemany(
+                    "INSERT INTO tweets VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        (int(row["tweet_id"]), *(row[field] for field in fields))
+                        for row in csv.DictReader(stream)
+                    ),
+                )
+        except sqlite3.IntegrityError as error:
+            raise ValueError("TWCS tweet IDs must be unique integers") from error
+        yield from _twitter_threads(db, seed)
+
+
+def _twitter_components(db):
+    parents = {key: key for (key,) in db.execute("SELECT id FROM tweets ORDER BY id")}
 
     def root(key):
         while parents[key] != key:
@@ -127,38 +175,38 @@ def twitter(csv_path: Path):
             key = parents[key]
         return key
 
-    with csv_path.open(encoding="utf-8-sig", newline="") as stream:
-        for row in csv.DictReader(stream):
-            key = int(row["tweet_id"])
-            if key in rows:
-                raise ValueError(f"duplicate TWCS tweet_id {key}")
-            rows[key] = (
-                row["author_id"],
-                row["inbound"],
-                row["created_at"],
-                row["text"],
-                row["response_tweet_id"],
-                row["in_response_to_tweet_id"],
-            )
-            parents[key] = key
-    for key, (_, _, _, _, replies, parent) in rows.items():
-        for linked in filter(None, [parent, *replies.split(",")]):
+    for key, replies, parent in db.execute("SELECT id, replies, parent FROM tweets"):
+        for linked in filter(None, [parent, *(replies or "").split(",")]):
             neighbor = int(linked)
             if neighbor in parents:
                 left, right = sorted((root(key), root(neighbor)))
                 parents[right] = left
-    threads = defaultdict(list)
-    for key in rows:
-        threads[root(key)].append(key)
-    for thread, ids in threads.items():
+    threads, roots = defaultdict(list), []
+    for key in parents:
+        thread = root(key)
+        if key == thread:
+            roots.append(key)
+        else:
+            threads[thread].append(key)
+    return roots, threads
+
+
+def _twitter_threads(db, seed):
+    roots, threads = _twitter_components(db)
+    random.Random(seed).shuffle(roots)
+    roles = {"true": Role.CUSTOMER, "false": Role.AGENT}
+    for thread in roots:
         case = {"id": f"twcs:{thread}", "url": TWCS, "source": "twcs"}
-        if len(ids) < 2:
-            yield case, "single_message"
+        ids = threads.pop(thread, ())
+        if len(ids) < 5:
+            yield case, TWCS_FILTERS[0]
             continue
         messages = []
-        for key in ids:
-            actor, inbound, created, body, replies, parent = rows[key]
-            role = {"true": Role.CUSTOMER, "false": Role.AGENT}.get((inbound or "").lower())
+        for key in (thread, *ids):
+            actor, inbound, created, body, replies, parent = db.execute(
+                "SELECT actor, inbound, created, body, replies, parent FROM tweets WHERE id = ?",
+                (key,),
+            ).fetchone()
             messages.append(
                 {
                     "id": str(key),
@@ -166,13 +214,21 @@ def twitter(csv_path: Path):
                     "created_at": created,
                     "actor_id": actor,
                     "inbound": inbound,
-                    "role": role,
+                    "role": roles.get((inbound or "").lower()),
                     "role_basis": "derived:twcs_inbound",
                     "reply_ids": replies,
                     "parent_id": parent,
                 }
             )
-        yield case | {"messages": messages}, None
+        counts = Counter(m["role"] for m in messages if (m["text"] or "").strip())
+        if min(counts[Role.CUSTOMER], counts[Role.AGENT]) < 2:
+            yield case, TWCS_FILTERS[1]
+        elif not any(
+            m["role"] == Role.AGENT and TWCS_PROMISE.search(m["text"] or "") for m in messages
+        ):
+            yield case, TWCS_FILTERS[2]
+        else:
+            yield case | {"messages": messages}, None
 
 
 def normalized(case, exclusion):
@@ -201,16 +257,7 @@ def span(case) -> timedelta:
     return instant(messages[-1]["at"]) - instant(messages[0]["at"])
 
 
-def draw(
-    candidates,
-    seed: int,
-    random_count: int,
-    challenge_count: int,
-    exclusions: dict[str, str] | None = None,
-) -> dict:
-    counts: Counter[str] = Counter()
-    eligible = []
-    exclusions = exclusions or {}
+def _eligible(candidates, counts, exclusions):
     unseen = set(exclusions)
     for case, exclusion in candidates:
         if case["id"] in exclusions:
@@ -222,9 +269,40 @@ def draw(
         reason = normalized(case, exclusion)
         counts[reason or "eligible"] += 1
         if reason is None:
-            eligible.append(case)
+            yield case
     if unseen:
         raise ValueError(f"local review exclusions absent from source frame: {sorted(unseen)}")
+
+
+def draw_twitter(csv_path, hasher, seed, count, exclusions=None):
+    counts = Counter(dict.fromkeys(TWCS_FILTERS, 0))
+    brands = Counter()
+    selected = []
+    candidates = twitter(csv_path, hasher, seed)
+    for case in _eligible(candidates, counts, exclusions or {}):
+        accounts = {m["actor_id"] for m in case["messages"] if m["role"] == Role.AGENT}
+        if len(selected) < count and all(brands[account] < 5 for account in accounts):
+            brands.update(accounts)
+            selected.append(case | {"cohort": "random"})
+    if len(selected) != count:
+        raise ValueError(f"selected only {len(selected)} of {count} TWCS cases: {dict(counts)}")
+    return {
+        "seed": seed,
+        "frame_counts": dict(counts),
+        **({"local_review_exclusions": exclusions} if exclusions else {}),
+        "cases": selected,
+    }
+
+
+def draw(
+    candidates,
+    seed: int,
+    random_count: int,
+    challenge_count: int,
+    exclusions: dict[str, str] | None = None,
+) -> dict:
+    counts: Counter[str] = Counter()
+    eligible = list(_eligible(candidates, counts, exclusions or {}))
     if len(eligible) < random_count:
         raise ValueError(f"only {len(eligible)} eligible cases for {random_count} random cases")
     eligible.sort(key=lambda case: case["id"])
@@ -254,17 +332,76 @@ def draw(
 
 
 def to_ticket(case) -> SimTicket:
-    events = tuple(
-        MessagePosted(
-            id=f"{case['source']}:{m['id']}",
-            ticket_id=case["id"],
-            seq=seq,
-            at=instant(m["at"]),
-            author=Actor(m["actor_id"], Role(m["role"])),
-            text=m["text"],
+    events = []
+    previous_signer = None
+    for message in case["messages"]:
+        event_id = f"{case['source']}:{message['id']}"
+        at = instant(message["at"])
+        role = Role(message["role"])
+        actor = Actor(message["actor_id"], role)
+        if case["source"] == "twcs" and role == Role.AGENT:
+            sign_off = SIGN_OFF.search(message["text"])
+            if sign_off:
+                initials = sign_off[1]
+                actor = Actor(f"{actor.id}:{initials}", role, initials)
+                if previous_signer and previous_signer.name != initials:
+                    events.append(
+                        AssigneeChanged(
+                            id=f"{event_id}:handoff",
+                            ticket_id=case["id"],
+                            seq=len(events) + 1,
+                            at=at,
+                            previous=previous_signer.id,
+                            current=actor.id,
+                        )
+                    )
+            previous_signer = actor if sign_off else None
+        events.append(
+            MessagePosted(
+                id=event_id,
+                ticket_id=case["id"],
+                seq=len(events) + 1,
+                at=at,
+                author=actor,
+                text=message["text"],
+            )
         )
-        for seq, m in enumerate(case["messages"], 1)
-    )
     if any(before.at > after.at for before, after in zip(events, events[1:], strict=False)):
         raise ValueError("bundle messages are out of order")
-    return SimTicket(case["id"], events, (), Gold(), events[-1].at)
+    return SimTicket(case["id"], tuple(events), (), Gold(), events[-1].at)
+
+
+def source_messages(case, ticket):
+    return {
+        event.seq: message
+        for event, message in zip(
+            (e for e in ticket.events if isinstance(e, MessagePosted)),
+            case["messages"],
+            strict=True,
+        )
+    }
+
+
+def twitter_manifest(bundle, bundle_sha):
+    selected = []
+    for case in bundle["cases"]:
+        handoffs = sum(isinstance(e, AssigneeChanged) for e in to_ticket(case).events)
+        messages = case["messages"]
+        selected.append(
+            {
+                "thread_id": case["id"],
+                "tweet_ids": [m["id"] for m in messages],
+                "brand_ids": sorted({m["actor_id"] for m in messages if m["role"] == Role.AGENT}),
+                "messages": len(messages),
+                "handoffs": handoffs,
+            }
+        )
+    return {
+        "source": TWCS,
+        "source_snapshot_sha256": bundle["source_snapshot_sha256"],
+        "bundle_sha256": bundle_sha,
+        "seed": bundle["seed"],
+        "frame_counts": bundle["frame_counts"],
+        "threads_with_handoffs": sum(thread["handoffs"] > 0 for thread in selected),
+        "selected": selected,
+    }

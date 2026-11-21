@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections import Counter
 
 from ..card import Party
+from ..events import MessagePosted
 from .generate import Fate, GoldCommitment
-from .real_sources import instant
+from .real_sources import instant, source_messages, to_ticket
 from .result import PromiseStatus
 from .score import Counts, match, same_deadline
 
@@ -37,8 +38,10 @@ def reviewed(bundle, labels, bundle_sha):
 
 
 def validate(case, label):
-    messages = {m["id"]: (seq, m) for seq, m in enumerate(case["messages"], 1)}
-    actors = {m["actor_id"] for _, m in messages.values()}
+    ticket = to_ticket(case)
+    messages = {m["id"]: (seq, m) for seq, m in source_messages(case, ticket).items()}
+    actors = {e.author.id for e in ticket.events if isinstance(e, MessagePosted)}
+    actors.update(m["actor_id"] for _, m in messages.values())
 
     def evidence(items, earliest=1):
         for item in items:
@@ -87,7 +90,7 @@ def validate(case, label):
 
 def compare(case, label, snapshot):
     """Use synthetic anchor matching, then grade only evidence-backed fields."""
-    ids = {m["id"]: seq for seq, m in enumerate(case["messages"], 1)}
+    ids = {m["id"]: seq for seq, m in source_messages(case, to_ticket(case)).items()}
     excluded = {
         ids[item["evidence"][0]["message_id"]]
         for item in label["ambiguous"]
