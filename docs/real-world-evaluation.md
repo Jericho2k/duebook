@@ -1,12 +1,63 @@
 # Duebook real-world evaluation
 
-T17 replays frozen public support conversations through the existing event-memory benchmark and judges the card at the last observed message. The first run uses 30 English TWCS threads. Public transcripts can omit direct messages, deleted posts, work in other systems, and later outcomes.
+T17 replays frozen public conversations through the existing event-memory benchmark and judges the card at the last observed event. The active cohort is public Jira. Public transcripts can omit private comments, deleted posts, work in other systems, and later outcomes.
 
-## Source and permitted use
+## Public Jira intake
+
+Atlassian's public Jira returned search results, comments and expanded change histories anonymously. The legacy Red Hat URL redirected to Jira Cloud. The old search endpoint returned HTTP 410, and bounded searches on the current v3 API and raw comments via v2 worked without login. Apache also returned anonymous search, comments and an expanded issue history. Atlassian and Red Hat filled the draw, so no Apache issues were selected. [Atlassian Jira](https://jira.atlassian.com) · [Red Hat Jira](https://redhat.atlassian.net) · [Apache Jira](https://issues.apache.org/jira).
+
+The bounded frame took up to 20 results per project from 13 projects, ordered by votes descending and key ascending. It favors heavily discussed public issues and gives counts for this frame. Seed 7373 selected 15 issues across BCLOUD, CONFCLOUD, JBIDE, JRACLOUD and JSDCLOUD. Fourteen are Atlassian and one is Red Hat. All have at least 100 comments, at least one assignee change, and at least two weeks between the first and last observed comment or mapped change. The smallest has 107 comments and the largest has 1,181. The project maximum in the draw is four. [Jira manifest](../results/real-world/jira-intake.json).
+
+| Intake step | Issues |
+|---|---:|
+| Search frame | 260 |
+| Removed below the 50-comment retrieval floor | 178 |
+| Removed for incomplete anonymous snapshots | 0 |
+| Removed for missing readable evidence from both inferred human sides | 10 |
+| Removed without an assignee change | 4 |
+| Removed below the two-week span | 0 |
+| Removed at the final 100-comment floor | 4 |
+| Eligible at 100 comments or more | 64 |
+| Selected | 15 |
+
+A case-insensitive text prefilter looked for concrete release or dated follow-up wording in comments from inferred company actors. It found matches in nine of the 64 eligible issues at the 100-comment floor. All nine entered the draw. Six unmarked cases filled the remaining slots. The prefilter measures wording, and each supposed undertaking still needs review.
+
+### Event mapping and text
+
+Each public comment becomes a message in its original Jira text, with a link to the comment. Changelog assignee transitions become handoffs, including transitions to or from unassigned. Status transitions become status events. Source timestamps are normalized to UTC, and changelog changes precede comments at equal timestamps. Fix-version changes establish an actor's role.
+
+Roles are inferred from the public snapshot. Bot accounts and automation names map to system. The reporter maps to customer. Other actors map to company if the snapshot lists them as the current or a historical assignee or as the author of a status or fix-version change. All other commenters map to customer. These are ticket roles inferred from activity, and employment status is unverified.
+
+The selected issues contain 5,123 comments, 61 handoffs and 74 status changes. The manifest reports code or log counts per issue. A line heuristic recognizes Jira code and noformat blocks, Markdown fences, common logs and stack frames. It flagged 28 comments and 439 lines, or 15,174 of 1,359,997 UTF-8 bytes. Raw bodies include the flagged text and stay in the private cache.
+
+The existing estimator projects **$3.140195212 expected** and **$15.820273840 under stress** for the Jira cohort. Model spend is **$0**. The estimate includes the code and logs in the raw comment bodies.
+
+### Recreate the Jira intake
+
+```bash
+root=.cache/real-world
+python -m duebook.bench.experiment real jira-snapshot "$root/jira-snapshot.json" \
+  --project atlassian:JRACLOUD --project atlassian:CONFCLOUD \
+  --project atlassian:JSDCLOUD --project atlassian:BCLOUD \
+  --project redhat:JBIDE --project redhat:WFLY --project redhat:JBEAP \
+  --project redhat:RHEL --project redhat:OCPBUGS --project redhat:RESTEASY \
+  --project redhat:ENTESB --project redhat:TEIID --project redhat:QUARKUS
+python -m duebook.bench.experiment real prepare "$root/jira.json" \
+  --jira-snapshot "$root/jira-snapshot.json" --manifest "$root/jira-intake.json"
+python -m duebook.bench.experiment real estimate "$root/jira.json"
+```
+
+The snapshot and frozen bundle are private. The checked-in manifest records their SHA-256 digests and the draw's links and counts. Re-freezing from the saved snapshot reproduces the draw. Use a fresh directory to fetch current API content.
+
+## Parked TWCS cohort
+
+The TWCS artifacts and tooling are retained for reproducibility. TWCS labeling and inference are parked while Jira is the active cohort.
+
+### Source and permitted use
 
 This is a non-commercial academic evaluation for an HSE master's project. Thought Vector published TWCS on Kaggle with PointScrape credited. CC BY-NC-SA 4.0 permits non-commercial use with attribution. Raw messages and human labels stay local. The paid run sends text through OpenRouter to DeepInfra and requests zero data retention and no training use. The owner's local approval records the basis and spend limit. [TWCS data card](https://www.kaggle.com/datasets/thoughtvector/customer-support-on-twitter) · [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) · [OpenRouter ZDR](https://openrouter.ai/docs/guides/features/zdr).
 
-## Frozen TWCS draw
+### Frozen TWCS draw
 
 Seed 7373 selected 30 threads and 342 messages across 21 brands. At most three selected threads feature any one brand. Of 798,197 reply components, 695,654 had fewer than six messages, 5,245 had fewer than two readable messages per side, and 52,432 had no company message with promise or time wording. These sequential cuts left 44,866 eligible threads. The re-freeze preserves the selected message IDs and records the revised assignment rule in the bundle hash. The separate VS Code intake remains archived for future work. [TWCS manifest](../results/real-world/twcs-intake.json) · [Archived VS Code manifest](../results/real-world/intake.json).
 
@@ -24,7 +75,7 @@ The TWCS `inbound` flag maps source accounts to the customer or company side. A 
 
 The TWCS-only estimate is **$0.194044004 expected** and **$1.027915280 under stress**. The Part B cap is **$0.40**. Model spend to date is **$0**. The scenarios assume 1.1 and 2 calls per readable message, respectively, with 3,000 or 6,000 fixed and card input tokens plus twice the body size in UTF-8 bytes, and 150 or 1,500 output tokens per call. Both use uncached pricing of $0.14 input and $0.42 output per million tokens. [OpenRouter price listing](https://openrouter.ai/deepseek/deepseek-v4.1-flash).
 
-## Label before running a model
+### Label before running a model
 
 From the PR checkout, using Python 3.12 with Duebook installed, serve the labeling page on loopback.
 
@@ -53,7 +104,7 @@ python -m duebook.bench.experiment real compare-labels "$root/twcs.json" \
 
 It lists added, removed and changed promises on threads you marked reviewed. Anchor agreement divides the number of shared opening-message IDs by their union, counting once for each promise. Labels on the same message are paired by preserved ID first. Edits to side, action, deadline or outcome can agree on the anchor. A sample without anchors has no agreement percentage.
 
-## Reproduce the draw and estimate
+### Reproduce the draw and estimate
 
 Use a fresh local output directory to preserve the files used for labeling. The importer reads and hashes the CSV in one pass. A temporary disk database holds the text while the importer groups messages by in-file reply edges.
 
@@ -66,7 +117,7 @@ python -m duebook.bench.experiment real estimate "$repro/twcs.json" | tee "$repr
 
 The checked-in manifest contains tweet and brand IDs, counts, and hashes. The local bundle contains raw text. Keep it with the labels and any eventual prompts, model replies, or saved proposals under `.cache/real-world/`.
 
-## Part B — TWCS only
+### Parked TWCS run procedure
 
 Start after the owner confirms blind labeling is complete and signs off on inference. The local approval JSON records `bundle_sha256`, `labels_sha256`, `route`, `external_inference` set to `true`, `approved_by`, `rights_and_provider_basis`, `max_usd`, and `estimate` copied from the estimate output. Use the hash of the final label file.
 

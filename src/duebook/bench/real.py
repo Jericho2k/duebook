@@ -20,6 +20,7 @@ from ..extract.cost import PRICES, Usage
 from ..temporal import WorkCalendar
 from .experiment import make_methods, run_all, run_of, saved
 from .meter import Ledger
+from .real_jira import draw_jira, jira_manifest, snapshot_jira
 from .real_labels import compare, compare_review, reviewed
 from .real_sources import (
     digest,
@@ -243,7 +244,7 @@ def report(bundle, labels, record, synthetic, *, annotation_review=None):
         f"stress projection ${record['estimate']['stress_usd']:.4f}.",
         "",
         f"Source frame counts `{json.dumps(bundle['frame_counts'], sort_keys=True)}`. "
-        f"Seed {bundle['seed']}. Scores use the last observed message in each ticket.",
+        f"Seed {bundle['seed']}. Scores use the last observed event in each ticket.",
     ]
     if annotation_review is not None:
         lines.extend(review_section(annotation_review))
@@ -319,11 +320,15 @@ def main(argv: Sequence[str]) -> None:
     sources = prepare.add_mutually_exclusive_group(required=True)
     sources.add_argument("--github-frame", type=Path)
     sources.add_argument("--twcs-csv", type=Path)
+    sources.add_argument("--jira-snapshot", type=Path)
+    jira = cmds.add_parser("jira-snapshot")
+    jira.add_argument("snapshot", type=Path)
+    jira.add_argument("--project", action="append", required=True, help="tracker:PROJECT")
     prepare.add_argument("--github-comments", type=Path)
     prepare.add_argument("--seed", type=int, default=7373)
     prepare.add_argument("--random", type=int)
     prepare.add_argument("--challenge", type=int)
-    prepare.add_argument("--manifest", type=Path, help="TWCS link-level manifest output")
+    prepare.add_argument("--manifest", type=Path, help="TWCS or Jira link-level manifest output")
     prepare.add_argument("--exclude", type=Path, help="JSON mapping case IDs to review reasons")
     for command in ("prepare", "estimate", "annotations", "compare-labels", "run", "report"):
         sub = prepare if command == "prepare" else cmds.add_parser(command)
@@ -342,8 +347,12 @@ def main(argv: Sequence[str]) -> None:
             sub.add_argument("--max-usd", required=True, type=float)
     args = parser.parse_args(argv)
     try:
+        if args.cmd == "jira-snapshot":
+            snapshot_jira(args.snapshot, args.project)
+            return
         if args.cmd == "prepare":
             is_twitter = args.twcs_csv is not None
+            is_jira = args.jira_snapshot is not None
             random_count = args.random if args.random is not None else (30 if is_twitter else 40)
             challenge_count = (
                 args.challenge if args.challenge is not None else (0 if is_twitter else 10)
@@ -354,8 +363,10 @@ def main(argv: Sequence[str]) -> None:
                 raise ValueError("GitHub preparation requires a frame and comment snapshots")
             if is_twitter and challenge_count:
                 raise ValueError("TWCS only supports a random cohort")
-            if args.manifest and not is_twitter:
-                raise ValueError("--manifest is only available for TWCS preparation")
+            if args.manifest and not (is_twitter or is_jira):
+                raise ValueError("--manifest is only available for TWCS or Jira preparation")
+            if is_jira and any(v is not None for v in (args.random, args.challenge, args.exclude)):
+                raise ValueError("Jira uses the fixed 15-issue draw and project caps")
             exclusions = read(args.exclude) if args.exclude else None
             if is_twitter:
                 source = args.twcs_csv
@@ -368,6 +379,9 @@ def main(argv: Sequence[str]) -> None:
                     after.st_ino, after.st_size, after.st_mtime_ns
                 ):
                     raise ValueError("source snapshot changed during the draw")
+            elif is_jira:
+                snapshot, source_sha = read_frozen(args.jira_snapshot)
+                result = draw_jira(snapshot, args.seed)
             else:
                 source = args.github_frame
                 source_sha = digest(source)
@@ -378,7 +392,8 @@ def main(argv: Sequence[str]) -> None:
             bundle = result | {"schema": 1, "source_snapshot_sha256": source_sha}
             write(args.bundle, bundle)
             if args.manifest:
-                write(args.manifest, twitter_manifest(bundle, digest(args.bundle)))
+                manifest = jira_manifest if is_jira else twitter_manifest
+                write(args.manifest, manifest(bundle, digest(args.bundle)))
             return
         bundle, bundle_sha = read_frozen(args.bundle)
         if bundle["schema"] != 1:

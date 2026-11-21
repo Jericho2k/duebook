@@ -11,11 +11,12 @@ import re
 import sqlite3
 from collections import Counter, defaultdict
 from contextlib import closing
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
-from ..events import Actor, AssigneeChanged, MessagePosted, Role
+from ..events import Actor, AssigneeChanged, MessagePosted, Role, StatusChanged
 from .generate import Gold, SimTicket
 
 TWCS = "https://www.kaggle.com/datasets/thoughtvector/customer-support-on-twitter"
@@ -373,6 +374,21 @@ def to_ticket(case) -> SimTicket:
         )
     if any(before.at > after.at for before, after in zip(events, events[1:], strict=False)):
         raise ValueError("bundle messages are out of order")
+    if case["source"] == "jira":
+        for change in case["changes"]:
+            kind = {"assignee": AssigneeChanged, "status": StatusChanged}[change["kind"]]
+            events.append(
+                kind(
+                    id=f"jira:{change['id']}",
+                    ticket_id=case["id"],
+                    seq=1,
+                    at=instant(change["at"]),
+                    previous=change["previous"],
+                    current=change["current"],
+                )
+            )
+        events.sort(key=lambda event: (event.at, isinstance(event, MessagePosted)))
+        events = [replace(event, seq=seq) for seq, event in enumerate(events, 1)]
     return SimTicket(case["id"], tuple(events), (), Gold(), events[-1].at)
 
 
