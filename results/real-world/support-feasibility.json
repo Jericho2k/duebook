@@ -1,0 +1,450 @@
+{
+  "callcenteren": {
+    "archive": "customer_service_general_inbound.zip",
+    "calls_with_nonblank_speaker": 0,
+    "json_records": 1217,
+    "record_schemas": [
+      {
+        "keys": [
+          "audio_duration",
+          "confidence",
+          "redacted_pii_policies",
+          "text",
+          "words"
+        ],
+        "records": 1217
+      }
+    ],
+    "sha256": "43c1eae23ecd1db5afdcee54bcd7d38b15511faaf2775ae89006c48b183edb01",
+    "verified_qualifying_in_archive": 0,
+    "word_keys": [
+      "confidence",
+      "end",
+      "speaker",
+      "start",
+      "text"
+    ],
+    "word_rows_without_speaker": 2594674
+  },
+  "csds": {
+    "dialogues": 10701,
+    "entries_by_speaker": {
+      "A": 138942,
+      "Q": 138457
+    },
+    "files": {
+      "test": {
+        "dialogs": 800,
+        "sha256": "7284125cbed0fb5beb7cd4526f3c1fd7b7a14add55862743bbd25d81a8ae86eb"
+      },
+      "train": {
+        "dialogs": 9101,
+        "sha256": "737f9be2c591b021dbfa1ff177b4ff0e5d8f81f03d3158ab9ea9a2fdaeed8909"
+      },
+      "val": {
+        "dialogs": 800,
+        "sha256": "2a2a806146b5b6f39aaa280531ca067a02a98bdb4092f63de4f808024d141c61"
+      }
+    },
+    "released_dialogue_entries": {
+      "at_least": {
+        "100": 0,
+        "150": 0,
+        "200": 0,
+        "300": 0,
+        "50": 442,
+        "75": 5
+      },
+      "in_100_to_300": 0,
+      "max": 79,
+      "median": 24,
+      "min": 7,
+      "p75": 32.0,
+      "p90": 42.0,
+      "p95": 48.0,
+      "p99": 61.0
+    },
+    "two_sided": 10701,
+    "verified_qualifying": 0
+  },
+  "mendeley": {
+    "archive_sha256": "574913d32c7f210efe9591392e57ba30753e627651cf44e4f610ce57d1d90e29",
+    "checks": {
+      "blank_grouped_bodies": 0,
+      "blank_utterance_rows": 23,
+      "comments_with_fragment_sequence_gap": 2,
+      "duplicate_fragment_keys": 0,
+      "email_like_comments": 0,
+      "ipv4_like_comments": 0,
+      "missing_author": 0,
+      "missing_comment_timestamp": 0,
+      "missing_role": 0,
+      "phone_format_like_comments": 0,
+      "placeholder_comments": 5809,
+      "private_comments": 1690,
+      "same_ticket_author_time_payload_excess": 9,
+      "tickets_with_comment_sequence_gap": 2,
+      "tickets_with_reversed_created_order": 0,
+      "timestamps_without_offset": 0,
+      "utterance_rows": 30104,
+      "visible_comments_without_readable_words": 37
+    },
+    "coverage": {
+      "known_roles_visible_100_to_300": 2,
+      "readable_two_sided": 327,
+      "released_minus_metadata_+0": 3,
+      "released_minus_metadata_+1": 356,
+      "released_minus_metadata_+2": 1,
+      "visible_100_to_300_with_both_roles": 2
+    },
+    "doi": "10.17632/btm76zndnt.3",
+    "exclusion_reason_counts": {
+      "no_text_released": 66331,
+      "only_curated_fragments_original_completeness_unverified": 360,
+      "requester_assignee_exchange_not_observed": 33,
+      "under_100_readable_customer_visible_comments": 358
+    },
+    "files": {
+      "EXAMPLE.md": {
+        "bytes": 27503,
+        "sha256": "71de05944e1f1a3240d22716b292eb0586e00423b15bdf1a7513c6f66d945696"
+      },
+      "FEATURES.md": {
+        "bytes": 14794,
+        "sha256": "e9443bffac53623293274f8fc1860aec0cadde58056c9b31476d67005a60d495"
+      },
+      "db.png": {
+        "bytes": 475669,
+        "sha256": "44fce9a0449d706f2ae2eb85803358c76c1ead9f9caeefcff0a6ea6ae417f84d"
+      },
+      "holidays_by_country.csv": {
+        "bytes": 67198,
+        "sha256": "f97e9df840ea5ec74f9ffeadf3956e06f315197212d0d41469c6db92b5be68b2"
+      },
+      "issues.csv": {
+        "bytes": 20586538,
+        "sha256": "eab3b8857bc19bd917e0767fb9c30b7714d5468b25c5a1c1cd71a760e9602f02"
+      },
+      "issues_change_history.csv": {
+        "bytes": 18912269,
+        "sha256": "93f6d99893bac6eb755c075dc4a3c3f655cab7c6b4e2d54a3dca0b26e4b6a3c6"
+      },
+      "issues_snapshot.csv": {
+        "bytes": 28488246,
+        "sha256": "89975cd7e0868408ea7b0a701758d54a439255d7814fd3aa14b198f9ea543948"
+      },
+      "issues_snapshot_sample.xlsx": {
+        "bytes": 105863,
+        "sha256": "f9b4d947e231ad518d97774bc74d99f44324e472a83198ee0656c6880edb5e92"
+      },
+      "process-flow.png": {
+        "bytes": 47767,
+        "sha256": "e2961ba10b7b86d5af7025d7f4917d02d641c11ee03ec2aa63c4382740e7f5bf"
+      },
+      "sample_utterances.csv": {
+        "bytes": 3380477,
+        "sha256": "6486067634164a8d9fc361887b9b700965e704c9b03c87ef4e19275cccf30196"
+      }
+    },
+    "history": {
+      "assignee_rows": 62706,
+      "distinct_nonempty_assignee_masks": 472,
+      "duplicate_history_ids": 0,
+      "handoffs": 24130,
+      "rows": 257508,
+      "status_rows": 194802,
+      "tickets_with_assignee_history": 37414,
+      "tickets_with_handoffs": 16473
+    },
+    "length_screen_candidates": [
+      {
+        "comments_with_fragment_gaps": 0,
+        "exclusion_reasons": [
+          "only_curated_fragments_original_completeness_unverified"
+        ],
+        "handoffs": 1,
+        "private_comments": 54,
+        "readable_known_side_count": 102,
+        "readable_visible_comment_count": 142,
+        "released_comment_count": 196,
+        "reported_comment_count": 195,
+        "ticket_type": "Ticket",
+        "unique_released_author_masks": 8,
+        "visible_known_role_switches": 50,
+        "visible_placeholder_counts": {
+          "ph_country": 5,
+          "ph_item": 1,
+          "ph_items": 7,
+          "ph_link": 4,
+          "ph_name": 6,
+          "ph_path": 4,
+          "ph_technical": 32,
+          "ph_user": 85
+        },
+        "visible_roles": {
+          "assignee": 62,
+          "others": 40,
+          "reporter": 40
+        },
+        "visible_workflow_markers": {
+          "assignee": {
+            "approval": 1,
+            "diagnostics": 7,
+            "follow_up": 0,
+            "planned_action": 8,
+            "relative_time": 0,
+            "request": 35,
+            "resolution": 0
+          },
+          "reporter": {
+            "approval": 0,
+            "diagnostics": 8,
+            "follow_up": 4,
+            "planned_action": 1,
+            "relative_time": 0,
+            "request": 1,
+            "resolution": 0
+          }
+        }
+      },
+      {
+        "comments_with_fragment_gaps": 0,
+        "exclusion_reasons": [
+          "only_curated_fragments_original_completeness_unverified"
+        ],
+        "handoffs": 1,
+        "private_comments": 17,
+        "readable_known_side_count": 118,
+        "readable_visible_comment_count": 134,
+        "released_comment_count": 151,
+        "reported_comment_count": 150,
+        "ticket_type": "Ticket",
+        "unique_released_author_masks": 7,
+        "visible_known_role_switches": 61,
+        "visible_placeholder_counts": {
+          "ph_country": 1,
+          "ph_item": 1,
+          "ph_items": 5,
+          "ph_link": 10,
+          "ph_name": 5,
+          "ph_technical": 14,
+          "ph_user": 111
+        },
+        "visible_roles": {
+          "assignee": 80,
+          "others": 16,
+          "reporter": 38
+        },
+        "visible_workflow_markers": {
+          "assignee": {
+            "approval": 0,
+            "diagnostics": 12,
+            "follow_up": 0,
+            "planned_action": 32,
+            "relative_time": 2,
+            "request": 66,
+            "resolution": 2
+          },
+          "reporter": {
+            "approval": 2,
+            "diagnostics": 0,
+            "follow_up": 1,
+            "planned_action": 2,
+            "relative_time": 1,
+            "request": 22,
+            "resolution": 2
+          }
+        }
+      },
+      {
+        "comments_with_fragment_gaps": 0,
+        "exclusion_reasons": [
+          "under_100_readable_customer_visible_comments",
+          "only_curated_fragments_original_completeness_unverified"
+        ],
+        "handoffs": 1,
+        "private_comments": 32,
+        "readable_known_side_count": 51,
+        "readable_visible_comment_count": 88,
+        "released_comment_count": 120,
+        "reported_comment_count": 119,
+        "ticket_type": "Ticket",
+        "unique_released_author_masks": 12,
+        "visible_known_role_switches": 14,
+        "visible_placeholder_counts": {
+          "ph_code": 3,
+          "ph_file": 2,
+          "ph_link": 2,
+          "ph_logs": 3,
+          "ph_name": 13,
+          "ph_path": 7,
+          "ph_sql": 4,
+          "ph_technical": 28,
+          "ph_user": 72
+        },
+        "visible_roles": {
+          "assignee": 10,
+          "others": 37,
+          "reporter": 41
+        },
+        "visible_workflow_markers": {
+          "assignee": {
+            "approval": 0,
+            "diagnostics": 3,
+            "follow_up": 0,
+            "planned_action": 5,
+            "relative_time": 0,
+            "request": 1,
+            "resolution": 0
+          },
+          "reporter": {
+            "approval": 0,
+            "diagnostics": 12,
+            "follow_up": 8,
+            "planned_action": 3,
+            "relative_time": 0,
+            "request": 20,
+            "resolution": 0
+          }
+        }
+      },
+      {
+        "comments_with_fragment_gaps": 0,
+        "exclusion_reasons": [
+          "under_100_readable_customer_visible_comments",
+          "only_curated_fragments_original_completeness_unverified"
+        ],
+        "handoffs": 1,
+        "private_comments": 18,
+        "readable_known_side_count": 59,
+        "readable_visible_comment_count": 81,
+        "released_comment_count": 100,
+        "reported_comment_count": 99,
+        "ticket_type": "Ticket",
+        "unique_released_author_masks": 8,
+        "visible_known_role_switches": 23,
+        "visible_placeholder_counts": {
+          "ph_items": 3,
+          "ph_link": 2,
+          "ph_name": 3,
+          "ph_technical": 9,
+          "ph_user": 58
+        },
+        "visible_roles": {
+          "assignee": 45,
+          "others": 22,
+          "reporter": 14
+        },
+        "visible_workflow_markers": {
+          "assignee": {
+            "approval": 1,
+            "diagnostics": 0,
+            "follow_up": 0,
+            "planned_action": 24,
+            "relative_time": 0,
+            "request": 32,
+            "resolution": 1
+          },
+          "reporter": {
+            "approval": 0,
+            "diagnostics": 0,
+            "follow_up": 3,
+            "planned_action": 0,
+            "relative_time": 0,
+            "request": 7,
+            "resolution": 0
+          }
+        }
+      }
+    ],
+    "license": "CC BY 4.0",
+    "published_metadata_all_tickets": {
+      "at_least": {
+        "100": 212,
+        "150": 74,
+        "200": 30,
+        "300": 7,
+        "50": 1029,
+        "75": 436
+      },
+      "in_100_to_300": 205,
+      "max": 685,
+      "median": 5,
+      "min": 0,
+      "p75": 10.0,
+      "p90": 18.0,
+      "p95": 27.0,
+      "p99": 61.0
+    },
+    "publisher_index_sha256": "125ce017eb774be28915322ea1d968633eb692986ad6a9fd7c27a8099c3b4b4f",
+    "readable_visible_comments_by_role": {
+      "assignee": 2686,
+      "others": 1291,
+      "reporter": 1582
+    },
+    "readable_visible_comments_text_sample": {
+      "at_least": {
+        "100": 2,
+        "150": 0,
+        "200": 0,
+        "300": 0,
+        "50": 21,
+        "75": 6
+      },
+      "in_100_to_300": 2,
+      "max": 142,
+      "median": 8.0,
+      "min": 2,
+      "p75": 19.0,
+      "p90": 36.0,
+      "p95": 53.0,
+      "p99": 80.41
+    },
+    "readable_visible_known_sides_text_sample": {
+      "at_least": {
+        "100": 2,
+        "150": 0,
+        "200": 0,
+        "300": 0,
+        "50": 10,
+        "75": 2
+      },
+      "in_100_to_300": 2,
+      "max": 118,
+      "median": 6.0,
+      "min": 1,
+      "p75": 14.0,
+      "p90": 29.0,
+      "p95": 43.0,
+      "p99": 60.82
+    },
+    "released_comment_ids_text_sample": {
+      "at_least": {
+        "100": 4,
+        "150": 2,
+        "200": 0,
+        "300": 0,
+        "50": 33,
+        "75": 13
+      },
+      "in_100_to_300": 4,
+      "max": 196,
+      "median": 11.0,
+      "min": 3,
+      "p75": 25.25,
+      "p90": 46.1,
+      "p95": 58.0,
+      "p99": 99.41
+    },
+    "released_comments_by_role": {
+      "assignee": 3116,
+      "others": 2573,
+      "reporter": 1597
+    },
+    "sample_workbook_explicit_issue_ids": 360,
+    "ticket_count": 66691,
+    "tickets_with_released_text": 360,
+    "unique_released_author_masks": 265,
+    "verified_qualifying": 0
+  }
+}
