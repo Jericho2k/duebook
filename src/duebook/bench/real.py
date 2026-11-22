@@ -17,11 +17,14 @@ from zoneinfo import ZoneInfo
 
 from ..extract.client import DEFAULT_MODEL, openrouter_fields, settings_for
 from ..extract.cost import PRICES, Usage
+from ..reducer import Guards
 from ..temporal import WorkCalendar
 from .experiment import make_methods, run_all, run_of, saved
 from .meter import Ledger
+from .methods import Recorded
 from .real_jira import draw_jira, jira_manifest, snapshot_jira
-from .real_labels import compare, compare_review, reviewed
+from .real_labels import compare, compare_review, index_labels, reviewed, validate
+from .real_mendeley import prepare as prepare_mendeley
 from .real_sources import (
     digest,
     draw,
@@ -39,6 +42,8 @@ from .score import Counts
 
 ROUTE = "OpenRouter / DeepInfra FP8 / " + DEFAULT_MODEL
 SYNTHETIC = Path("results/round10/test5.json")
+CALENDAR = WorkCalendar(ZoneInfo("UTC"))
+ROUND_10_GUARDS = Guards(rules=5)
 
 
 def estimate(bundle):
@@ -107,6 +112,44 @@ def preflight(bundle_sha, labels_sha, approval, projection, max_usd):
         raise ValueError("budget must be positive and within approval")
 
 
+def reference_method(bundle, ledger, *, recorded=None):
+    mendeley = any(case["source"] == "mendeley" for case in bundle["cases"])
+    if mendeley and any(case["source"] != "mendeley" for case in bundle["cases"]):
+        raise ValueError("Mendeley requires its own Round 10 reference configuration")
+    (method,) = make_methods(
+        ("event_memory",), DEFAULT_MODEL, ledger, WorkCalendar() if mendeley else CALENDAR,
+        recorded=recorded,
+    )
+    if mendeley:
+        method.guards = ROUND_10_GUARDS
+    return method
+
+
+def offline(bundle, labels, bundle_sha, out):
+    by_ticket = index_labels(bundle, labels, bundle_sha)
+    tickets = []
+    for case in bundle["cases"]:
+        validate(case, by_ticket[case["id"]])
+        tickets.append(to_ticket(case))
+    ledger = Ledger(0, PRICES[DEFAULT_MODEL])
+    method = reference_method(
+        bundle, ledger, recorded={ticket.ticket_id: Recorded() for ticket in tickets}
+    )
+    method.capture_trace = True
+    runs = run_all([method], tickets, 1)
+    if ledger.usd() or any(
+        run.failure or run.usage.calls or len(run.detail["event_trace"]) != len(ticket.events)
+        for ticket, run in zip(tickets, runs, strict=True)
+    ):
+        raise ValueError("offline fold did not complete with empty proposals")
+    anchors = {}
+    for case, run in zip(bundle["cases"], runs, strict=True):
+        (scored, _, _) = compare(case, by_ticket[run.ticket_id], run.snapshots[-1])
+        anchors[run.ticket_id] = asdict(scored)
+    write(out, {"bundle_sha256": bundle_sha, "spend_usd": 0, "runs": [saved(r) for r in runs],
+                "empty_proposal_anchor_counts": anchors})
+
+
 def live(bundle, labels_path, bundle_sha, approval, max_usd, out):
     projection = estimate(bundle)
     labels, labels_sha = read_frozen(labels_path)
@@ -121,9 +164,7 @@ def live(bundle, labels_path, bundle_sha, approval, max_usd, out):
     # An interrupted run keeps its partial journal. Reusing its name would reset the spend ledger.
     journal.touch(exist_ok=False, mode=0o600)
     ledger = Ledger(max_usd, PRICES[DEFAULT_MODEL])
-    (method,) = make_methods(
-        ("event_memory",), DEFAULT_MODEL, ledger, WorkCalendar(ZoneInfo("UTC"))
-    )
+    method = reference_method(bundle, ledger)
     for field in ("model", "escalation", "verifier"):
         client = getattr(method, field)
         provider = openrouter_fields(settings_for(client.model, client.reasoning))["provider"]
@@ -138,6 +179,7 @@ def live(bundle, labels_path, bundle_sha, approval, max_usd, out):
                 },
             ),
         )
+    method.capture_trace = any(case["source"] == "mendeley" for case in bundle["cases"])
     started = time.perf_counter()
     runs = run_all([method], [to_ticket(c) for c in bundle["cases"]], 1, journal=journal)
     write(
@@ -243,9 +285,19 @@ def report(bundle, labels, record, synthetic, *, annotation_review=None):
         f"Pre-run estimate ${record['estimate']['expected_usd']:.4f}, "
         f"stress projection ${record['estimate']['stress_usd']:.4f}.",
         "",
-        f"Source frame counts `{json.dumps(bundle['frame_counts'], sort_keys=True)}`. "
-        f"Seed {bundle['seed']}. Scores use the last observed event in each ticket.",
+        "Scores use the final observation checkpoint in each ticket.",
     ]
+    if "frame_counts" in bundle:
+        lines.append(f"Source frame counts `{json.dumps(bundle['frame_counts'], sort_keys=True)}`.")
+    if "seed" in bundle:
+        lines.append(f"Seed {bundle['seed']}.")
+    if any(case["source"] == "mendeley" for case in cases.values()):
+        lines.extend([
+            "",
+            "Exploratory, purpose-selected cases from a curated release. Some visible messages "
+            "were withheld because their participant side is uncertain. These two cases support "
+            "case-level inspection only.",
+        ])
     if annotation_review is not None:
         lines.extend(review_section(annotation_review))
     for (source, cohort), rows in sorted(sections.items()):
@@ -321,6 +373,9 @@ def main(argv: Sequence[str]) -> None:
     sources.add_argument("--github-frame", type=Path)
     sources.add_argument("--twcs-csv", type=Path)
     sources.add_argument("--jira-snapshot", type=Path)
+    mendeley = cmds.add_parser("prepare-mendeley")
+    for field in ("source", "manifest", "selection", "bundle", "review"):
+        mendeley.add_argument(field, type=Path)
     jira = cmds.add_parser("jira-snapshot")
     jira.add_argument("snapshot", type=Path)
     jira.add_argument("--project", action="append", required=True, help="tracker:PROJECT")
@@ -330,12 +385,14 @@ def main(argv: Sequence[str]) -> None:
     prepare.add_argument("--challenge", type=int)
     prepare.add_argument("--manifest", type=Path, help="TWCS or Jira link-level manifest output")
     prepare.add_argument("--exclude", type=Path, help="JSON mapping case IDs to review reasons")
-    for command in ("prepare", "estimate", "annotations", "compare-labels", "run", "report"):
+    for command in (
+        "prepare", "estimate", "annotations", "compare-labels", "offline", "run", "report"
+    ):
         sub = prepare if command == "prepare" else cmds.add_parser(command)
         sub.add_argument("bundle", type=Path)
-        if command in ("annotations", "report", "run"):
+        if command in ("annotations", "offline", "report", "run"):
             sub.add_argument("--out", required=True, type=Path)
-        if command in ("compare-labels", "run", "report"):
+        if command in ("compare-labels", "offline", "run", "report"):
             sub.add_argument("--labels", required=True, type=Path)
         if command in ("compare-labels", "report"):
             sub.add_argument("--draft-labels", required=command == "compare-labels", type=Path)
@@ -347,6 +404,11 @@ def main(argv: Sequence[str]) -> None:
             sub.add_argument("--max-usd", required=True, type=float)
     args = parser.parse_args(argv)
     try:
+        if args.cmd == "prepare-mendeley":
+            prepare_mendeley(
+                args.source, args.manifest, read(args.selection), args.bundle, args.review
+            )
+            return
         if args.cmd == "jira-snapshot":
             snapshot_jira(args.snapshot, args.project)
             return
@@ -405,6 +467,8 @@ def main(argv: Sequence[str]) -> None:
         elif args.cmd == "compare-labels":
             comparison = draft_comparison(bundle, bundle_sha, args.draft_labels, read(args.labels))
             print(json.dumps(comparison, indent=2, ensure_ascii=False))
+        elif args.cmd == "offline":
+            offline(bundle, read(args.labels), bundle_sha, args.out)
         elif args.cmd == "run":
             live(bundle, args.labels, bundle_sha, read(args.approval), args.max_usd, args.out)
         else:

@@ -1,4 +1,4 @@
-"""Serve a local editor for blind TWCS labels."""
+"""Serve a local editor for blind TWCS and Mendeley labels."""
 
 import argparse
 import json
@@ -14,7 +14,7 @@ from duebook.bench.real_sources import digest, read_frozen, write
 PAGE = r"""<!doctype html>
 <html lang="en"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TWCS labeling</title>
+<title>Support transcript labeling</title>
 <style>
   body { font: 16px system-ui; margin: 2rem auto; padding: 0 1rem; max-width: 88rem }
   h1, h2 { margin-top: 0 } h2 { font-size: 1.25rem }
@@ -26,12 +26,13 @@ PAGE = r"""<!doctype html>
   article, fieldset { border: 1px solid #a4aab4; border-radius: .35rem; padding: .65rem;
     margin: 0 0 .65rem; min-width: 0 }
   .customer { border-left: 4px solid #2271a5 } .agent { border-left: 4px solid #46743a }
+  .withheld { color: #4e5561; border-left: 4px solid #a4aab4 }
   .message { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: .4rem }
   #messages { max-height: 75vh; overflow: auto }
   #status { display: block; padding: .5rem 0 } #status.error { color: #ab1f21 }
   @media (max-width: 52rem) { main { display: block } #messages { max-height: 45vh } }
 </style>
-<h1>TWCS labeling</h1>
+<h1>Support transcript labeling</h1>
 <label>Thread <select id="thread" disabled></select></label>
 <output id="status" aria-live="polite">Loading frozen transcripts…</output>
 <main hidden>
@@ -107,7 +108,7 @@ document.addEventListener("selectionchange", () => {
   const {anchorNode, focusNode, anchorOffset, focusOffset} = selection;
   const message = anchorNode?.parentElement;
   if (selection.isCollapsed || anchorNode !== focusNode) return;
-  if (message?.classList.contains("message")) {
+  if (message?.classList.contains("message") && message.dataset.id) {
     const start = Math.min(anchorOffset, focusOffset);
     const end = Math.max(anchorOffset, focusOffset);
     selected = {message_id: message.dataset.id, quote: anchorNode.data.slice(start, end)};
@@ -124,7 +125,9 @@ function evidence(container, entries) {
     const source = item.querySelector("select");
     const box = item.querySelector("textarea");
     source.add(option("", "Choose a message"));
-    for (const m of active.messages) source.add(option(m.id, m.id + " · " + m.role));
+    for (const m of active.messages.filter(m => !m.withheld)) {
+      source.add(option(m.id, m.id + " · " + m.role));
+    }
     source.value = message_id;
     box.value = quote;
     item.querySelector(".selection").onclick = () => {
@@ -198,12 +201,13 @@ function show(id) {
   byId("messages").replaceChildren();
   for (const m of active.messages) {
     const article = document.createElement("article");
-    article.className = m.role;
+    article.className = m.withheld ? "withheld" : m.role;
     const heading = document.createElement("strong");
-    heading.textContent = m.id + " · " + m.role + " · " + m.actor_id + " · " + m.at;
+    heading.textContent = m.id + " · " + (m.author_role || m.role) + " · " + m.actor_id
+      + " · " + m.at + (m.withheld ? " · Role uncertain, review context only" : "");
     const body = document.createElement("div");
     body.className = "message";
-    body.dataset.id = m.id;
+    if (!m.withheld) body.dataset.id = m.id;
     body.textContent = m.text;
     article.append(heading, body);
     byId("messages").append(article);
@@ -288,14 +292,20 @@ fetch("/data").then(response => {
 
 
 class Labels:
-    def __init__(self, bundle_path: Path, path: Path):
+    def __init__(self, bundle_path: Path, path: Path, source_review: Path | None = None):
         bundle, bundle_sha = read_frozen(bundle_path)
         self.cases = {case["id"]: case for case in bundle["cases"]}
         if bundle["schema"] != 1 or not self.cases or any(
-            case["source"] != "twcs" for case in self.cases.values()
+            case["source"] not in ("twcs", "mendeley") for case in self.cases.values()
         ):
-            raise ValueError("a frozen TWCS bundle is required")
+            raise ValueError("a frozen TWCS or Mendeley bundle is required")
         self.path = path
+        self.context = {}
+        if source_review is not None:
+            release, _ = read_frozen(source_review)
+            if release["bundle_sha256"] != bundle_sha:
+                raise ValueError("source review file does not match the frozen bundle")
+            self.context = {case["id"]: case["messages"] for case in release["cases"]}
         self.sheet = annotation_sheet(bundle, bundle_sha)
         self.saved_sha = None
         if path.exists():
@@ -307,16 +317,25 @@ class Labels:
                 or sheet["bundle_sha256"] != bundle_sha
                 or [t["ticket_id"] for t in sheet["tickets"]] != list(self.cases)
             ):
-                raise ValueError("label file does not match the frozen TWCS bundle")
+                raise ValueError("label file does not match the frozen bundle")
             self.sheet = sheet
 
+    def messages(self, case):
+        eligible = {m["id"]: m for m in case["messages"]}
+        for message in self.context.get(case["id"], case["messages"]):
+            source = eligible.get(message["id"], message)
+            yield {k: source[k] for k in ("id", "text", "at", "actor_id")} | {
+                "role": source.get("role"),
+                "author_role": source.get("author_role"),
+                "withheld": source["id"] not in eligible,
+            }
+
     def data(self):
-        fields = ("id", "text", "at", "role", "actor_id")
         return {
             "cases": [
                 {
                     "id": case["id"],
-                    "messages": [{k: m[k] for k in fields} for m in case["messages"]],
+                    "messages": list(self.messages(case)),
                 }
                 for case in self.cases.values()
             ],
@@ -397,8 +416,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bundle", type=Path)
     parser.add_argument("labels", type=Path)
+    parser.add_argument("--source-review", type=Path)
     args = parser.parse_args()
     try:
-        run_server(Labels(args.bundle, args.labels))
+        run_server(Labels(args.bundle, args.labels, args.source_review))
     except (OSError, ValueError, KeyError) as error:
         parser.error(str(error))

@@ -375,8 +375,8 @@ def test_live_preflight_precedes_any_request_and_reuses_the_meters_and_report(
 
     with httpx.Client(transport=httpx.MockTransport(respond)) as client:
 
-        def fake_methods(*args):
-            (method,) = make_methods(*args)
+        def fake_methods(*args, **kwargs):
+            (method,) = make_methods(*args, **kwargs)
             method.model = replace(method.model, http=client)
             return [method]
 
@@ -405,3 +405,77 @@ def test_live_preflight_precedes_any_request_and_reuses_the_meters_and_report(
     assert "Historical synthetic `test5`" in rendered
     assert "Owner reviewed 1 of 1 threads." in rendered
     assert "Promise-anchor agreement on those threads was unavailable (no anchors)." in rendered
+
+
+def test_mendeley_rebuilds_public_boundaries_and_keeps_uncertain_roles_local(tmp_path):
+    from duebook.bench.real_mendeley import prepare
+
+    at = "2022-06-05 09:45:56+00:00"
+    later = "2022-06-06 08:00:00+00:00"
+    source = tmp_path / "release"
+    source.mkdir()
+    (source / "sample_utterances.csv").write_text(
+        "issueid,id,comment_seq,utr_seq,author,created,is_private,actionbody,author_role\n"
+        f"42,c1,1,2,r,{at},0.0,there,reporter\n"
+        f"42,c1,1,1,r,{at},0.0,is anyone,reporter\n"
+        f"42,c2,2,1,a,{later},0.0,will send to person@example.org,assignee\n"
+        f"42,c3,3,1,x,{later},0.0,wait for me,others\n"
+        f"42,c4,4,1,r,{later},1.0,private text,reporter\n",
+        encoding="utf-8",
+    )
+    (source / "issues.csv").write_text("id,issue_reporter\n42,r\n", encoding="utf-8")
+    (source / "issues_change_history.csv").write_text(
+        "id,issueid,field,value,created\n"
+        "1,42,assignee,a,2022-06-05 11:00:00+00:00\n",
+        encoding="utf-8",
+    )
+    manifest = tmp_path / "source.jsonl"
+    manifest.write_text(json.dumps({"ticket_id": "42", "comment_ids": ["c1", "c2", "c3", "c4"]}))
+    bundle_path, source_review = tmp_path / "bundle.json", tmp_path / "review.json"
+    selection = {"M1": {"id": "42", "visible": 3}}
+    prepare(source, manifest, selection, bundle_path, source_review)
+    rebuilt = tmp_path / "second.json"
+    prepare(source, manifest, selection, rebuilt, tmp_path / "second-review.json")
+    assert digest(bundle_path) == digest(rebuilt)
+
+    (selected,) = read(bundle_path)["cases"]
+    assert [(m["id"], m["text"], m["role"]) for m in selected["messages"]] == [
+        ("c1", "is anyone there", "customer"),
+        ("c2", "will send to [redacted email]", "agent"),
+    ]
+    assert selected["messages"][0]["at"] == at
+    review = Labels(bundle_path, tmp_path / "labels.json", source_review).data()["cases"][0]
+    assert [(m["id"], m["withheld"]) for m in review["messages"]] == [
+        ("c1", False), ("c2", False), ("c3", True),
+    ]
+    assert [e.id for e in to_ticket(selected).events] == [
+        "mendeley:c1", "mendeley:1", "mendeley:c2",
+    ]
+
+
+def test_zero_call_replay_records_each_event_without_changing_v1_checkpoints(tmp_path, monkeypatch):
+    from duebook.extract.client import ChatClient
+    from duebook.store.codec import decode_card
+
+    def reject_call(*args, **kwargs):
+        pytest.fail("offline path called the model")
+
+    monkeypatch.setattr(ChatClient, "complete_json", reject_call)
+    sample = case() | {"source": "mendeley", "changes": [
+        {"id": "handoff", "kind": "assignee", "previous": "1", "current": "2",
+         "at": "2017-11-01T10:00:00+00:00"}
+    ]}
+    bundle = {"cases": [sample]}
+    out = tmp_path / "offline.json"
+    real.offline(bundle, real.annotation_sheet(bundle, "frozen"), "frozen", out)
+    (record,) = read(out)["runs"]
+    assert record["usage"]["calls"] == 0
+    ticket = to_ticket(sample)
+    assert real.run_of(record).snapshots[0].checkpoint == checkpoints(ticket)[0]
+    trace = record["detail"]["event_trace"]
+    assert [item["event_id"] for item in trace] == [event.id for event in ticket.events]
+    assert record["detail"]["proposals"] == [[], [], []]
+    assert record["detail"]["closing_rules"] == 5
+    assert decode_card(trace[-1]["card"]) == replay(
+        ticket.ticket_id, [(event, ()) for event in ticket.events]
+    )

@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
 
 from ..card import Card
 from ..events import Event, MessagePosted, other_side, remember_turn
@@ -41,6 +41,7 @@ from ..proposals import (
     SettleConditional,
 )
 from ..reducer import GUARDED, Guards, apply
+from ..store.codec import encode
 from ..temporal import WorkCalendar
 from .generate import CloseCase, SimTicket
 from .result import Snapshot, checkpoints, from_card
@@ -164,6 +165,8 @@ def fold(
     stops: Iterable[int] = (),
     cal: WorkCalendar | None = None,
     guards: Guards | None = None,
+    *,
+    trace: list | None = None,
 ) -> Folded:
     """Read a ticket event by event, keeping the card at each of ``stops``."""
     wanted = set(stops)
@@ -183,8 +186,12 @@ def fold(
             seconds += time.perf_counter() - started
             spent += getattr(error, "usage", None) or Usage()
             failure = (ticket.ticket_id, event.seq, f"{type(error).__name__}: {error}")
+            if trace is not None:
+                trace.append({"seq": event.seq, "event_id": event.id, "error": failure[2],
+                              "seconds": time.perf_counter() - started})
             break
-        seconds += time.perf_counter() - started
+        reading_seconds = time.perf_counter() - started
+        seconds += reading_seconds
         usage = extraction.total_usage
         spent += usage
         if usage.calls:
@@ -195,6 +202,16 @@ def fold(
         refused += [_refused(card, event.seq, r.proposal, r.reason)
                     for r in outcome.rejections if r.reason in GUARDED]  # fmt: skip
         card = outcome.card
+        if trace is not None:
+            trace.append({
+                "seq": event.seq, "event_id": event.id, "at": event.at.isoformat(),
+                "usage": asdict(usage), "reading_seconds": reading_seconds,
+                "rejections": [
+                    {"proposal": encode(r.proposal), "reason": r.reason.value, "partial": r.partial}
+                    for r in outcome.rejections
+                ],
+                "card": encode(card),
+            })
         if event.seq in wanted:
             cards[event.seq] = card
     # A ticket that stopped early is judged on the card it reached.

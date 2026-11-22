@@ -374,12 +374,12 @@ def to_ticket(case) -> SimTicket:
         )
     if any(before.at > after.at for before, after in zip(events, events[1:], strict=False)):
         raise ValueError("bundle messages are out of order")
-    if case["source"] == "jira":
+    if case["source"] in ("jira", "mendeley"):
         for change in case["changes"]:
             kind = {"assignee": AssigneeChanged, "status": StatusChanged}[change["kind"]]
             events.append(
                 kind(
-                    id=f"jira:{change['id']}",
+                    id=f"{case['source']}:{change['id']}",
                     ticket_id=case["id"],
                     seq=1,
                     at=instant(change["at"]),
@@ -389,7 +389,10 @@ def to_ticket(case) -> SimTicket:
             )
         events.sort(key=lambda event: (event.at, isinstance(event, MessagePosted)))
         events = [replace(event, seq=seq) for seq, event in enumerate(events, 1)]
-    return SimTicket(case["id"], tuple(events), (), Gold(), events[-1].at)
+    observed_at = instant(case["observed_at"]) if "observed_at" in case else events[-1].at
+    if observed_at < events[-1].at:
+        raise ValueError("observation ends before the final event")
+    return SimTicket(case["id"], tuple(events), (), Gold(), observed_at)
 
 
 def source_messages(case, ticket):
