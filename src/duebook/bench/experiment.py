@@ -257,7 +257,6 @@ class _Split:
 def run_all(
     methods: Sequence[Method], tickets: Sequence[SimTicket], workers: int,
     subsets: dict[str, int] | None = None, journal: Path | None = None,
-    *, stop_on_failure: bool = False,
 ) -> list:  # fmt: skip
     """Every (method, ticket) pair; one already in the journal without a failure is not run."""
     subsets = subsets or {}
@@ -285,13 +284,6 @@ def run_all(
                 f.write(json.dumps(saved(run), ensure_ascii=False) + "\n")
         return run
 
-    if stop_on_failure:
-        runs = []
-        for job in jobs:
-            runs.append(one(job))
-            if runs[-1].failure:
-                break
-        return runs
     with ThreadPoolExecutor(workers) as pool:
         return list(pool.map(one, jobs))
 

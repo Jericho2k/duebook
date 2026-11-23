@@ -37,6 +37,7 @@ CC BY 4.0 with additional masking. Inference used OpenRouter with ZDR and data c
 - Customer monitoring and reporting became one promise (`1099526.0`). “End of this week” resolved to that same Sunday, Oct 23 at 20:59:59 UTC, because the resolver treated Sunday as the last workday of a Monday-based week.
   The promise stayed in breach after the customer reported two more files and support asked for logs (`1100339.0`, `1100350.0`). The card caught the new promise to preserve the files (`1100339.0`).
   The default alert policy suppressed notices for the customer deadline (`1099526.0`).
+  The premature breach at `1099526.0` came from a calendar bug fixed in [PR #32](https://github.com/Jericho2k/duebook/pull/32).
 - Duebook kept the reopened investigation follow-up (`1100373.0`) open after a second test fix and successful retest (`1108290.0`, `1108812.0`).
   The final monitoring promise and conditional rollout (`1109645.0`) stayed pending at the final comment (`1110782.0`). Their medium-confidence cutoff was Dec 18 at 20:59:59 UTC, beyond observation.
   The card ended with 11 open or breached commitments and one claim. False closes totaled zero.
@@ -55,4 +56,5 @@ Notices are derived from saved cards at observed event times and intervening sch
 ## Cost and latency
 
 One run completed in 408.7 s with 233 calls (220 extraction, 13 verification) and zero unread comments. Ledger spend was $0.0273770336. OpenRouter key usage increased by $0.027376928.
+The run had retries off. It needed none (zero unread comments and zero failures), so the results are unaffected.
 M1 used $0.0126526736 and 195.2 model seconds. M2 used $0.0147243600 and 212.7 model seconds.
