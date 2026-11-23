@@ -450,13 +450,16 @@ database logs it and reconnects.
 ### With Docker
 
 ```bash
-cp .env.example .env   # set the model key, secrets, alert channel
+cp .env.example .env   # set the database password, model key, secrets and alert channel
 docker compose up -d --build
-docker compose up -d --scale processor=3   # processors share the work safely
+docker compose ps -a
+curl -fsS http://127.0.0.1:8000/health
 ```
 
 `docker-compose.yml` runs PostgreSQL 16, the migrations, the API on port
-8000, a processor, a scheduler and a delivery worker.
+8000, a processor, a scheduler and a delivery worker. Check that `migrate`
+exits 0, `api` is healthy and `processor`, `scheduler` and `deliverer` are up.
+Use `docker compose up -d --scale processor=3` to scale the processor.
 
 ### Without Docker
 
@@ -486,9 +489,31 @@ history and articles. Set `DUEBOOK_ALERTS_SINCE` to the go-live instant before
 processing historical messages. Keep delivery and logs restricted to
 authorized operators until the customer approves an alert destination.
 
+For a local Docker pilot, run `docker compose up -d` from a separate checkout
+of the [official Zammad Compose stack](https://github.com/zammad/zammad-docker-compose).
+Create one agent and one customer and assign the test
+ticket to the agent. Enable Zammad token access and give the poller token
+`ticket.agent` permission. Set `DUEBOOK_ALERT_CHANNEL=log` in Duebook's `.env`.
+Use a Zammad HTTPS origin reachable from both the API container and the browser.
+For local HTTP, publish `127.0.0.1:8080:8080` on Duebook's `api` in a Compose
+override. Give Zammad's HTTP container `network_mode: container:duebook-api-1`,
+remove its own port mapping and attach its upstreams to `duebook_default`.
+Set `DUEBOOK_ZAMMAD_URL=http://127.0.0.1:8080` and start Duebook before Zammad.
+
 ```bash
-duebook sync-zammad 17 --duebook-url https://duebook.example.com
+# Export DUEBOOK_ZAMMAD_SYNC_TOKEN in your shell for this command.
+docker compose exec -T -e DUEBOOK_ZAMMAD_SYNC_TOKEN api duebook sync-zammad 17
+docker compose logs -f deliverer
 ```
+
+For a host poller, run `duebook sync-zammad 17 --duebook-url https://duebook.example.com`.
+
+After the first sync, post public articles with an agent promise such as
+“Я перезвоню вам в течение 3 минут”, a separate promise to send an invoice,
+and the customer's confirmation that the invoice arrived. Sync again and
+check the card and the `breached` log entry after the callback deadline.
+Restart with `docker compose restart processor` and sync again. Expect zero
+new events, the same sources and commitments, and no repeated alert.
 
 Run the command again to pick up changes, or schedule it for the selected
 ticket. It fetches the ticket, history and articles on each pass and checks
@@ -505,7 +530,8 @@ in the open page's memory until you disconnect or leave. Refreshing the card
 or opening the conversation or a citation checks live access again. The
 card shows commitments, responsibility, deadlines and confidence. Selecting
 a citation highlights its message in the conversation pane, with a link to
-the original article. If a suggestion needs clarification, open the
+the original article. Find fulfilled promises under “Другие обязательства”.
+If a suggestion needs clarification, open the
 article and request a public reply in Zammad. The reply is attributed to its
 author and goes through normal extraction and reduction on the next sync.
 A debtor claim and a counterparty confirmation have distinct labels.
@@ -620,10 +646,6 @@ rescue case (the reply that settles a promise names nothing, and the
 extractor sees one message), and in 4 of 20 tickets closed a callback on an
 unrelated "the money arrived": the verifier said no, and the guards let it
 through. The test tickets and the baselines' answers are frozen.
-
-Each service command has been run against a local PostgreSQL with uvicorn and
-a stand-in model endpoint; the Dockerfile and `docker-compose.yml` have been
-checked with `docker compose config` but not yet built or started.
 
 Round 5 adds the negative verdict veto and contextual confirmation. Round 6
 refused contextual closes whose question names something the target does not.
