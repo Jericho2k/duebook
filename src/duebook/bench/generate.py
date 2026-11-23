@@ -36,10 +36,9 @@ tickets every time, so two extractors, or two versions of one, are compared on
 identical input. ``SPLITS`` fixes which seeds are for development and which
 for the reported numbers.
 
-Each ticket also carries the proposals a perfect extractor would make. Running
-those through the real reducer must score 1.0 on every measure; that is the
-check that the generator, the reducer and the scorer agree with each other
-before any model is measured.
+Each ticket carries planted proposals for checking the labels against the real
+reducer. Implicit delivery is gold fulfilment, even when a correctly targeted
+proposal can establish only the debtor's claim under today's rules.
 
 The text here comes from templates. Templates make the labels certain and the
 language predictable, and an extractor should not be measured only on phrasing
@@ -91,7 +90,7 @@ from ..temporal import (
 
 
 class Fate(StrEnum):
-    #: Confirmed done by the other side before the deadline.
+    #: Fulfilled before the deadline.
     KEPT = "kept"
     #: The deadline passed and nothing was done.
     BROKEN = "broken"
@@ -110,7 +109,7 @@ class GoldCommitment:
     action: str
     due_at: datetime | None
     fate: Fate
-    #: The message that settled it: the other side's confirmation (KEPT), the
+    #: The message that settled it: delivery or confirmation (KEPT), the
     #: cancellation (CANCELLED) or the renegotiation (RENEGOTIATED).
     resolved_seq: int | None = None
 
@@ -119,7 +118,7 @@ class GoldCommitment:
         return self.resolved_seq is not None and self.resolved_seq <= seq
 
     def done(self, seq: int) -> bool:
-        """Done, and confirmed by the other side, by event ``seq``."""
+        """Fulfilled by event ``seq``."""
         return self.fate is Fate.KEPT and self.closed(seq)
 
 
@@ -189,7 +188,7 @@ class GoldCloseCase:
 
 
 class Beat(StrEnum):
-    """Round 8's beats on what counts as a promise (``main3``)."""
+    """Labelled messages for particular benchmark cases."""
 
     #: Someone else on the company's side will do it: a company commitment.
     DELEGATED_DATED = "delegated_dated"
@@ -205,6 +204,8 @@ class Beat(StrEnum):
     #: value is a change, of the other side's a dispute.
     CORRECTION_OWN = "correction_own"
     CORRECTION_OTHER = "correction_other"
+    IMPLICIT_FULFILMENT = "implicit_fulfilment"
+    RESTATEMENT = "restatement"
 
 
 #: Beats whose message makes a gold commitment; the others make none.
@@ -308,6 +309,7 @@ class Profile:
     condition_outcomes: bool = False
     #: Plant an identifier corrected by the side that gave it, or by the other side.
     corrections: bool = False
+    implicit: bool = False
 
 
 STANDARD = Profile(
@@ -328,7 +330,8 @@ MAIN2 = replace(MAIN, name="main2", close_cases=True)
 MAIN3 = replace(MAIN2, name="main3", accountability=True)
 MAIN4 = replace(MAIN3, name="main4", condition_outcomes=True)
 MAIN5 = replace(MAIN4, name="main5", corrections=True)
-PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2, MAIN3, MAIN4, MAIN5)}
+IMPLICIT = replace(MAIN, name="implicit", messages=(100, 150), twins=(0, 0), implicit=True)
+PROFILES = {p.name: p for p in (STANDARD, LONG, MAIN, MAIN2, MAIN3, MAIN4, MAIN5, IMPLICIT)}
 
 
 @dataclass(frozen=True, slots=True)
@@ -373,6 +376,8 @@ SPLITS = {
         # times in test5. Chosen on the labels alone; test5 is never used for tuning.
         Split("dev7", seed=7221, count=4, profile=MAIN5, results=Path("results/round10")),
         Split("test5", seed=7373, count=20, profile=MAIN5, results=Path("results/round10")),
+        Split("test6-implicit", seed=8484, count=20, profile=IMPLICIT,
+              results=Path("results/round11")),  # fmt: skip
         # The two readers see the same tickets in the generator's original wording.
         Split("dev-portability", seed=9091, count=12, profile=MAIN5,
               results=Path("results/round10/model-comparison")),  # fmt: skip
@@ -773,6 +778,9 @@ def _ticket(rng: random.Random, ticket_id: str, cal: WorkCalendar, profile: Prof
         _accountability(plan, profile.condition_outcomes)
     if profile.corrections:
         _correction(plan, order)
+    if profile.implicit:
+        for kind in rng.sample(IMPLICIT_PROMISES, 2):
+            _implicit_promises(plan, kind, plan.moment(0.12, 0.6))
 
     # Planned last: by now it is known when the ticket ends, and this promise's
     # deadline must still be ahead then.
@@ -949,6 +957,59 @@ def _twin_promises(plan: _Plan, kind, at: datetime) -> None:
             _committed(b, Role.AGENT, p, ph, e, d, f)
         ))  # fmt: skip
         _settle_later(plan, promise, fate, when, due_at, made, second_at + timedelta(minutes=30))
+
+
+IMPLICIT_PROMISES = (
+    ("пришлю ссылку на встречу для {obj}", "ссылка на встречу для {obj} будет в чате",
+     "Ссылка на встречу для {obj}: https://meet.example/{code}"),
+    ("пришлю счёт для {obj}", "счёт для {obj} появится в переписке",
+     "Счёт для {obj} во вложении: invoice-{code}.pdf"),
+    ("установлю обновление для {obj}", "обновление для {obj} поставим",
+     "Обновление для {obj} установлено"),
+)
+
+
+def _implicit_promises(plan: _Plan, kind, at: datetime) -> None:
+    action, restated, delivery = kind
+    phrase, expr = _date_deadline(at, 3, plan.cal)
+    due_at = resolve(expr, at, plan.cal).due_at
+    objects = plan.rng.sample(("тестового контура", "промышленного контура"), 2)
+    fates = plan.rng.sample([Fate.KEPT, Fate.BROKEN], 2)
+    second = plan.within(at, at + timedelta(hours=4), Role.AGENT)
+    for obj, fate, when in zip(objects, fates, (at, second), strict=True):
+        text = action.format(obj=obj)
+        proof = delivery.format(obj=obj, code=plan.rng.randrange(10000, 99999))
+        promise = (Party.COMPANY, "{due} " + text, text, proof)
+        made: list[int] = []
+        plan.add(when, lambda b, p=promise, f=fate, m=made: m.append(
+            _committed(b, Role.AGENT, p, phrase, expr, due_at, f)
+        ))  # fmt: skip
+        if fate is Fate.BROKEN:
+            _settle_later(plan, promise, fate, when, due_at, made)
+            continue
+
+        def restate(b: _Builder, text: str) -> None:
+            b.beats.append(GoldBeat(Beat.RESTATEMENT, b.say(Role.AGENT, text, verbatim=True)))
+
+        alternate = restated.format(obj=obj)
+        variants = (f"Напомню: {alternate} {phrase}.", f"Срок прежний, {phrase}. Я {text}.",
+                    f"Ориентируйтесь на тот же срок: {phrase} {alternate}.")  # fmt: skip
+        for i, wording in enumerate(variants[:plan.rng.randint(2, 3)]):
+            lo = at + timedelta(hours=5 + 7 * i)
+            repeat_at = plan.within(lo, lo + timedelta(hours=6), Role.AGENT)
+            plan.add(repeat_at, lambda b, wording=wording: restate(b, wording))
+
+        def fulfil(b: _Builder, p=promise, m=made) -> None:
+            seq = b.say(Role.AGENT, p[3], ResolveCommitment(f"e{m[0]}#0", p[3], _wording(p)),
+                        verbatim=True)  # fmt: skip
+            _settled(b, m[0], seq)
+            b.beats.append(GoldBeat(Beat.IMPLICIT_FULFILMENT, seq))
+
+        delivered = plan.within(at + timedelta(hours=28), due_at - timedelta(hours=8), Role.AGENT)
+        plan.add(delivered, fulfil)
+        plan.add(delivered + timedelta(minutes=2), lambda b: b.say(
+            Role.CUSTOMER, "А настройки доступа ещё можно изменить?", verbatim=True
+        ))  # fmt: skip
 
 
 def _accountability(plan: _Plan, outcomes: bool = False) -> None:
