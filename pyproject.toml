@@ -43,7 +43,7 @@ packages = ["src/duebook"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 filterwarnings = [
     # Starlette's test client warns that it will move off httpx; nothing to act on here.
     "ignore:Using `httpx` with `starlette.testclient`",
