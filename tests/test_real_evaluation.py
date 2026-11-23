@@ -27,7 +27,7 @@ from duebook.bench.result import Promise, PromiseStatus, Snapshot, checkpoints
 from duebook.card import Party
 from duebook.events import AssigneeChanged, MessagePosted, Role, Side
 from duebook.proposals import MakeCommitment
-from duebook.reducer import replay
+from duebook.reducer import RULES, replay
 from scripts.label_twcs import Labels
 
 
@@ -418,7 +418,7 @@ def test_mendeley_rebuilds_public_boundaries_and_keeps_uncertain_roles_local(tmp
         "issueid,id,comment_seq,utr_seq,author,created,is_private,actionbody,author_role\n"
         f"42,c1,1,2,r,{at},0.0,there,reporter\n"
         f"42,c1,1,1,r,{at},0.0,is anyone,reporter\n"
-        f"42,c2,2,1,a,{later},0.0,will send to person@example.org,assignee\n"
+        f"42,c2,2,1,a,{later},0.0,will send to person@example.org in CityName,assignee\n"
         f"42,c3,3,1,x,{later},0.0,wait for me,others\n"
         f"42,c4,4,1,r,{later},1.0,private text,reporter\n",
         encoding="utf-8",
@@ -432,7 +432,8 @@ def test_mendeley_rebuilds_public_boundaries_and_keeps_uncertain_roles_local(tmp
     manifest = tmp_path / "source.jsonl"
     manifest.write_text(json.dumps({"ticket_id": "42", "comment_ids": ["c1", "c2", "c3", "c4"]}))
     bundle_path, source_review = tmp_path / "bundle.json", tmp_path / "review.json"
-    selection = {"M1": {"id": "42", "visible": 3}}
+    selection = {"M1": {"id": "42", "visible": 3},
+                 "redact": [{"kind": "location", "pattern": r"\bcityname\b"}]}  # fmt: skip
     prepare(source, manifest, selection, bundle_path, source_review)
     rebuilt = tmp_path / "second.json"
     prepare(source, manifest, selection, rebuilt, tmp_path / "second-review.json")
@@ -441,7 +442,7 @@ def test_mendeley_rebuilds_public_boundaries_and_keeps_uncertain_roles_local(tmp
     (selected,) = read(bundle_path)["cases"]
     assert [(m["id"], m["text"], m["role"]) for m in selected["messages"]] == [
         ("c1", "is anyone there", "customer"),
-        ("c2", "will send to [redacted email]", "agent"),
+        ("c2", "will send to [redacted email] in [redacted location]", "agent"),
     ]
     assert selected["messages"][0]["at"] == at
     review = Labels(bundle_path, tmp_path / "labels.json", source_review).data()["cases"][0]
@@ -475,7 +476,7 @@ def test_zero_call_replay_records_each_event_without_changing_v1_checkpoints(tmp
     trace = record["detail"]["event_trace"]
     assert [item["event_id"] for item in trace] == [event.id for event in ticket.events]
     assert record["detail"]["proposals"] == [[], [], []]
-    assert record["detail"]["closing_rules"] == 5
+    assert record["detail"]["closing_rules"] == RULES
     assert decode_card(trace[-1]["card"]) == replay(
         ticket.ticket_id, [(event, ()) for event in ticket.events]
     )

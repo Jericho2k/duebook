@@ -32,7 +32,11 @@ def reviewed(bundle, labels, bundle_sha):
     by_ticket = index_labels(bundle, labels, bundle_sha)
     for case in bundle["cases"]:
         label = by_ticket[case["id"]]
-        if label["review"] != "complete" or not label["annotator"].strip():
+        draft = (
+            case["source"] == "mendeley" and case["cohort"] == "exploratory"
+            and label["review"] == "pending" and label["annotator"] == DRAFT_ANNOTATOR
+        )
+        if not draft and (label["review"] != "complete" or not label["annotator"].strip()):
             raise ValueError(f"unfinished human labels for {case['id']}")
         if case["cohort"] == "challenge" and (
             not label["second_reviewer"].strip()

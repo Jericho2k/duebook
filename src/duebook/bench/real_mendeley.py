@@ -12,8 +12,6 @@ DOI = "https://doi.org/10.17632/btm76zndnt.3"
 SOURCES = ("sample_utterances.csv", "issues.csv", "issues_change_history.csv")
 KNOWN = {"reporter": "customer", "assignee": "agent"}
 REDACTIONS = {
-    "organization": re.compile(r"\bprogress\s*soft\b", re.I),
-    "location": re.compile(r"\bamman\b", re.I),
     "email": re.compile(r"[\w.+-]+@[\w.-]+\.[a-z]{2,}", re.I),
     "network": re.compile(r"(?:https?://[^\s<>]+|\b(?:\d{1,3}\.){3}\d{1,3}\b)", re.I),
     "phone": re.compile(r"(?<!\w)\+\d(?:[ .()-]*\d){8,14}(?!\d)"),
@@ -78,7 +76,11 @@ def timeline(history, comments):
 
 
 def prepare(source: Path, manifest: Path, selection: dict, bundle_path: Path, review_path: Path):
-    ids = {case["id"] for case in selection.values()}
+    redaction_patterns = {
+        entry["kind"]: re.compile(entry["pattern"], re.I) for entry in selection.get("redact", [])
+    } | REDACTIONS
+    selected = {alias: spec for alias, spec in selection.items() if alias != "redact"}
+    ids = {case["id"] for case in selected.values()}
     with manifest.open(encoding="utf-8") as stream:
         frame = {row["ticket_id"]: row for line in stream
                  if (row := json.loads(line))["ticket_id"] in ids}
@@ -92,7 +94,7 @@ def prepare(source: Path, manifest: Path, selection: dict, bundle_path: Path, re
     for row in rows(paths[2], "issueid", ids):
         history[row["issueid"]].append(row)
     cases, review = [], []
-    for alias, spec in selection.items():
+    for alias, spec in selected.items():
         key = spec["id"]
         if set(utterances[key]) != set(frame[key]["comment_ids"]):
             raise ValueError(f"{alias} does not match the original candidate manifest")
@@ -112,7 +114,7 @@ def prepare(source: Path, manifest: Path, selection: dict, bundle_path: Path, re
                 excluded[role] += 1
                 continue
             body = comment["text"]
-            for name, pattern in REDACTIONS.items():
+            for name, pattern in redaction_patterns.items():
                 body, count = pattern.subn(f"[redacted {name}]", body)
                 if count:
                     redactions[name] += count

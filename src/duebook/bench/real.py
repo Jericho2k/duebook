@@ -17,10 +17,9 @@ from zoneinfo import ZoneInfo
 
 from ..extract.client import DEFAULT_MODEL, openrouter_fields, settings_for
 from ..extract.cost import PRICES, Usage
-from ..reducer import Guards
 from ..temporal import WorkCalendar
 from .experiment import make_methods, run_all, run_of, saved
-from .meter import Ledger
+from .meter import Ledger, OverBudget
 from .methods import Recorded
 from .real_jira import draw_jira, jira_manifest, snapshot_jira
 from .real_labels import compare, compare_review, index_labels, reviewed, validate
@@ -43,7 +42,6 @@ from .score import Counts
 ROUTE = "OpenRouter / DeepInfra FP8 / " + DEFAULT_MODEL
 SYNTHETIC = Path("results/round10/test5.json")
 CALENDAR = WorkCalendar(ZoneInfo("UTC"))
-ROUND_10_GUARDS = Guards(rules=5)
 
 
 def estimate(bundle):
@@ -115,13 +113,12 @@ def preflight(bundle_sha, labels_sha, approval, projection, max_usd):
 def reference_method(bundle, ledger, *, recorded=None):
     mendeley = any(case["source"] == "mendeley" for case in bundle["cases"])
     if mendeley and any(case["source"] != "mendeley" for case in bundle["cases"]):
-        raise ValueError("Mendeley requires its own Round 10 reference configuration")
+        raise ValueError("Mendeley requires its own work calendar")
+    calendar = WorkCalendar(ZoneInfo("Asia/Amman"), frozenset({6, 0, 1, 2, 3}))
     (method,) = make_methods(
-        ("event_memory",), DEFAULT_MODEL, ledger, WorkCalendar() if mendeley else CALENDAR,
+        ("event_memory",), DEFAULT_MODEL, ledger, calendar if mendeley else CALENDAR,
         recorded=recorded,
     )
-    if mendeley:
-        method.guards = ROUND_10_GUARDS
     return method
 
 
@@ -165,6 +162,7 @@ def live(bundle, labels_path, bundle_sha, approval, max_usd, out):
     journal.touch(exist_ok=False, mode=0o600)
     ledger = Ledger(max_usd, PRICES[DEFAULT_MODEL])
     method = reference_method(bundle, ledger)
+    mendeley = method.capture_trace = any(case["source"] == "mendeley" for case in bundle["cases"])
     for field in ("model", "escalation", "verifier"):
         client = getattr(method, field)
         provider = openrouter_fields(settings_for(client.model, client.reasoning))["provider"]
@@ -173,15 +171,19 @@ def live(bundle, labels_path, bundle_sha, approval, max_usd, out):
             field,
             replace(
                 client,
+                http_retries=0 if mendeley else client.http_retries,
+                content_retries=0 if mendeley else client.content_retries,
                 extra=client.extra
                 | {
                     "provider": provider | {"zdr": True, "data_collection": "deny"},
                 },
             ),
         )
-    method.capture_trace = any(case["source"] == "mendeley" for case in bundle["cases"])
     started = time.perf_counter()
-    runs = run_all([method], [to_ticket(c) for c in bundle["cases"]], 1, journal=journal)
+    runs = run_all(
+        [method], [to_ticket(c) for c in bundle["cases"]], 1, journal=journal,
+        stop_on_failure=mendeley,
+    )
     write(
         out,
         {
@@ -195,6 +197,10 @@ def live(bundle, labels_path, bundle_sha, approval, max_usd, out):
             "runs": [saved(r) for r in runs],
         },
     )
+    if mendeley:
+        ledger.check()
+        if runs[-1].failure:
+            raise ValueError(f"{runs[-1].ticket_id} failed: {runs[-1].failure}")
 
 
 def measurement(counts):
@@ -292,6 +298,8 @@ def report(bundle, labels, record, synthetic, *, annotation_review=None):
     if "seed" in bundle:
         lines.append(f"Seed {bundle['seed']}.")
     if any(case["source"] == "mendeley" for case in cases.values()):
+        if any(label["review"] == "pending" for label in labels.values()):
+            lines.extend(["", "Draft V1 scores (machine-drafted, not human-reviewed, n=2)."])
         lines.extend([
             "",
             "Exploratory, purpose-selected cases from a curated release. Some visible messages "
@@ -487,5 +495,5 @@ def main(argv: Sequence[str]) -> None:
             )
             with args.out.open("x", encoding="utf-8") as stream:
                 stream.write(formatted)
-    except (ValueError, KeyError, OSError) as error:
+    except (ValueError, KeyError, OSError, OverBudget) as error:
         parser.error(str(error))
