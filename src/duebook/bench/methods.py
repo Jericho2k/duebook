@@ -24,6 +24,7 @@ from ..extract.prompt import Bound, build_messages
 from ..extract.verifier import verifying_reader
 from ..lifecycle import AlertPolicy
 from ..proposals import AskQuestion, MakeCommitment, Proposal, RecordStep
+from ..reducer import RULES
 from ..store.codec import encode
 from ..temporal import WorkCalendar
 from .generate import SimTicket
@@ -111,6 +112,7 @@ class EventMemory:
     #: Per ticket id, the messages read again live while the rest is replayed
     #: from ``recorded``: a targeted re-extraction. Only these are verified.
     reread: dict[str, frozenset[int]] | None = None
+    capture_trace: bool = False
 
     def run(self, ticket: SimTicket) -> MethodRun:
         meter = Meter(self.model, self.ledger)
@@ -132,7 +134,11 @@ class EventMemory:
             reader.live = verifying_reader(reader.live, checker, self.cal)
         elif checker is not None:
             reader = verifying_reader(reader, checker, self.cal)
-        folded = fold(ticket, reader, [cp.seq for cp in checkpoints(ticket)], self.cal)
+        trace = [] if self.capture_trace else None
+        folded = fold(
+            ticket, reader, [cp.seq for cp in checkpoints(ticket)], self.cal,
+            trace=trace,
+        )
         snaps = snapshots(ticket, folded, self.policy)
         failure = folded.failure[2] if folded.failure else None
         extraction = before.extraction + meter.tally.usage
@@ -162,6 +168,9 @@ class EventMemory:
             "providers": tally.providers,
             "extraction_usage": asdict(extraction),
         }
+        if trace is not None:
+            detail["event_trace"] = trace
+            detail["closing_rules"] = RULES
         if self.reread is not None:
             # (seq, what the record proposed, what the live read proposes).
             detail["reread"] = reread
