@@ -1,4 +1,5 @@
 from datetime import date, datetime, time
+from zoneinfo import ZoneInfo
 
 import pytest
 from helpers import CAL, MSK, START
@@ -134,6 +135,17 @@ def test_end_of_week_is_the_last_working_day():
     assert local(resolve(PeriodEnd(Period.WEEK), START, CAL)).date() == date(2027, 1, 15)
     saturday = datetime(2027, 1, 16, 12, 0, tzinfo=MSK)
     assert local(resolve(PeriodEnd(Period.WEEK), saturday, CAL)).date() == date(2027, 1, 22)
+
+
+def test_end_of_week_follows_the_calendars_working_week():
+    cal = WorkCalendar(ZoneInfo("Asia/Amman"), frozenset({6, 0, 1, 2, 3}))
+    sunday = datetime(2027, 1, 17, 12, tzinfo=cal.tz)
+    friday = datetime(2027, 1, 22, 12, tzinfo=cal.tz)
+    expr = PeriodEnd(Period.WEEK)
+    assert resolve(expr, sunday, cal).due_at.astimezone(cal.tz).date() == date(2027, 1, 21)
+    assert resolve(expr, friday, cal).due_at.astimezone(cal.tz).date() == date(2027, 1, 28)
+    next_thursday = resolve(WeekdayRef(3, week=1), sunday, cal)
+    assert next_thursday.due_at.astimezone(cal.tz).date() == date(2027, 1, 28)
 
 
 def test_end_of_month_is_the_last_working_day():

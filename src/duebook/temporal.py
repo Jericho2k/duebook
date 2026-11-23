@@ -118,6 +118,10 @@ class WorkCalendar:
     def end_of(self, day: date) -> datetime:
         return datetime.combine(day, self.day_end, tzinfo=self.tz)
 
+    def week_start(self, day: date) -> date:
+        first = min((d for d in self.workdays if (d - 1) % 7 not in self.workdays), default=0)
+        return day - timedelta(days=(day.weekday() - first) % 7)
+
     def add_workdays(self, start: date, count: int) -> date:
         day = start
         remaining = count
@@ -171,8 +175,9 @@ def resolve(expr: DueExpr, said_at: datetime, cal: WorkCalendar) -> Deadline:
             if week is not None:
                 if week < 0:
                     raise ValueError("week must not point backwards")
-                monday = today - timedelta(days=today.weekday())
-                return on(monday + timedelta(days=7 * week + weekday), at)
+                start = cal.week_start(today)
+                offset = (weekday - start.weekday()) % 7
+                return on(start + timedelta(days=7 * week + offset), at)
             ahead = (weekday - today.weekday()) % 7
             if ahead == 0 and on(today, at).due_at <= said_at:
                 ahead = 7
@@ -190,10 +195,10 @@ def resolve(expr: DueExpr, said_at: datetime, cal: WorkCalendar) -> Deadline:
             if period is Period.DAY:
                 return on(today, None)
             if period is Period.WEEK:
-                sunday = today + timedelta(days=6 - today.weekday())
-                last = cal.last_workday_on_or_before(sunday)
-                if last < today:  # said on a weekend: the working week is over
-                    last = cal.last_workday_on_or_before(sunday + timedelta(days=7))
+                week_end = cal.week_start(today) + timedelta(days=6)
+                last = cal.last_workday_on_or_before(week_end)
+                if last < today:
+                    last = cal.last_workday_on_or_before(week_end + timedelta(days=7))
                 return on(last, None)
             month_end = date(
                 today.year, today.month, _calendar.monthrange(today.year, today.month)[1]
