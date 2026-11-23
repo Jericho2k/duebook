@@ -80,6 +80,7 @@ from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCach
 from ..extract.cost import Usage
 from ..extract.extractor import reading_clients
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
+from ..lifecycle import AlertPolicy, NoticeKind, next_wakeup, notices
 from ..proposals import AssertFact, MakeCommitment, MakeConditional, Proposal, SettleConditional
 from ..reducer import UNGUARDED, Guards, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
@@ -87,7 +88,7 @@ from ..store.codec import decode_proposals
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
 from .baselines.full_context import moments
-from .generate import SPLITS, CloseCase, SimTicket, Split
+from .generate import SPLITS, Beat, CloseCase, SimTicket, Split
 from .meter import Ledger, Meter
 from .methods import EventMemory, Method, MethodRun, Recorded
 from .result import Checkpoint, Moment, Snapshot, checkpoints, from_card, snapshot_of
@@ -145,7 +146,7 @@ def rewritten(
     else:
         # Rephrasing needs no reasoning: ``client.PRESETS`` switches it off for
         # a writer that has it. At this temperature nothing is cached.
-        client = ChatClient(api_key="proxy-injected", model=writer, temperature=0.8)
+        client = ChatClient(api_key=_api_key(), model=writer, temperature=0.8)
 
         # Messages are rewritten one by one and independently, so all of them
         # can be in flight at once.
@@ -187,6 +188,10 @@ def rewritten(
 # --------------------------------------------------------------- running ----
 
 
+def _api_key() -> str:
+    return os.environ.get("DUEBOOK_OPENROUTER_API_KEY") or "proxy-injected"
+
+
 def make_methods(
     names: Sequence[str], model: str, ledger: Ledger, cal: WorkCalendar,
     cache: ResponseCache | None = None, recorded: dict[str, Recorded] | None = None,
@@ -194,7 +199,7 @@ def make_methods(
 ) -> list:  # fmt: skip
     """The methods by name; ``recorded`` replays proposals for ``event_memory``, except
     the messages in ``reread``, which are read again live."""
-    key = os.environ.get("DUEBOOK_OPENROUTER_API_KEY", "proxy-injected")
+    key = _api_key()
     reader = ChatClient(api_key=key, model=model, cache=cache)
     # Answering a checkpoint means writing out the whole account; it needs room.
     answerer = ChatClient(api_key=key, model=model, max_tokens=12_000, timeout=240,
@@ -563,6 +568,66 @@ def _truth(ticket: SimTicket, target_seq: int, seq: int) -> str:
     if not g.closed(seq):
         return "false"
     return "true" if g.resolved_seq == seq else "wrong_target"
+
+
+def false_notice_audit(ticket: SimTicket, run: MethodRun, cal: WorkCalendar) -> list[dict]:
+    """Judge each notice at its first eligibility, including clock wakeups."""
+    policy = AlertPolicy()
+    proposals = [decode_proposals(row) for row in run.detail["proposals"]]
+    events = ticket.events[:len(proposals)]
+    reader = Replayed({e.id: p for e, p in zip(events, proposals, strict=True)})
+    folded = fold(ticket, reader, [e.seq for e in events], cal)
+    repeats = {b.seq for b in ticket.gold.beats if b.kind is Beat.RESTATEMENT}
+    kinds = {NoticeKind.DUE_SOON, NoticeKind.BREACHED, NoticeKind.CLAIM_UNCONFIRMED}
+    seen, false = set(), []
+    for i, event in enumerate(events):
+        card = folded.cards[event.seq]
+        snapshot = from_card(card, Checkpoint(event.seq, event.at, Moment.MESSAGE))
+        pairs, _, _ = match(ticket.gold.commitments, snapshot.promises)
+        labels = {id(p): g for g, p in pairs}
+        gold = {c.id: labels.get(id(p)) for c, p in zip(card.commitments, snapshot.promises,
+                                                     strict=True)}  # fmt: skip
+        until = events[i + 1].at if i + 1 < len(events) else None
+        at = event.at
+        while at is not None and (
+            at == event.at or (at < until if until is not None else at <= ticket.end)
+        ):
+            for notice in notices(card, at, policy):
+                if notice.kind not in kinds or notice.key in seen:
+                    continue
+                seen.add(notice.key)
+                c = card.commitment(notice.commitment_id)
+                seq = c.source.seq
+                label = gold[c.id]
+                evidence = label.resolved_seq if label and label.closed(event.seq) else None
+                if seq in repeats:
+                    cause = "D"
+                elif label is None:
+                    cause = "unplanted"
+                elif evidence is not None:
+                    ids = {target_of(p) for p in proposals[evidence - 1]} - {None}
+                    if c.id in ids:
+                        cause = "claim_only" if notice.seq == evidence else "B"
+                    else:
+                        cause = "C" if ids else "A"
+                elif notice.kind is NoticeKind.CLAIM_UNCONFIRMED:
+                    continue
+                elif label.due_at is None:
+                    cause = "E"
+                else:
+                    span = label.due_at - ticket.events[seq - 1].at
+                    lead = min(policy.due_soon_lead, span * policy.max_lead_fraction)
+                    if notice.kind is NoticeKind.BREACHED and at >= label.due_at:
+                        continue
+                    gold_soon = label.due_at - lead <= at < label.due_at
+                    if notice.kind is NoticeKind.DUE_SOON and gold_soon:
+                        continue
+                    cause = "E"
+                false.append({"key": notice.key, "kind": notice.kind, "at": at, "cause": cause,
+                              "promise": c.source.event_id, "evidence": f"e{evidence}" if evidence
+                              else None})  # fmt: skip
+            at = next_wakeup(card, at, policy)
+    return false
 
 
 def _closed(target, card: Card) -> bool:
@@ -1213,6 +1278,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         "runs": [record(r, score_ticket(by_id[r.ticket_id], r.snapshots)) for r in runs
                  if id(r) not in {id(f) for f in frozen}],
     }  # fmt: skip
+    if split.profile.implicit:
+        result["false_notices"] = {r.ticket_id: false_notice_audit(by_id[r.ticket_id], r, cal)
+                                   for r in reference}
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(compact(to_json(result)))
     journal.unlink(missing_ok=True)

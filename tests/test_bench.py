@@ -28,6 +28,7 @@ from duebook.bench import (
 from duebook.bench.experiment import to_json
 from duebook.bench.generate import (
     CORRECTION_BEATS,
+    IMPLICIT,
     MAIN3,
     PROMISE_BEATS,
     TWINS,
@@ -40,7 +41,7 @@ from duebook.bench.rewrite import acceptable
 from duebook.bench.run import fold, snapshots
 from duebook.bench.score import attribute, beat_outcomes
 from duebook.closing import overlap
-from duebook.events import Role, Side
+from duebook.events import MessagePosted, Role, Side
 from duebook.extract import Completion, ModelError, Usage
 from duebook.extract.extractor import Extraction
 from duebook.proposals import MakeCommitment
@@ -447,7 +448,8 @@ def test_the_main_profile_plants_renegotiations_and_cancellations_with_true_labe
                 assert by_seq[gold.seq].superseded_by == by_seq[gold.resolved_seq].id
 
 
-@pytest.mark.parametrize("name", SPLITS)
+@pytest.mark.parametrize("name", [name for name, split in SPLITS.items()
+                                 if split.profile is not IMPLICIT])
 def test_the_oracle_scores_perfectly_at_the_end_and_handoffs_of_every_split(name):
     tickets = SPLITS[name].tickets()
     report = evaluate(tickets, Oracle.of(tickets))
@@ -464,6 +466,57 @@ def test_the_oracle_scores_perfectly_at_the_end_and_handoffs_of_every_split(name
     assert report.handoffs.checkpoints == sum(len(t.gold.handoffs) for t in tickets)
     if SPLITS[name].profile in (MAIN2, MAIN3):
         assert all(getattr(report.score, case.value).tp == len(tickets) for case in CloseCase)
+
+
+IMPLICIT_TICKETS = SPLITS["test6-implicit"].tickets()
+
+
+def test_implicit_delivery_is_gold_on_the_debtors_message_before_the_deadline():
+    for t in IMPLICIT_TICKETS:
+        delivered = {b.seq for b in t.gold.beats if b.kind is Beat.IMPLICIT_FULFILMENT}
+        assert len(delivered) == 2
+        for seq in delivered:
+            gold, = (g for g in t.gold.commitments if g.resolved_seq == seq)
+            event = t.events[seq - 1]
+            assert gold.fate is Fate.KEPT and event.at < gold.due_at
+            assert event.author.side is gold.owner.side is Side.COMPANY
+            assert t.anchors[event.id] == (event.text,)
+            assert t.proposals[seq - 1][0].commitment_id == f"e{gold.seq}#0"
+            assert any(e.author.side is Side.CUSTOMER and e.text.startswith("А настройки")
+                       for e in t.events[seq:] if isinstance(e, MessagePosted)
+                       and e.at - event.at == timedelta(minutes=2))
+
+
+def test_restatements_change_the_wording_without_adding_gold_promises():
+    for t in IMPLICIT_TICKETS:
+        promises = {g.seq for g in t.gold.commitments}
+        repeats = [b.seq for b in t.gold.beats if b.kind is Beat.RESTATEMENT]
+        assert not promises.intersection(repeats)
+        for g in t.gold.commitments:
+            if not any(b.seq == g.resolved_seq and b.kind is Beat.IMPLICIT_FULFILMENT
+                       for b in t.gold.beats):
+                continue
+            obj = g.action.split(" для ")[1]
+            subject = g.action.split()[1][:4]
+            texts = [t.events[s - 1].text for s in repeats if g.seq < s < g.resolved_seq
+                     and obj in t.events[s - 1].text and subject in t.events[s - 1].text]
+            assert len(set(texts)) == len(texts) and 2 <= len(texts) <= 3
+
+
+def test_lookalikes_overlap_and_the_unfulfilled_rival_really_breaches():
+    for t in IMPLICIT_TICKETS:
+        assert 100 <= t.messages <= 150
+        for beat in (b for b in t.gold.beats if b.kind is Beat.IMPLICIT_FULFILMENT):
+            kept, = (g for g in t.gold.commitments if g.resolved_seq == beat.seq)
+            rival, = (g for g in t.gold.commitments if g.seq != kept.seq
+                      and g.action.split(" для ")[0] == kept.action.split(" для ")[0]
+                      and " для " in g.action)
+            assert rival.action != kept.action and rival.seq < beat.seq
+            assert rival.fate is Fate.BROKEN and rival.resolved_seq is None
+            assert kept.due_at == rival.due_at < t.end
+    score = evaluate(IMPLICIT_TICKETS, Oracle.of(IMPLICIT_TICKETS)).score
+    assert score.commitments.f1 == score.alerts.f1 == 1.0
+    assert not score.closes_false and score.alerts.tp >= 2 * len(IMPLICIT_TICKETS)
 
 
 def test_round_one_profiles_generate_exactly_the_tickets_round_one_was_run_on():
@@ -575,7 +628,7 @@ def test_round_eight_splits_plant_every_beat():
             kinds |= set(mine)
             assert mine.count(Beat.SAME_ACTION) == 2
             assert mine.count(Beat.DELEGATED_DATED) + mine.count(Beat.DELEGATED_UNDATED) == 2
-        assert kinds == set(Beat) - CORRECTION_BEATS
+        assert kinds == PROMISE_BEATS | {Beat.PREDICTION, Beat.STATUS_REPORT, Beat.CONDITIONAL}
 
 
 def test_a_beat_that_is_not_a_promise_plants_no_commitment():
