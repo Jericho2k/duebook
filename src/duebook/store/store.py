@@ -47,13 +47,13 @@ from ..lifecycle import (
     handoff_checks,
     next_wakeup,
     notices,
-    promise_check,
 )
 from ..proposals import Proposal
 from ..reducer import Guards, OutOfOrder, Rejection, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
+from . import promise_check
 from .codec import decode_card, decode_event, decode_proposals, encode
 from .outbox import Outbox
 
@@ -361,13 +361,20 @@ class Store:
         return decode_event(row["body"]) if row else None
 
     def next_check(self, card: Card) -> PromiseCheck | None:
-        row = self.conn.execute(
-            "select e.body from events e left join event_proposals p"
+        row = self._pending_check(card)
+        return decode_event(row["body"]) if row else None
+
+    def handoff_pending_since(self, card: Card) -> datetime | None:
+        row = self._pending_check(card)
+        return row["received_at"] if row and row["body"]["kind"] == CheckKind.HANDOFF else None
+
+    def _pending_check(self, card: Card) -> dict | None:
+        return self.conn.execute(
+            "select e.body, e.received_at from events e left join event_proposals p"
             " using (ticket_id, seq, check_order) where e.ticket_id = %s and e.seq = %s"
             " and e.check_order > 0 and p.seq is null order by e.check_order limit 1",
             (card.ticket_id, card.last_seq),
         ).fetchone()
-        return decode_event(row["body"]) if row else None
 
     def events(self, ticket_id: str) -> Iterator[Event]:
         """The acknowledged stream, including events still waiting for processing."""

@@ -7,16 +7,20 @@ from helpers import ANNA, CAL, IVAN, OLGA, START, Ticket, persist, promise
 
 from duebook import Party, apply
 from duebook.api import create_app
+from duebook.api.zammad import _review_card, _SyncTicket
+from duebook.brief import compose
 from duebook.card import CommitmentState
 from duebook.events import CheckKind
 from duebook.extract.client import Completion
 from duebook.extract.cost import Usage
 from duebook.extract.extractor import Extraction, read_event
 from duebook.extract.verifier import verifying_reader
-from duebook.lifecycle import AlertPolicy, deadline_checks, handoff_checks, promise_check
+from duebook.lifecycle import AlertPolicy, deadline_checks, handoff_checks
 from duebook.proposals import MakeCommitment, ResolveCommitment, Verdict, Verification
 from duebook.reducer import Reason
 from duebook.settings import Settings
+from duebook.store import promise_check
+from duebook.store.codec import decode_card, encode
 
 YES = Verification(Verdict.YES)
 PROMISE = "I will send the invoice"
@@ -173,3 +177,33 @@ def test_delivery_without_a_verbatim_quote_stays_a_claim():
 def test_m0006_waybill_report_stays_a_claim():
     assert delivery("Накладная уже у вас — по ней отправлен VC-858", "",
                     action="Пришлём вам накладную").state is CommitmentState.CLAIMED
+
+
+def test_handoff_brief_serves_after_two_minutes_pending(store, dsn):
+    ticket, _, _ = earlier_proof()
+    store.schedule_checks = True
+    queued_at = ticket.now + timedelta(hours=1)
+    persist(store, ticket, now=queued_at)
+    now = queued_at + timedelta(minutes=2)
+    app = create_app(Settings(database_url=dsn), clock=lambda: now)
+    path = f"/tickets/{ticket.card.ticket_id}/brief"
+    with TestClient(app) as client:
+        assert client.get(path).status_code == 202
+        now += timedelta(seconds=1)
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "сверка после передачи ещё не завершена" in response.text.splitlines()
+
+
+def test_a_merged_repeat_cites_its_message_in_brief_and_review():
+    quote = "I will send the PDF invoice"
+    card = decode_card(encode(join(PROMISE, quote).card))
+    (commitment,) = card.commitments
+    (repeat,) = commitment.repeats
+    assert (repeat.event_id, repeat.seq, repeat.quote) == ("e2", 2, quote)
+    assert "повторено в сообщении №2" in compose(card, START).text
+    ticket = _SyncTicket(id=1, number="1", title="Test", created_at=START,
+                         owner_id=None, state_id=1, state="open")
+    review = _review_card(card, ticket, "https://example.test/1", START, AlertPolicy(), {})
+    (source,) = review["commitments"][0]["repeats"]
+    assert (source["label"], source["seq"], source["quote"]) == ("повторено в сообщении", 2, quote)

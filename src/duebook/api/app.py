@@ -25,7 +25,7 @@ import hmac
 import json
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -40,7 +40,6 @@ from psycopg_pool import ConnectionPool, PoolTimeout
 from .. import signing
 from ..brief import Brief, compose
 from ..card import Card, Source
-from ..events import CheckKind
 from ..lifecycle import status_at
 from ..settings import Settings
 from ..store import Conflict, Store
@@ -182,12 +181,13 @@ def create_app(
         with store() as s, s.conn.transaction():
             s.conn.execute("set transaction isolation level repeatable read, read only")
             current = _known(s, ticket_id)
-            pending = s.next_check(current)
-            if pending is not None and pending.kind is CheckKind.HANDOFF:
-                raise HTTPException(202, "Handoff reconciliation is pending", {"Retry-After": "1"})
+            since = s.handoff_pending_since(current)
             names = s.authors(ticket_id)
         now = clock()
-        b = compose(current, now, budget=budget, cal=cal, policy=policy, names=names)
+        if since is not None and now - since <= timedelta(minutes=2):
+            raise HTTPException(202, "Handoff reconciliation is pending", {"Retry-After": "1"})
+        b = compose(current, now, budget=budget, cal=cal, policy=policy, names=names,
+                    handoff_pending=since is not None)
         if format == "text":
             return PlainTextResponse(b.text)
         return _brief_json(ticket_id, b, now, names)

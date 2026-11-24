@@ -503,8 +503,9 @@ def _make_commitment(
         # not a promise by the company.
         return card, [Reason.OWNER_AUTHOR_MISMATCH]
     due, reasons = _due(event, p.due, p.due_quote, p.quote, text, cal)
-    if any(_same_promise(c, p, due, guards) for c in card.commitments):
-        return card, [Reason.DUPLICATE]
+    old = next((c for c in card.commitments if _same_promise(c, p, due, guards)), None)
+    if old is not None:
+        return _repeat(card, old, source, guards)
 
     if guards.rules >= 7 and p.restates is not None:
         old = card.commitment(p.restates)
@@ -513,7 +514,7 @@ def _make_commitment(
             and not _check_close(old, _rivals(card, old), (p.quote, p.action), p.target_quote,
                                  guards, p.verification, event.text, restates=True)
         ):
-            return card, [Reason.DUPLICATE]
+            return _repeat(card, old, source, guards)
 
     retired, refused = p.supersedes, None
     if p.supersedes is not None:
@@ -524,11 +525,6 @@ def _make_commitment(
             return card, [Reason.ALREADY_RESOLVED]
         refused = _check_close(old, _rivals(card, old), (p.quote, p.action), p.target_quote,
                                guards, p.verification, event.text, restates=True)  # fmt: skip
-        if (
-            guards.rules >= 7 and p.reconciliation and p.reconciliation.verdict is Verdict.YES
-            and (due is None or old.due and due.deadline.due_at == old.due.deadline.due_at)
-        ):
-            refused = refused or Reason.NOT_ABOUT_TARGET
         if refused is not None:
             # The new promise was made and is kept; the old one is NOT retired
             # on this evidence, only marked as possibly replaced.
@@ -564,6 +560,13 @@ def _make_commitment(
         for c in card.commitments
     )
     return replace(card, commitments=(*commitments, commitment)), reasons
+
+
+def _repeat(card, target, source, guards) -> tuple[Card, list[Reason]]:
+    if guards.rules >= 8 and all(s.event_id != source.event_id
+                                 for s in (target.source, *target.repeats)):
+        card = _put_commitment(card, replace(target, repeats=(*target.repeats, source)))
+    return card, [Reason.DUPLICATE]
 
 
 def identity_candidates(card: Card, event: MessagePosted, p: MakeCommitment,

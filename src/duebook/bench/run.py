@@ -49,7 +49,7 @@ from ..extract.extractor import (
     read_event,
     unread,
 )
-from ..lifecycle import AlertPolicy, deadline_checks, handoff_checks, promise_check
+from ..lifecycle import AlertPolicy, deadline_checks, handoff_checks
 from ..proposals import (
     CancelCommitment,
     MakeCommitment,
@@ -58,6 +58,7 @@ from ..proposals import (
     SettleConditional,
 )
 from ..reducer import GUARDED, Guards, apply
+from ..store import promise_check
 from ..store.codec import encode
 from ..temporal import WorkCalendar
 from .generate import CloseCase, SimTicket

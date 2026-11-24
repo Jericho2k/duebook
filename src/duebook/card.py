@@ -170,6 +170,7 @@ class Commitment:
     #: check it if the other side has not confirmed it by the deadline (decision 0006).
     claim_checked: bool = False
     progress: tuple[Source, ...] = field(default=(), metadata={"omit_default": True})
+    repeats: tuple[Source, ...] = field(default=(), metadata={"omit_default": True})
 
     @property
     def unresolved(self) -> bool:

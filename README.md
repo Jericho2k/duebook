@@ -81,8 +81,8 @@ without calling a model. [Closing rule decision](docs/decisions/0001-verifier-ve
 [Decision 0007](docs/decisions/0007-promise-reconciliation.md) adds a reconciliation
 pass for possible repeats, ahead of alerts and on handoff. Checks cite public
 messages from the event log. A check still running when an alert becomes due
-does not hold the alert. A handoff brief returns HTTP 202 with `Retry-After`
-until its checks finish. The event usage JSON records input, cached input,
+does not hold the alert. A handoff brief returns HTTP 202 with `Retry-After` for
+up to two minutes, then serves with a pending-check notice. The event usage JSON records input, cached input,
 output, cost, latency and the effect of each reconciliation call.
 
 ```python
