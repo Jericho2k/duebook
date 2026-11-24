@@ -75,8 +75,15 @@ from pathlib import Path
 from typing import Any
 
 from ..card import Card
-from ..events import MessagePosted, other_side, remember_turn
-from ..extract.client import DEFAULT_MODEL, ChatClient, ModelError, ResponseCache
+from ..events import MessagePosted, PromiseCheck, other_side, remember_turn
+from ..extract.client import (
+    DEFAULT_MODEL,
+    REASONING,
+    ChatClient,
+    ModelError,
+    ResponseCache,
+    reconciliation_client,
+)
 from ..extract.cost import Usage
 from ..extract.extractor import reading_clients
 from ..extract.verifier import DEFAULT_VERIFIER_REASONING, target_of
@@ -84,7 +91,7 @@ from ..lifecycle import AlertPolicy, NoticeKind, next_wakeup, notices
 from ..proposals import AssertFact, MakeCommitment, MakeConditional, Proposal, SettleConditional
 from ..reducer import UNGUARDED, Guards, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
-from ..store.codec import decode_proposals
+from ..store.codec import decode_event, decode_proposals, serialized_fields
 from ..temporal import WorkCalendar
 from .baselines.answer import render_event
 from .baselines.full_context import moments
@@ -196,6 +203,7 @@ def make_methods(
     names: Sequence[str], model: str, ledger: Ledger, cal: WorkCalendar,
     cache: ResponseCache | None = None, recorded: dict[str, Recorded] | None = None,
     reread: dict[str, frozenset[int]] | None = None,
+    reconcile_reasoning: str | None = None,
 ) -> list:  # fmt: skip
     """The methods by name; ``recorded`` replays proposals for ``event_memory``, except
     the messages in ``reread``, which are read again live."""
@@ -216,7 +224,10 @@ def make_methods(
             # client, with the verifier's reasoning.
             live = recorded is None or reread is not None
             verifier = replace(reader, reasoning=verifying) if verifying and live else None
+            reconciler = (reconciliation_client(reader, reconcile_reasoning)
+                          if name == "event_memory" and recorded is None else None)
             methods.append(EventMemory(extractor, ledger, cal, name=name, verifier=verifier,
+                                       reconciler=reconciler,
                                        recorded=recorded if name == "event_memory" else None,
                                        escalation=escalation, reread=reread))
         elif name in ("full_context", "full_context_live"):
@@ -458,7 +469,7 @@ def refolded(run: MethodRun, ticket: SimTicket, cal: WorkCalendar, name: str) ->
     recorded. Without the verifier the run costs what its extraction cost.
     """
     proposals = [decode_proposals(p) for p in run.detail.get("proposals", [])]
-    folded = refold(ticket, proposals, REFOLDS[name], cal)
+    folded = refold(ticket, proposals, REFOLDS[name], cal, recorded_checks=_checks(run))
     usage, seconds = run.usage, run.ingest_seconds
     if name == "event_memory_no_verifier" and "verifier" in run.detail:
         usage = Usage(**run.detail["extraction_usage"])
@@ -467,6 +478,11 @@ def refolded(run: MethodRun, ticket: SimTicket, cal: WorkCalendar, name: str) ->
               "refused": [[r.seq, r.reason, r.kind, r.target_seq] for r in folded.refused]}
     return replace(run, method=name, snapshots=snapshots(ticket, folded), usage=usage,
                    ingest_usage=usage, ingest_seconds=seconds, detail=detail)  # fmt: skip
+
+
+def _checks(run: MethodRun) -> tuple[tuple[PromiseCheck, tuple[Proposal, ...]], ...]:
+    return tuple((decode_event(e), decode_proposals(ps))
+                 for e, ps in run.detail.get("check_events", ()))
 
 
 def recorded_proposals(path: Path, tickets: Sequence[SimTicket] = ()) -> dict[str, Recorded]:
@@ -487,7 +503,7 @@ def recorded_proposals(path: Path, tickets: Sequence[SimTicket] = ()) -> dict[st
             Usage(**extraction) if extraction else run.usage,
             Usage(**verifier["usage"]) if verifier else Usage(),
             run.ingest_seconds - verifier.get("seconds", 0.0), verifier.get("seconds", 0.0),
-            run.detail.get("providers", {}),
+            run.detail.get("providers", {}), _checks(run),
         )  # fmt: skip
     return out
 
@@ -536,6 +552,8 @@ def audit(ticket: SimTicket, proposals: Sequence[Sequence[Proposal]],
         previous = turns.get(other_side(event))
         after = apply(card, event, ps, cal, previous=previous).card
         for p in ps:
+            if isinstance(p, MakeCommitment) and p.restates is not None:
+                continue
             v = getattr(p, "verification", None)
             target = card.commitment(target_of(p) or "")
             if v is None or target is None:
@@ -576,18 +594,18 @@ def false_notice_audit(ticket: SimTicket, run: MethodRun, cal: WorkCalendar) -> 
     proposals = [decode_proposals(row) for row in run.detail["proposals"]]
     events = ticket.events[:len(proposals)]
     reader = Replayed({e.id: p for e, p in zip(events, proposals, strict=True)})
-    folded = fold(ticket, reader, [e.seq for e in events], cal)
+    frames = []
+    fold(ticket, reader, (), cal, recorded_checks=_checks(run), frames=frames)
     repeats = {b.seq for b in ticket.gold.beats if b.kind is Beat.RESTATEMENT}
     kinds = {NoticeKind.DUE_SOON, NoticeKind.BREACHED, NoticeKind.CLAIM_UNCONFIRMED}
     seen, false = set(), []
-    for i, event in enumerate(events):
-        card = folded.cards[event.seq]
+    for i, (event, card) in enumerate(frames[:len(events) + len(_checks(run))]):
         snapshot = from_card(card, Checkpoint(event.seq, event.at, Moment.MESSAGE))
         pairs, _, _ = match(ticket.gold.commitments, snapshot.promises)
         labels = {id(p): g for g, p in pairs}
         gold = {c.id: labels.get(id(p)) for c, p in zip(card.commitments, snapshot.promises,
                                                      strict=True)}  # fmt: skip
-        until = events[i + 1].at if i + 1 < len(events) else None
+        until = frames[i + 1][0].at if i + 1 < len(frames) else None
         at = event.at
         while at is not None and (
             at == event.at or (at < until if until is not None else at <= ticket.end)
@@ -607,7 +625,7 @@ def false_notice_audit(ticket: SimTicket, run: MethodRun, cal: WorkCalendar) -> 
                 elif evidence is not None:
                     ids = {target_of(p) for p in proposals[evidence - 1]} - {None}
                     if c.id in ids:
-                        cause = "claim_only" if notice.seq == evidence else "B"
+                        cause = "claim_only" if notice.kind is NoticeKind.CLAIM_UNCONFIRMED else "B"
                     else:
                         cause = "C" if ids else "A"
                 elif notice.kind is NoticeKind.CLAIM_UNCONFIRMED:
@@ -853,11 +871,11 @@ def timeline(run: MethodRun, ticket: SimTicket, cal: WorkCalendar) -> tuple[Snap
     if "proposals" in run.detail:
         answers = {e.id: tuple(decode_proposals(p))
                    for e, p in zip(ticket.events, run.detail["proposals"], strict=False)}
-        folded = fold(ticket, Replayed(answers), [e.seq for e in ticket.events], cal)
+        frames = []
+        fold(ticket, Replayed(answers), (), cal, recorded_checks=_checks(run), frames=frames)
         kinds = {cp.seq: cp.kind for cp in checkpoints(ticket)}
-        return tuple(from_card(folded.cards[e.seq],
-                               Checkpoint(e.seq, e.at, kinds.get(e.seq, Moment.MESSAGE)))
-                     for e in ticket.events)  # fmt: skip
+        return tuple(from_card(card, Checkpoint(e.seq, e.at, kinds.get(e.seq, Moment.MESSAGE)))
+                     for e, card in frames)  # fmt: skip
     if "live" in run.detail:
         live = (s if isinstance(s, Snapshot) else snapshot_of(s) for s in run.detail["live"])
         return tuple(s for s in live if s.error is None)
@@ -959,6 +977,28 @@ def _calls(runs: Sequence[MethodRun]) -> dict[str, Any]:
                                  else None}}  # fmt: skip
 
 
+def _by_call_kind(runs: Sequence[MethodRun]) -> dict[str, Any]:
+    table = {}
+    calls = [c for r in runs for c in r.detail.get("model_calls", ())]
+    for kind in ("read", "escalate", "verify", "reconcile_identity", "reconcile_deadline",
+                 "reconcile_handoff"):
+        rows = [c for c in calls if c["kind"] == kind]
+        if not rows and not calls:
+            continue
+        useful = sum(c["useful"] is True for c in rows)
+        table[kind] = {
+            "calls": len(rows),
+            "response_cache_hits": sum(c["cache_hit"] for c in rows),
+            **{k: sum(c[k] for c in rows) for k in ("input", "cached_input", "output")},
+            "usd": sum(c["usd"] or 0 for c in rows),
+            "charged_usd": sum(c["usd"] or 0 for c in rows if not c["cache_hit"]),
+            "mean_seconds": sum(c["seconds"] for c in rows) / len(rows) if rows else None,
+            "useful": useful if kind.startswith("reconcile_") else None,
+            "useful_rate": useful / len(rows) if rows and kind.startswith("reconcile_") else None,
+        }
+    return table
+
+
 def _interval(draws: list[float]) -> list[float]:
     ordered = sorted(draws)
     lo = ordered[int(0.025 * (len(ordered) - 1))]
@@ -971,7 +1011,7 @@ def _interval(draws: list[float]) -> list[float]:
 
 def to_json(value: Any) -> Any:
     if is_dataclass(value) and not isinstance(value, type):
-        return {f: to_json(getattr(value, f)) for f in value.__dataclass_fields__}
+        return {f.name: to_json(getattr(value, f.name)) for f in serialized_fields(value)}
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, Enum):
@@ -1089,6 +1129,8 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser.add_argument("--methods", default=",".join(METHODS),
                         help=f"of {', '.join([*METHODS, *EVENT_MEMORY])}; empty to run none")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="the extracting model")
+    parser.add_argument("--reconcile-reasoning", choices=REASONING,
+                        help="override the reconciler preset on the development set")
     parser.add_argument("--writer", default=WRITER, help="rewrites the tickets; not --model")
     parser.add_argument(
         "--max-usd",
@@ -1188,7 +1230,9 @@ def main(argv: Sequence[str] | None = None) -> None:
         listed = json.loads(args.reread.read_text())["tickets"]
         reread = {t: frozenset(seqs) for t, seqs in listed.items()}
         tickets = [t for t in tickets if t.ticket_id in reread]
-    methods = make_methods(names, args.model, ledger, cal, cache, recorded, reread)
+    methods = make_methods(names, args.model, ledger, cal, cache, recorded, reread,
+                           **({"reconcile_reasoning": args.reconcile_reasoning}
+                              if args.reconcile_reasoning else {}))
     if reread is not None:
         calls = sum(len(reread[t.ticket_id]) for t in tickets)
         projected = project_reread(args.projection_from or args.replay, calls)
@@ -1278,7 +1322,10 @@ def main(argv: Sequence[str] | None = None) -> None:
         "runs": [record(r, score_ticket(by_id[r.ticket_id], r.snapshots)) for r in runs
                  if id(r) not in {id(f) for f in frozen}],
     }  # fmt: skip
-    if split.profile.implicit:
+    by_kind = {name: _by_call_kind([r for r in runs if r.method == name]) for name in names}
+    if any(by_kind.values()):
+        result["model_calls_by_kind"] = by_kind
+    if split.profile.implicit or any(_checks(r) for r in reference):
         result["false_notices"] = {r.ticket_id: false_notice_audit(by_id[r.ticket_id], r, cal)
                                    for r in reference}
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1291,6 +1338,18 @@ def main(argv: Sequence[str] | None = None) -> None:
     keys.extend(case.value for case in CloseCase
                 if case.value in summary["methods"][summary["reference"]])  # fmt: skip
     print(table(summary, keys))
+    for name, rows in by_kind.items():
+        if rows:
+            print(f"\n{name} model calls")
+            print("| Kind | Calls | Disk hits | Input | Cached input | Output | "
+                  "USD | Mean s | Useful |")
+            print("|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+            for kind, row in rows.items():
+                rate = "—" if row["useful_rate"] is None else f"{row['useful_rate']:.1%}"
+                print(f"| {kind} | {row['calls']} | {row['response_cache_hits']} | "
+                      f"{row['input']} | "
+                      f"{row['cached_input']} | {row['output']} | ${row['usd']:.4f} | "
+                      f"{row['mean_seconds'] or 0:.2f} | {rate} |")
     for m, rows in summary["methods"].items():
         print(f"{m}: promises {rows['promise_stages']}; beats {rows['beats']}", file=sys.stderr)
     print(f"guards: {effects['verdicts']}", file=sys.stderr)

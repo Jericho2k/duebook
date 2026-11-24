@@ -18,11 +18,14 @@ Two things follow from that, and both matter for reliability:
 
 from __future__ import annotations
 
+import json
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
 
-from .card import Card, Commitment, CommitmentState, Conditional, Confidence, Party
+from .card import Card, Closure, Commitment, CommitmentState, Conditional, Confidence, Party
+from .events import AssigneeChanged, CheckKind, MessagePosted, PromiseCheck
 
 
 class Status(StrEnum):
@@ -135,6 +138,8 @@ def notices(card: Card, now: datetime, policy: AlertPolicy | None = None) -> lis
                 commitment_id=c.id,
                 due_at=due_at,
                 recipient=_recipient(card, c),
+                seq=next((s.source.seq for s in reversed(c.suggestions)
+                          if s.kind is Closure.RESOLVED), None),
             )
         )
     for c in card.commitments:
@@ -173,6 +178,42 @@ def next_wakeup(card: Card, now: datetime, policy: AlertPolicy | None = None) ->
     moments += [m for c in card.commitments if (m := claim_check_at(c, policy)) is not None]
     future = [m for m in moments if m > now]
     return min(future) if future else None
+
+
+def deadline_checks(card: Card, policy: AlertPolicy) -> Iterable[tuple[datetime, Commitment]]:
+    for c in card.commitments:
+        if _alertable(c, policy):
+            due = c.due.deadline.due_at
+            for at in sorted({due - _lead(c, policy) - timedelta(hours=1),
+                              due - timedelta(minutes=15)}):
+                if at > c.created_at:
+                    yield at, c
+
+
+def handoff_checks(card: Card, event: AssigneeChanged) -> Iterable[tuple[datetime, Commitment]]:
+    return ((event.at, c) for c in card.commitments
+            if c.state is CommitmentState.OPEN and c.owner is not Party.CUSTOMER)
+
+
+def promise_check(card: Card, c: Commitment, kind: CheckKind, at: datetime,
+                  messages: Iterable[MessagePosted]) -> PromiseCheck:
+    # UTF-8 bytes bound the token count of the JSON evidence.
+    remaining = 6400
+    evidence = []
+    for m in messages:  # newest first
+        if not m.public or m.seq > card.last_seq or m.at > at:
+            continue
+        if m.seq <= c.source.seq:
+            break
+        row = json.dumps([m.id, m.author.side.value, m.text], ensure_ascii=False)
+        remaining -= len(row.encode()) + 2
+        if remaining < 0:
+            break
+        evidence.append(m)
+    position = card.last_seq if kind is CheckKind.HANDOFF else at.isoformat()
+    return PromiseCheck(id=f"check:{kind}:{c.id}:{position}",
+                        ticket_id=card.ticket_id, seq=card.last_seq, at=at,
+                        commitment_id=c.id, kind=kind, messages=tuple(evidence))
 
 
 def claim_check_at(c: Commitment, policy: AlertPolicy | None = None) -> datetime | None:

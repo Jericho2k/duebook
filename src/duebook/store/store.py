@@ -21,17 +21,36 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 import psycopg
 from psycopg.types.json import Jsonb
 
 from ..card import Card
-from ..events import Event, MessagePosted, Role, Side, other_side, remember_turn
-from ..lifecycle import AlertPolicy, next_wakeup, notices
+from ..events import (
+    AssigneeChanged,
+    CheckKind,
+    Event,
+    MessagePosted,
+    PromiseCheck,
+    Role,
+    Side,
+    other_side,
+    remember_turn,
+)
+from ..extract.client import ModelCall
+from ..extract.extractor import mark_useful
+from ..lifecycle import (
+    AlertPolicy,
+    deadline_checks,
+    handoff_checks,
+    next_wakeup,
+    notices,
+    promise_check,
+)
 from ..proposals import Proposal
-from ..reducer import Guards, Rejection, apply
+from ..reducer import Guards, OutOfOrder, Rejection, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
@@ -81,6 +100,7 @@ class Store:
     policy: AlertPolicy = field(default_factory=AlertPolicy)
     #: Like the calendar, part of what a replay depends on.
     vocab: Vocabulary = DEFAULT_VOCABULARY
+    schedule_checks: bool = False
     outbox: Outbox = field(init=False)
 
     def __post_init__(self) -> None:
@@ -106,7 +126,7 @@ class Store:
                 self._mark_pending(event.ticket_id, now)
                 return True
             stored = self.conn.execute(
-                "select body from events where ticket_id = %s and seq = %s",
+                "select body from events where ticket_id = %s and seq = %s and check_order = 0",
                 (event.ticket_id, event.seq),
             ).fetchone()
         if stored is None:
@@ -124,6 +144,7 @@ class Store:
         usage: Any = None,
         verifier_usage: Any = None,
         malformed: Any = None,
+        model_calls: tuple[ModelCall, ...] = (),
     ) -> Recorded:
         """Apply one event and persist everything that follows from it.
 
@@ -131,8 +152,20 @@ class Store:
         one; nothing is written in that case.
         """
         with self.conn.transaction():
-            self.ingest(event, now)
+            if not isinstance(event, PromiseCheck):
+                self.ingest(event, now)
             card = self._lock(event.ticket_id, now)
+            order = self._check_order(event) if isinstance(event, PromiseCheck) else 0
+            if order and self.conn.execute(
+                "select 1 from event_proposals where ticket_id = %s and seq = %s"
+                " and check_order = %s",
+                (event.ticket_id, event.seq, order),
+            ).fetchone():
+                return Recorded(card, replayed=True)
+            if order or (self.schedule_checks and event.seq == card.last_seq + 1):
+                pending = self.next_check(card)
+                if (order and pending is None) or (pending is not None and pending.id != event.id):
+                    raise OutOfOrder("reconciliation checks must be applied in log order")
             previous = self.previous_turn(event) if any(
                 getattr(p, "context_quote", "") for p in proposals
             ) else None
@@ -140,6 +173,12 @@ class Store:
             if outcome.replayed:
                 return Recorded(card, replayed=True)
 
+            if model_calls:
+                mark_useful(model_calls, card, outcome, event, proposals, self.cal,
+                            self.vocab, previous=previous)
+                usage = {**(usage or {}), "model_calls": [
+                    *((usage or {}).get("model_calls") or ()), *(c.record() for c in model_calls)
+                ]}
             refused = [
                 {"index": _position(proposals, r.proposal), "reason": r.reason.value}
                 for r in outcome.rejections
@@ -147,16 +186,20 @@ class Store:
             self.conn.execute(
                 "insert into event_proposals"
                 " (ticket_id, seq, proposals, rejections, usage, verifier_usage, malformed,"
-                " applied_at) values (%s, %s, %s, %s, %s, %s, %s, %s)",
+                " applied_at, check_order) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (event.ticket_id, event.seq, Jsonb(encode(tuple(proposals))), Jsonb(refused),
-                 _json(usage), _json(verifier_usage), _json(malformed), now),
+                 _json(usage), _json(verifier_usage), _json(malformed), now, order),
             )  # fmt: skip
             # The event is read at last: whatever held the ticket here is over.
             self.conn.execute(
                 "delete from holds where ticket_id = %s and seq <= %s",
                 (event.ticket_id, event.seq),
             )
-            enqueued = self._settle(outcome.card, now)
+            if self.schedule_checks and isinstance(event, AssigneeChanged):
+                self._append_checks(outcome.card, handoff_checks(outcome.card, event),
+                                    CheckKind.HANDOFF, now)
+            enqueued = self.outbox.enqueue(notices(card, now, self.policy), now) if order else ()
+            enqueued += self._settle(outcome.card, now)
         return Recorded(outcome.card, outcome.rejections, enqueued=enqueued)
 
     def wake(self, now: datetime, limit: int = 100) -> int:
@@ -172,13 +215,56 @@ class Store:
         """
         with self.conn.transaction():
             rows = self.conn.execute(
-                "select card from tickets where wake_at <= %s"
+                "select card, check_at from tickets where wake_at <= %s"
                 " order by wake_at limit %s for update skip locked",
                 (now, limit),
             ).fetchall()
             for row in rows:
-                self._settle(decode_card(row["card"]), now)
+                card, check_at = decode_card(row["card"]), row["check_at"]
+                if self.schedule_checks and check_at is not None and check_at <= now:
+                    lock = self.conn.execute(
+                        "select pg_try_advisory_xact_lock(hashtextextended(%s, 0)) as got",
+                        (card.ticket_id,),
+                    ).fetchone()
+                    if lock["got"]:
+                        checks = ((at, c) for at, c in deadline_checks(card, self.policy)
+                                  if check_at <= at <= now)
+                        self._append_checks(card, checks, CheckKind.DEADLINE, now)
+                        self.conn.execute("update tickets set check_at = null where ticket_id = %s",
+                                          (card.ticket_id,))
+                self._settle(card, now)
         return len(rows)
+
+    def _append_checks(self, card, checks, kind: CheckKind, now: datetime) -> None:
+        for at, c in sorted(checks, key=lambda item: (item[0], item[1].id)):
+            rows = self.conn.execute(
+                "select body from events where ticket_id = %s and kind = 'MessagePosted'"
+                " and seq > %s and seq <= %s and at <= %s and (body->>'public')::boolean"
+                " order by seq desc",
+                (card.ticket_id, c.source.seq, card.last_seq, at),
+            )
+            check = promise_check(card, c, kind, at, (decode_event(row["body"]) for row in rows))
+            stored = self.conn.execute(
+                "insert into events"
+                " (ticket_id, seq, event_id, kind, at, body, received_at, check_order)"
+                " values (%s, %s, %s, 'PromiseCheck', %s, %s, %s, nextval('event_check_order'))"
+                " on conflict do nothing returning seq",
+                (card.ticket_id, check.seq, check.id, check.at, Jsonb(encode(check)), now),
+            ).fetchone()
+            if stored is not None:
+                self._mark_pending(card.ticket_id, now)
+
+    def _check_order(self, event: PromiseCheck) -> int:
+        row = self.conn.execute(
+            "select check_order, body from events where ticket_id = %s and event_id = %s"
+            " and check_order > 0",
+            (event.ticket_id, event.id),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"check {event.id} must be appended before processing")
+        if row["body"] != encode(event):
+            raise Conflict(f"check {event.id} differs from its stored evidence")
+        return row["check_order"]
 
     def hold(
         self,
@@ -269,14 +355,25 @@ class Store:
 
     def event(self, ticket_id: str, seq: int) -> Event | None:
         row = self.conn.execute(
-            "select body from events where ticket_id = %s and seq = %s", (ticket_id, seq)
+            "select body from events where ticket_id = %s and seq = %s and check_order = 0",
+            (ticket_id, seq),
+        ).fetchone()
+        return decode_event(row["body"]) if row else None
+
+    def next_check(self, card: Card) -> PromiseCheck | None:
+        row = self.conn.execute(
+            "select e.body from events e left join event_proposals p"
+            " using (ticket_id, seq, check_order) where e.ticket_id = %s and e.seq = %s"
+            " and e.check_order > 0 and p.seq is null order by e.check_order limit 1",
+            (card.ticket_id, card.last_seq),
         ).fetchone()
         return decode_event(row["body"]) if row else None
 
     def events(self, ticket_id: str) -> Iterator[Event]:
         """The acknowledged stream, including events still waiting for processing."""
         rows = self.conn.execute(
-            "select body from events where ticket_id = %s order by seq", (ticket_id,),
+            "select body from events where ticket_id = %s and check_order = 0 order by seq",
+            (ticket_id,),
         )
         return (decode_event(row["body"]) for row in rows)
 
@@ -304,8 +401,9 @@ class Store:
     def _applied(self, ticket_id: str, upto: int | None) -> list[dict]:
         return self.conn.execute(
             "select e.body, p.proposals, p.close_rules from events e"
-            " join event_proposals p using (ticket_id, seq)"
-            " where e.ticket_id = %s and (%s::bigint is null or e.seq <= %s) order by e.seq",
+            " join event_proposals p using (ticket_id, seq, check_order)"
+            " where e.ticket_id = %s and (%s::bigint is null or e.seq <= %s)"
+            " order by e.seq, e.check_order",
             (ticket_id, upto, upto),
         ).fetchall()
 
@@ -348,7 +446,8 @@ class Store:
         """How many stored events have not been applied yet."""
         row = self.conn.execute(
             "select count(*) as n from events e where e.ticket_id = %s and not exists"
-            " (select 1 from event_proposals p where p.ticket_id = e.ticket_id and p.seq = e.seq)",
+            " (select 1 from event_proposals p where p.ticket_id = e.ticket_id and p.seq = e.seq"
+            " and p.check_order = e.check_order)",
             (ticket_id,),
         ).fetchone()
         return row["n"]
@@ -421,11 +520,18 @@ class Store:
     def _settle(self, card: Card, now: datetime) -> tuple[str, ...]:
         """Write the snapshot, queue what is due now, and note when to look again."""
         enqueued = self.outbox.enqueue(notices(card, now, self.policy), now)
+        wake_at = next_wakeup(card, now, self.policy)
+        check_at = None
+        if self.schedule_checks:
+            check_at = min((at for at, _ in deadline_checks(card, self.policy) if at > now),
+                           default=None)
         self.conn.execute(
-            "update tickets set last_seq = %s, card = %s, wake_at = %s, updated_at = %s"
+            "update tickets set last_seq = %s, card = %s, updated_at = %s,"
+            " check_at = least(case when check_at <= %s then check_at end, %s),"
+            " wake_at = least(%s, %s, case when check_at <= %s then %s end)"
             " where ticket_id = %s",
-            (card.last_seq, Jsonb(encode(card)), next_wakeup(card, now, self.policy), now,
-             card.ticket_id),
+            (card.last_seq, Jsonb(encode(card)), now, now, check_at, wake_at, check_at, now,
+             now + timedelta(seconds=1), card.ticket_id),
         )  # fmt: skip
         return enqueued
 

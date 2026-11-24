@@ -7,6 +7,7 @@ side. The reducer makes the decision from the stored verdict and evidence.
 
 from __future__ import annotations
 
+import json
 import logging
 from collections import Counter
 from dataclasses import dataclass, field, replace
@@ -14,7 +15,7 @@ from typing import Any
 
 from ..card import Card, Commitment
 from ..closing import NAMING, asks_to_confirm, confirms_reply, overlap
-from ..events import Event, MessagePosted
+from ..events import Event, MessagePosted, PromiseCheck, other_side
 from ..proposals import (
     CancelCommitment,
     MakeCommitment,
@@ -24,8 +25,9 @@ from ..proposals import (
     Verdict,
     Verification,
 )
+from ..reducer import identity_candidates
 from ..temporal import WorkCalendar
-from .client import DEFAULT_MODEL, ChatClient, ModelError
+from .client import DEFAULT_MODEL, ChatClient, ModelError, call_kind
 from .cost import Usage
 from .extractor import Extraction, JsonModel, Reader, VerifierUsage, read_event
 
@@ -103,8 +105,8 @@ def target_of(proposal: Proposal) -> str | None:
     match proposal:
         case ResolveCommitment() | CancelCommitment():
             return proposal.commitment_id
-        case MakeCommitment(supersedes=str() as old):
-            return old
+        case MakeCommitment():
+            return proposal.restates or proposal.supersedes
     return None
 
 
@@ -151,6 +153,11 @@ class Verifier:
             {"role": "system", "content": VERIFIER_PROMPT},
             {"role": "user", "content": render_request(target, proposal, event, self.cal)},
         ]
+        if isinstance(proposal, MakeCommitment) and proposal.restates:
+            messages[0]["content"] = REPEAT_VERIFIER_PROMPT
+        if isinstance(proposal, ResolveCommitment) and proposal.partial:
+            messages[0]["content"] += (" Here done means it reports concrete progress on this "
+                                       "promise, even if part remains. Judge the progress only.")
         verdict, usage, provider, _ = self._ask(messages, VERIFY_SCHEMA, "verdict")
         return verdict, usage, provider
 
@@ -178,7 +185,8 @@ class Verifier:
     def _ask(self, messages, schema, output):
         name = _model_name(self.model)
         try:
-            completion = self.model.complete_json(messages, schema, name=output)
+            with call_kind("verify"):
+                completion = self.model.complete_json(messages, schema, name=output)
         except ModelError as error:  # fail safe: as if no verifier had been asked
             failure = Verification(Verdict.UNSURE, model=name, error=f"ModelError: {error}")
             return failure, error.usage, error.provider, {}
@@ -205,7 +213,9 @@ class VerifyingReader:
     """
 
     reader: Reader
-    verifier: Verifier
+    verifier: Verifier | None
+    reconciler: JsonModel | None = None
+    cal: WorkCalendar = field(default_factory=WorkCalendar)
 
     def extract(self, card: Card, event: Event) -> Extraction:
         return self.extract_with_context(card, event, None)
@@ -213,13 +223,17 @@ class VerifyingReader:
     def extract_with_context(
         self, card: Card, event: Event, previous: MessagePosted | None,
     ) -> Extraction:
-        return self.verify_extraction(card, event, previous,
-                                      read_event(self.reader, card, event, previous))
+        if isinstance(event, PromiseCheck):
+            return self._check(card, event) if self.reconciler else Extraction()
+        extraction = read_event(self.reader, card, event, previous)
+        if self.reconciler and isinstance(event, MessagePosted):
+            extraction = self._identities(card, event, extraction)
+        return self.verify_extraction(card, event, previous, extraction)
 
     def verify_extraction(
         self, card: Card, event: Event, previous: MessagePosted | None, extraction: Extraction,
     ) -> Extraction:
-        if not isinstance(event, MessagePosted) or any(
+        if self.verifier is None or not isinstance(event, MessagePosted) or any(
             isinstance(p, Unreadable) for p in extraction.proposals
         ):
             return extraction
@@ -248,9 +262,144 @@ class VerifyingReader:
                                 event.ticket_id, event.seq, target.id, verdict.model)  # fmt: skip
             proposals.append(p)
         if not providers:
-            return extraction
+            return replace(extraction, proposals=tuple(proposals))
         usage = VerifierUsage(providers.total(), failures, spent, dict(providers))
         return replace(extraction, proposals=tuple(proposals), verifier_usage=usage)
+
+
+    def _identities(self, card: Card, event: MessagePosted, extraction: Extraction) -> Extraction:
+        proposals = list(extraction.proposals)
+        usage = extraction.usage
+        for index, p in enumerate(proposals):
+            if not isinstance(p, MakeCommitment):
+                continue
+            candidates = identity_candidates(card, event, p, self.cal)
+            if not candidates:
+                continue
+            data, verification, cost = self._reconcile(
+                "identity", IDENTITY_PROMPT, IDENTITY_SCHEMA,
+                {"promise": [p.action, p.quote, p.due_quote], "message": event.text,
+                 "candidates": {c.id: [*_description(c), date] for c, date in candidates}},
+                index, p,
+            )
+            usage += cost
+            target, date = next(((c, date) for c, date in candidates if c.id == data.get("id")),
+                                (None, "unclear"))
+            quote = data.get("target_quote")
+            result = data.get("result")
+            if target and isinstance(quote, str) and result in ("repeat", "reschedule"):
+                # The model identifies the promise. The temporal resolver distinguishes its dates.
+                p = replace(p, restates=target.id if date in ("same", "unstated") else None,
+                            supersedes=target.id if date == "different" else None,
+                            target_quote=quote, verification=None, reconciliation=verification)
+            elif result == "new":
+                p = replace(p, supersedes=None, target_quote="", verification=None,
+                            reconciliation=replace(verification, verdict=Verdict.NO))
+            else:
+                p = replace(p, reconciliation=replace(verification, verdict=Verdict.UNSURE))
+            proposals[index] = p
+        return replace(extraction, proposals=tuple(proposals), usage=usage)
+
+    def _check(self, card: Card, event: PromiseCheck) -> Extraction:
+        target = card.commitment(event.commitment_id)
+        if target is None or not target.unresolved or not event.messages:
+            return Extraction()
+        data, _, cost = self._reconcile(
+            event.kind.value, CHECK_PROMPT, CHECK_SCHEMA,
+            {"promise": _description(target),
+             "messages": [[m.id, m.author.side.value, m.text] for m in reversed(event.messages)]},
+        )
+        result, quote, target_quote = (data.get(k) for k in ("result", "quote", "target_quote"))
+        proof = next((m for m in event.messages if m.id == data.get("id")), None)
+        if result not in ("kept", "partial") or not all(isinstance(v, str) for v in (
+            quote, target_quote,
+        )):
+            return Extraction(usage=cost)
+        proposal = ResolveCommitment(target.id, quote, target_quote,
+                                     evidence_id=data.get("id") or "", partial=result == "partial")
+        if proof is None or not quote.strip() or quote not in proof.text:
+            return Extraction((proposal,), usage=cost)
+        context = data.get("context_quote")
+        if isinstance(context, str) and context and not proposal.partial:
+            previous = max((m for m in event.messages if m.seq < proof.seq and m.text.strip()
+                            and m.author.side is other_side(proof)), key=lambda m: m.seq,
+                           default=None)
+            if previous and context in previous.text:
+                proposal = replace(proposal, context_quote=context)
+        else:
+            previous = None
+        checked = self.verify_extraction(card, proof, previous, Extraction((proposal,), usage=cost))
+        p = checked.proposals[0]
+        if p.commitment_id != target.id:
+            p = replace(proposal, verification=Verification(Verdict.NO))
+        return replace(checked, proposals=(p,))
+
+    def _reconcile(self, kind, prompt, schema, payload, index=None, original=None):
+        name = _model_name(self.reconciler)
+        messages = [{"role": "system", "content": prompt},
+                    {"role": "user", "content": json.dumps(payload, ensure_ascii=False)}]
+        try:
+            with call_kind(f"reconcile_{kind}", index, original):
+                answer = self.reconciler.complete_json(messages, schema, name=f"reconcile_{kind}")
+        except ModelError as error:
+            return {}, Verification(Verdict.UNSURE, model=name, error=str(error)), error.usage
+        return answer.data, Verification(Verdict.YES, model=name), answer.usage
+
+
+IDENTITY_PROMPT = """
+Decide whether a new support promise repeats one open promise, reschedules that same promise,
+or is new. Focus on the new promise's quoted span, using the full message for context such as
+a sentence saying its earlier deadline will be missed. A repeat adds no separate obligation.
+Each candidate's last field compares deadlines: same, unstated, different, or unclear.
+Use this comparison and never calculate a date.
+Repeat includes an explicit reminder of the same deadline. Only different can be a reschedule.
+Look at the object, action, recipient, qualifiers, and numbers. A different environment, order,
+version, deliverable, or phase is a separate promise. Do not guess between possible targets.
+Return repeat or reschedule with a candidate id and a verbatim identifying target_quote from its
+original quote. Return new with empty id and target_quote if no unique candidate fits.
+"""
+
+REPEAT_VERIFIER_PROMPT = """
+Does NEW MESSAGE repeat the same outstanding promise in COMMITMENT? Compare the action,
+deliverable, recipient, and any order number, environment, or phase. A repeated date or
+extra logistical detail can still be the same promise. Say no if it adds a separate
+obligation or leaves the identity unclear. Return yes with a verbatim evidence_quote
+from NEW MESSAGE if it is the same obligation, otherwise return no or unsure with an
+empty evidence_quote.
+"""
+
+
+CHECK_PROMPT = """
+Review one support promise and the public messages after it in chronological order.
+Find a message showing that this exact promised action was completed. A delivered link, filename,
+or artifact can itself show completion when it is clearly the promised one. A plan, repeated
+promise, status enquiry, thanks, or a similar deliverable for a different order or environment
+is insufficient. Do not guess based on time or if more than one obligation fits the evidence.
+For kept or partial, give the evidence message id, its exact quote, and a target_quote copied
+verbatim from the promise's original wording. Partial means concrete progress with work remaining.
+Prefer the counterparty's confirmation when both sides mention the completion. For a short
+confirmation that answers the other side's immediately preceding question, also quote that
+question as context_quote. Otherwise leave it empty. If there is no evidence, return open
+with all other fields empty. Only use the supplied messages.
+"""
+
+
+def _reconciliation_schema(results, *fields):
+    return {"type": "object", "properties": {
+        "result": {"type": "string", "enum": results},
+        **{key: {"type": "string"} for key in fields},
+    }, "required": ["result", *fields], "additionalProperties": False}
+
+
+IDENTITY_SCHEMA = _reconciliation_schema(["repeat", "reschedule", "new"], "id", "target_quote")
+CHECK_SCHEMA = _reconciliation_schema(
+    ["kept", "partial", "open"], "id", "quote", "target_quote", "context_quote"
+)
+
+
+def _description(c: Commitment) -> list[str]:
+    return [c.owner.side.value, c.action, c.source.quote,
+            c.due.deadline.due_at.isoformat() if c.due else ""]
 
 
 def _leans_on(previous: MessagePosted | None, p: Proposal, target: Commitment) -> bool:
@@ -297,8 +446,10 @@ def verifying_reader(
     *,
     model: str = DEFAULT_MODEL,
     reasoning: str = DEFAULT_VERIFIER_REASONING,
+    reconciler: JsonModel | None = None,
+    verify: bool = True,
 ) -> VerifyingReader:
     """Reuse the connection options and route the verifier by its own model preset."""
     if isinstance(client, ChatClient):
         client = replace(client, model=model, reasoning=reasoning, settings=None)
-    return VerifyingReader(reader, Verifier(client, cal))
+    return VerifyingReader(reader, Verifier(client, cal) if verify else None, reconciler, cal)

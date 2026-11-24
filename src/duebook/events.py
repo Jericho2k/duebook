@@ -92,3 +92,17 @@ class AssigneeChanged(Event):
 class StatusChanged(Event):
     previous: str
     current: str
+
+
+class CheckKind(StrEnum):
+    DEADLINE = "deadline"
+    HANDOFF = "handoff"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PromiseCheck(Event):
+    """A system event ordered after its helpdesk sequence and before the next."""
+
+    commitment_id: str
+    kind: CheckKind
+    messages: tuple[MessagePosted, ...]

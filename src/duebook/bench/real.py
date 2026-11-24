@@ -52,6 +52,8 @@ def estimate(bundle):
                     * ((context + 2 * body) * pricing.input_per_m + output * pricing.output_per_m)
                     / 1_000_000
                 )
+        for key, calls in (("expected_usd", 50), ("stress_usd", 150)):
+            group[key] += calls * (6400 * pricing.input_per_m + 4000 * pricing.output_per_m) / 1e6
     return {
         "route": ROUTE,
         "pricing_per_million": asdict(pricing),
@@ -138,9 +140,13 @@ def live(bundle, labels_path, bundle_sha, approval, max_usd, out):
     journal.touch(exist_ok=False, mode=0o600)
     ledger = Ledger(max_usd, PRICES[DEFAULT_MODEL])
     method = reference_method(ledger)
-    for field in ("model", "escalation", "verifier"):
+    for field in ("model", "escalation", "verifier", "reconciler"):
         client = getattr(method, field)
-        provider = openrouter_fields(settings_for(client.model, client.reasoning))["provider"]
+        if client is None:
+            continue
+        provider = openrouter_fields(
+            client.settings or settings_for(client.model, client.reasoning)
+        )["provider"]
         setattr(
             method,
             field,

@@ -356,6 +356,7 @@ def _review_card(
             "source": evidence(c.source), "resolution": resolution,
             "resolution_context": evidence(c.resolution_context) if c.resolution_context else None,
             "activated_by": evidence(c.activated_by) if c.activated_by else None,
+            "progress": [evidence(item) for item in c.progress],
             "suggestions": [suggestion(item) for item in c.suggestions] if c.unresolved else [],
         })
     facts = {fact.id: fact for fact in card.facts}

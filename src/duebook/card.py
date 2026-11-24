@@ -8,7 +8,7 @@ was true earlier but changed" is half of what a new operator needs to know.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import IntEnum, StrEnum
 
@@ -169,6 +169,7 @@ class Commitment:
     #: The claim was recorded under rule version 6, so ``lifecycle`` asks a person to
     #: check it if the other side has not confirmed it by the deadline (decision 0006).
     claim_checked: bool = False
+    progress: tuple[Source, ...] = field(default=(), metadata={"omit_default": True})
 
     @property
     def unresolved(self) -> bool:

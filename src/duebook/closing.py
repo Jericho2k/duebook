@@ -230,6 +230,15 @@ def _differences(text: str, target: Iterable[str]) -> tuple[list[Stem], list[Ste
     return _added(mine, theirs), _added(theirs, mine)
 
 
+def names_dropped(text: str, target: Iterable[str]) -> bool:
+    return bool(_differences(text, target)[1])
+
+
+def shares_name(text: str, target: Iterable[str]) -> bool:
+    names = [s for item in target for s in content(item)]
+    return any(s.meets(t) for s in content(text) for t in names)
+
+
 def names_beyond(question: str, target: Iterable[str]) -> bool:
     """Does the question a reply confirms name something ``target`` does not?
 

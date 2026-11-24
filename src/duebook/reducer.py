@@ -65,17 +65,20 @@ from .closing import (
     confirms,
     confirms_reply,
     names_beyond,
+    names_dropped,
     names_other,
     negated,
     overlap,
     quote_identifies,
     restates,
+    shares_name,
     vouches,
 )
 from .events import (
     AssigneeChanged,
     Event,
     MessagePosted,
+    PromiseCheck,
     Role,
     Side,
     StatusChanged,
@@ -148,7 +151,7 @@ GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMB
 #: close may not name another thing; 4 promise identity (decision 0003);
 #: 5 identifier slots hold a set (decision 0005); 6 an unconfirmed claim is checked, and a
 #: confirmation aimed at something that is not an open promise is suggested (decision 0006).
-RULES = 6
+RULES = 7
 
 
 @dataclass(frozen=True, slots=True)
@@ -229,6 +232,11 @@ def apply(
 ) -> Outcome:
     if event.ticket_id != card.ticket_id:
         raise ValueError(f"event {event.id} belongs to ticket {event.ticket_id}")
+    guards = guards or Guards()
+    if isinstance(event, PromiseCheck) and guards.rules >= 7:
+        if event.seq != card.last_seq:
+            raise OutOfOrder(f"check {event.id} expects seq {event.seq}, got {card.last_seq}")
+        return _apply_check(card, event, proposals, guards)
     if event.seq <= card.last_seq:
         return Outcome(card, replayed=True)
     if event.seq != card.last_seq + 1:
@@ -236,7 +244,6 @@ def apply(
 
     cal = cal or WorkCalendar()
     vocab = vocab or DEFAULT_VOCABULARY
-    guards = guards or Guards()
     card = replace(card, last_seq=event.seq)
     rejections: list[Rejection] = []
 
@@ -260,6 +267,35 @@ def apply(
                                previous)  # fmt: skip
         rejections += [Rejection(proposal, reason) for reason in reasons]
 
+    return Outcome(card, tuple(rejections))
+
+
+def _apply_check(card, event: PromiseCheck, proposals, guards: Guards) -> Outcome:
+    rejections = []
+    for p in proposals:
+        if not isinstance(p, ResolveCommitment) or p.commitment_id != event.commitment_id:
+            rejections.append(Rejection(p, Reason.UNKNOWN_TARGET))
+            continue
+        proof = next((m for m in event.messages if m.id == p.evidence_id), None)
+        if proof is None or not proof.public or proof.ticket_id != event.ticket_id or (
+            proof.seq > event.seq or proof.at > event.at or not p.quote.strip()
+            or p.quote not in proof.text
+        ):
+            rejections.append(Rejection(p, Reason.UNGROUNDED))
+            continue
+        target = card.commitment(p.commitment_id)
+        if target is None or not target.unresolved or proof.seq <= target.source.seq:
+            rejections.append(Rejection(p, Reason.UNKNOWN_TARGET))
+            continue
+        previous = max((m for m in event.messages if m.seq < proof.seq and m.public
+                        and m.author.side is other_side(proof) and m.text.strip()),
+                       key=lambda m: m.seq, default=None)
+        source = Source(proof.id, proof.seq, proof.author.id, proof.author.side, p.quote)
+        updated, reasons = _resolve_commitment(card, proof, p, source, guards, previous)
+        if reasons:
+            rejections.extend(Rejection(p, reason) for reason in reasons)
+        else:
+            card = updated
     return Outcome(card, tuple(rejections))
 
 
@@ -470,6 +506,15 @@ def _make_commitment(
     if any(_same_promise(c, p, due, guards) for c in card.commitments):
         return card, [Reason.DUPLICATE]
 
+    if guards.rules >= 7 and p.restates is not None:
+        old = card.commitment(p.restates)
+        if (
+            old is not None and _reconciled_identity(old, p, due, reasons)
+            and not _check_close(old, _rivals(card, old), (p.quote, p.action), p.target_quote,
+                                 guards, p.verification, event.text, restates=True)
+        ):
+            return card, [Reason.DUPLICATE]
+
     retired, refused = p.supersedes, None
     if p.supersedes is not None:
         old = card.commitment(p.supersedes)
@@ -479,6 +524,11 @@ def _make_commitment(
             return card, [Reason.ALREADY_RESOLVED]
         refused = _check_close(old, _rivals(card, old), (p.quote, p.action), p.target_quote,
                                guards, p.verification, event.text, restates=True)  # fmt: skip
+        if (
+            guards.rules >= 7 and p.reconciliation and p.reconciliation.verdict is Verdict.YES
+            and (due is None or old.due and due.deadline.due_at == old.due.deadline.due_at)
+        ):
+            refused = refused or Reason.NOT_ABOUT_TARGET
         if refused is not None:
             # The new promise was made and is kept; the old one is NOT retired
             # on this evidence, only marked as possibly replaced.
@@ -514,6 +564,41 @@ def _make_commitment(
         for c in card.commitments
     )
     return replace(card, commitments=(*commitments, commitment)), reasons
+
+
+def identity_candidates(card: Card, event: MessagePosted, p: MakeCommitment,
+                        cal: WorkCalendar) -> list[tuple[Commitment, str]]:
+    if not p.action.strip() or p.owner.side is not event.author.side:
+        return []
+    if not p.quote.strip() or _norm(p.quote) not in _norm(event.text):
+        return []
+    due, reasons = _due(event, p.due, p.due_quote, p.quote, _norm(event.text), cal)
+    if any(_same_promise(c, p, due, Guards()) for c in card.commitments):
+        return []
+    candidates = [c for c in card.commitments if c.state is CommitmentState.OPEN
+                  and c.owner.side is p.owner.side
+                  and shares_name(f"{p.quote} {p.action}", _wording(c))]
+    return [(c, "unclear" if reasons else _date_relation(c, due)) for c in candidates]
+
+
+def _date_relation(c: Commitment, due: Due | None) -> str:
+    if due is None:
+        return "unstated"
+    if c.due is not None and c.due.deadline.due_at == due.deadline.due_at:
+        return "same"
+    return "different"
+
+
+def _reconciled_identity(target: Commitment, p: MakeCommitment,
+                         due: Due | None, reasons: list[Reason]) -> bool:
+    return (
+        target.state is CommitmentState.OPEN and target.owner.side is p.owner.side
+        and p.reconciliation is not None and p.reconciliation.verdict is Verdict.YES
+        and not reasons and (due is None or target.due is not None
+                             and due.deadline.due_at == target.due.deadline.due_at)
+        and shares_name(f"{p.quote} {p.action}", _wording(target))
+        and not names_dropped(f"{p.quote} {p.action}", _wording(target))
+    )
 
 
 def _same_promise(c: Commitment, p: MakeCommitment, due: Due | None, guards: Guards) -> bool:
@@ -588,6 +673,10 @@ def _resolve_commitment(
     if refused is not None:
         hint = Suggestion(Closure.RESOLVED, source, refused.value)
         return _put_commitment(card, _suggest(c, hint)), [refused]
+
+    if guards.rules >= 7 and p.evidence_id and p.partial:
+        updated = replace(c, progress=(*c.progress, source)) if source not in c.progress else c
+        return _put_commitment(card, updated), []
 
     if event.author.side is c.owner.side:
         # The debtor's word that it is done is a claim, not a fact.

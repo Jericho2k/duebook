@@ -24,7 +24,7 @@ as: no second opinion.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 from .card import Party, StepOutcome
@@ -79,6 +79,8 @@ class MakeCommitment:
     target_quote: str = ""
     #: The verifier's verdict on retiring the superseded commitment.
     verification: Verification | None = None
+    restates: str | None = field(default=None, metadata={"omit_default": True})
+    reconciliation: Verification | None = field(default=None, metadata={"omit_default": True})
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,6 +95,8 @@ class ResolveCommitment:
     verification: Verification | None = None
     #: An identifying span in the preceding public turn from the other side.
     context_quote: str = ""
+    evidence_id: str = field(default="", metadata={"omit_default": True})
+    partial: bool = field(default=False, metadata={"omit_default": True})
 
 
 @dataclass(frozen=True, slots=True)

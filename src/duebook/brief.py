@@ -189,6 +189,9 @@ class _Writer:
         elif c.state is CommitmentState.CLAIMED and c.resolution is not None:
             parts.append(f"заявлено как выполненное, не подтверждено {self.ref(c.resolution)}")
             sources.append(c.resolution)
+        for progress in c.progress:
+            parts.append(f"частично выполнено {self.ref(progress)}")
+            sources.append(progress)
         for hint in c.suggestions:
             # A close the reducer would not admit: still owed, but worth a look.
             if hint.reason == Reason.CONTEXT_NAMES_OTHER:

@@ -88,7 +88,7 @@ def supervise(
     while not stopper():
         try:
             with connect(dsn) as conn:
-                body(Store(conn, settings.calendar(), settings.policy()))
+                body(Store(conn, settings.calendar(), settings.policy(), schedule_checks=True))
         except Exception:
             if once:
                 raise
@@ -135,6 +135,7 @@ def serve(settings: Settings, args: argparse.Namespace) -> int:
 
 def extractor(settings: Settings):
     from .extract import ChatClient, Extractor
+    from .extract.client import reconciliation_client
     from .extract.extractor import reading_clients
     from .extract.verifier import verifying_reader
 
@@ -148,15 +149,10 @@ def extractor(settings: Settings):
     cal = settings.calendar()
     first, escalation = reading_clients(client)
     reader = Extractor(first, cal, escalation=escalation)
-    if settings.verifier_enabled:
-        return verifying_reader(
-            reader,
-            client,
-            cal,
-            model=settings.verifier_model,
-            reasoning=settings.verifier_reasoning,
-        )
-    return reader
+    return verifying_reader(
+        reader, client, cal, model=settings.verifier_model, reasoning=settings.verifier_reasoning,
+        reconciler=reconciliation_client(client), verify=settings.verifier_enabled,
+    )
 
 
 def process(settings: Settings, args: argparse.Namespace, stopper: Stopper, reader=None) -> int:

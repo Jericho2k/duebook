@@ -40,6 +40,7 @@ from psycopg_pool import ConnectionPool, PoolTimeout
 from .. import signing
 from ..brief import Brief, compose
 from ..card import Card, Source
+from ..events import CheckKind
 from ..lifecycle import status_at
 from ..settings import Settings
 from ..store import Conflict, Store
@@ -178,8 +179,12 @@ def create_app(
         budget: Annotated[int | None, Query(ge=1)] = None,
         format: Literal["text", "json"] = "text",
     ) -> PlainTextResponse | dict[str, Any]:
-        with store() as s:
+        with store() as s, s.conn.transaction():
+            s.conn.execute("set transaction isolation level repeatable read, read only")
             current = _known(s, ticket_id)
+            pending = s.next_check(current)
+            if pending is not None and pending.kind is CheckKind.HANDOFF:
+                raise HTTPException(202, "Handoff reconciliation is pending", {"Retry-After": "1"})
             names = s.authors(ticket_id)
         now = clock()
         b = compose(current, now, budget=budget, cal=cal, policy=policy, names=names)

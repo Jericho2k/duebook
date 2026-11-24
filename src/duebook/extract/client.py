@@ -32,14 +32,17 @@ import os
 import threading
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from contextlib import contextmanager, suppress
+from contextvars import ContextVar
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
 import httpx
 
-from .cost import Usage
+from ..proposals import MakeCommitment
+from .cost import PRICES, Usage
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
@@ -50,6 +53,7 @@ DEFAULT_MODEL = "deepseek/deepseek-v4.1-flash"
 REASONING: Mapping[str, Mapping[str, Any]] = MappingProxyType(
     {
         "off": MappingProxyType({"enabled": False}),
+        "medium": MappingProxyType({"effort": "medium", "exclude": True}),
         "low": MappingProxyType({"effort": "low", "exclude": True}),
     }
 )
@@ -110,6 +114,61 @@ PRESETS: Mapping[str, Preset] = MappingProxyType(
         "~z-ai/glm-flash-latest": Preset(("gmicloud/fp8", "tenstorrent/fp8", "novita/fp8"), "off"),
     }
 )
+
+
+RECONCILER = replace(PRESETS[DEFAULT_MODEL], reasoning="off")
+
+
+def reconciliation_client(client: ChatClient, reasoning: str | None = None) -> ChatClient:
+    return replace(client, model=DEFAULT_MODEL, settings=RECONCILER.settings(reasoning),
+                   max_tokens=400 if (reasoning or RECONCILER.reasoning) == "off" else 4000,
+                   content_retries=0)
+
+
+@dataclass(slots=True)
+class ModelCall:
+    kind: str
+    input: int
+    cached_input: int
+    output: int
+    usd: float | None
+    seconds: float
+    cache_hit: bool
+    useful: bool | None = None
+    proposal: int | None = None
+    event_id: str = ""
+    original: MakeCommitment | None = field(default=None, repr=False)
+
+    def record(self) -> dict:
+        return {f.name: getattr(self, f.name) for f in fields(self) if f.name != "original"}
+
+
+_calls: ContextVar[list[ModelCall] | None] = ContextVar("model_calls", default=None)
+_kind: ContextVar[tuple[str, int | None, MakeCommitment | None]] = ContextVar(
+    "call_kind", default=("read", None, None)
+)
+
+
+@contextmanager
+def capture_calls():
+    active = _calls.get()
+    if active is not None:
+        yield active
+        return
+    token = _calls.set([])
+    try:
+        yield _calls.get()
+    finally:
+        _calls.reset(token)
+
+
+@contextmanager
+def call_kind(kind: str, proposal: int | None = None, original: MakeCommitment | None = None):
+    token = _kind.set((kind, proposal, original))
+    try:
+        yield
+    finally:
+        _kind.reset(token)
 
 
 def settings_for(model: str, reasoning: str | None = None) -> ModelSettings:
@@ -238,10 +297,13 @@ class ChatClient:
 
         cache = self.cache if self.temperature == 0 else None
         if cache is not None:
+            started = time.perf_counter()
             stored = cache.get(body)
             data = _content(stored) if stored is not None else None
             if isinstance(data, dict):
-                return Completion(data, _usage(stored), cached=True,
+                usage = _usage(stored)
+                self._observe(usage, started, cached=True)
+                return Completion(data, usage, cached=True,
                                   provider=stored.get("provider"))  # fmt: skip
 
         spent = Usage()
@@ -262,7 +324,7 @@ class ChatClient:
 
         while True:
             try:
-                response = self._post(body)
+                response = self._measured_post(body)
             except httpx.TimeoutException as error:
                 raise ModelError(f"timeout, not retried (it may have been billed): {error!r}",
                                  spent, provider=provider) from error  # fmt: skip
@@ -324,6 +386,26 @@ class ChatClient:
             if cache is not None:
                 cache.put(body, payload)
             return Completion(data, spent, tuple(problems), provider=provider)
+
+    def _observe(self, usage: Usage, started: float, *, cached: bool = False) -> None:
+        calls = _calls.get()
+        if calls is not None:
+            kind, proposal, original = _kind.get()
+            calls.append(ModelCall(kind, usage.prompt_tokens, usage.cached_tokens,
+                                   usage.completion_tokens, usage.usd(PRICES.get(self.model)),
+                                   time.perf_counter() - started, cached, proposal=proposal,
+                                   original=original))
+
+    def _measured_post(self, body: dict[str, Any]) -> httpx.Response:
+        started, usage = time.perf_counter(), Usage()
+        try:
+            response = self._post(body)
+            if _calls.get() is not None:
+                with suppress(AttributeError, TypeError, ValueError, OverflowError):
+                    usage = _usage(response.json())
+            return response
+        finally:
+            self._observe(usage, started)
 
     def _post(self, body: dict[str, Any]) -> httpx.Response:
         http = self.http or httpx

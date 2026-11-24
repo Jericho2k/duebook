@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass, field, replace
 from typing import Any, Protocol
 
 from ..card import Card
-from ..events import Event, MessagePosted
+from ..events import Event, MessagePosted, PromiseCheck
 from ..extract.cost import Usage
 from ..extract.extractor import Extraction, Extractor, JsonModel, Reader, read_event
 from ..extract.prompt import Bound, build_messages
@@ -60,9 +60,12 @@ class MethodRun:
         failure: str | None = None,
         detail: dict[str, Any] | None = None,
     ) -> MethodRun:
+        detail = detail or {}
+        if tally.model_calls:
+            detail["model_calls"] = [call.record() for call in tally.model_calls]
         return cls(
             method, ticket.ticket_id, snaps, tally.usage, tally.ingest_seconds,
-            tally.answer_seconds, tally.ingest, tally.answer, failure, detail or {},
+            tally.answer_seconds, tally.ingest, tally.answer, failure, detail,
         )  # fmt: skip
 
 
@@ -84,6 +87,7 @@ class Recorded:
     seconds: float = 0.0
     verifier_seconds: float = 0.0
     providers: dict[str, int] = field(default_factory=dict)
+    checks: tuple[tuple[PromiseCheck, tuple[Proposal, ...]], ...] = ()
 
 
 @dataclass(slots=True)
@@ -113,6 +117,7 @@ class EventMemory:
     #: from ``recorded``: a targeted re-extraction. Only these are verified.
     reread: dict[str, frozenset[int]] | None = None
     capture_trace: bool = False
+    reconciler: JsonModel | None = None
 
     def run(self, ticket: SimTicket) -> MethodRun:
         meter = Meter(self.model, self.ledger)
@@ -129,15 +134,17 @@ class EventMemory:
             seqs = (self.reread or {}).get(ticket.ticket_id, frozenset())
             reader = _Spliced(answers, extractor, seqs, reread)
         checker = Meter(self.verifier, self.ledger) if self.verifier is not None else None
+        reconciler = Meter(self.reconciler, self.ledger, meter.tally) if self.reconciler else None
         if checker is not None and self.reread is not None:
             # Only what is read now: a record's unverified closes stay as recorded.
             reader.live = verifying_reader(reader.live, checker, self.cal)
         elif checker is not None:
-            reader = verifying_reader(reader, checker, self.cal)
+            reader = verifying_reader(reader, checker, self.cal, reconciler=reconciler)
         trace = [] if self.capture_trace else None
         folded = fold(
             ticket, reader, [cp.seq for cp in checkpoints(ticket)], self.cal,
-            trace=trace,
+            trace=trace, policy=self.policy, reconcile=reconciler is not None,
+            recorded_checks=before.checks,
         )
         snaps = snapshots(ticket, folded, self.policy)
         failure = folded.failure[2] if folded.failure else None
@@ -168,6 +175,9 @@ class EventMemory:
             "providers": tally.providers,
             "extraction_usage": asdict(extraction),
         }
+        if folded.checks:
+            detail["check_events"] = [[encode(e), encode(ps)] for e, ps in folded.checks]
+        tally.model_calls = meter.tally.model_calls + (checker.tally.model_calls if checker else [])
         if trace is not None:
             detail["event_trace"] = trace
             detail["closing_rules"] = RULES
