@@ -44,8 +44,8 @@ a conditional offer is kept, in
 [decision 0004](docs/decisions/0004-conditional-commitments.md); when a second
 order or account is a dispute, in
 [decision 0005](docs/decisions/0005-identifier-facts.md); what an unconfirmed claim
-raises, in [decision 0006](docs/decisions/0006-unconfirmed-claims.md);
-how promises are reconciled, in
+raises, in [decision 0006](docs/decisions/0006-unconfirmed-claims.md); how a
+promise's state is reconciled before it is acted on, in
 [decision 0007](docs/decisions/0007-promise-reconciliation.md).
 
 If a task cannot be done well within these rules, do not change them. Do the
