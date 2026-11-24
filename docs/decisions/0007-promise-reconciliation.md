@@ -1,6 +1,6 @@
 # Promises are reconciled, not only read in passing
 
-Status **proposed**, 2026-11-24.
+Status **Accepted by the owner** in chat on 2026-11-24.
 
 ## Context
 
