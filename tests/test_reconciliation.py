@@ -136,3 +136,40 @@ def test_checks_are_scheduled_at_the_required_times():
         START + timedelta(hours=3), START + timedelta(hours=7, minutes=45)
     ]
     assert [c.id for _, c in handoff_checks(ticket.card, ticket.log[-1][0])] == ["e1#0"]
+
+
+def delivery(text, quote, *, action="send meeting link"):
+    ticket = Ticket()
+    ticket.say(IVAN, action, MakeCommitment(Party.AGENT, action, action))
+    card = ticket.card
+    ticket.say(IVAN, text)
+    reader, verifier = Mock(), Mock()
+    reader.extract_with_context.return_value = Extraction(
+        (ResolveCommitment("e1#0", text, action),)
+    )
+    verifier.complete_json.return_value = Completion(
+        {"verdict": "yes", "evidence_quote": text, "delivery_quote": quote}, Usage()
+    )
+    event = ticket.log[-1][0]
+    proposals = read_event(verifying_reader(reader, verifier, CAL), card, event).proposals
+    return apply(card, event, proposals, CAL).card.commitments[0]
+
+
+def test_a_delivered_link_closes():
+    link = "https://example.com/meeting"
+    result = delivery(f"Here is the meeting link: {link}", link)
+    assert result.state is CommitmentState.FULFILLED and result.resolution.quote == link
+
+
+def test_a_report_of_work_elsewhere_stays_a_claim():
+    assert delivery("I sent the meeting link separately.", "").state is CommitmentState.CLAIMED
+
+
+def test_delivery_without_a_verbatim_quote_stays_a_claim():
+    assert delivery("Here is the meeting link: https://example.com", "https://example.net"
+                    ).state is CommitmentState.CLAIMED
+
+
+def test_m0006_waybill_report_stays_a_claim():
+    assert delivery("Накладная уже у вас — по ней отправлен VC-858", "",
+                    action="Пришлём вам накладную").state is CommitmentState.CLAIMED

@@ -44,6 +44,12 @@ VERIFY_SCHEMA: dict[str, Any] = {
     "additionalProperties": False,
 }
 
+DELIVERY_SCHEMA = {
+    **VERIFY_SCHEMA,
+    "properties": {**VERIFY_SCHEMA["properties"], "delivery_quote": {"type": "string"}},
+    "required": [*VERIFY_SCHEMA["required"], "delivery_quote"],
+}
+
 CONTEXT_SCHEMA = {
     **VERIFY_SCHEMA,
     "properties": {**VERIFY_SCHEMA["properties"], **dict.fromkeys(
@@ -158,7 +164,18 @@ class Verifier:
         if isinstance(proposal, ResolveCommitment) and proposal.partial:
             messages[0]["content"] += (" Here done means it reports concrete progress on this "
                                        "promise, even if part remains. Judge the progress only.")
-        verdict, usage, provider, _ = self._ask(messages, VERIFY_SCHEMA, "verdict")
+        schema = VERIFY_SCHEMA
+        if (isinstance(proposal, ResolveCommitment) and not proposal.partial and event.public
+                and event.author.side is target.owner.side):
+            schema = DELIVERY_SCHEMA
+            messages[0]["content"] += (
+                "\nAlso check whether NEW MESSAGE itself contains the thing promised. "
+                "If yes, copy the delivered link, filename, number or answer verbatim into "
+                "delivery_quote. Otherwise return an empty delivery_quote, even if verdict is "
+                "yes. Reports of work elsewhere or of something already sent are never delivery. "
+                "A tracking reference is not the promised document."
+            )
+        verdict, usage, provider, _ = self._ask(messages, schema, "verdict")
         return verdict, usage, provider
 
     def verify_context(
@@ -199,7 +216,11 @@ class Verifier:
             verification = Verification(Verdict.UNSURE, model=name,
                                         error=f"unreadable verdict: {error}")  # fmt: skip
         else:
-            verification = Verification(verdict, evidence.strip(), model=name)
+            delivery = completion.data.get("delivery_quote") if schema is DELIVERY_SCHEMA else ""
+            verification = Verification(
+                verdict, evidence.strip(), model=name,
+                delivery_quote=delivery if isinstance(delivery, str) else "",
+            )
         return verification, completion.usage, completion.provider, completion.data
 
 
@@ -254,6 +275,8 @@ class VerifyingReader:
                 else:
                     verdict, cost, provider = self.verifier.verify(target, p, event)
                     p = replace(p, verification=verdict)
+                    if isinstance(p, ResolveCommitment) and verdict.delivery_quote:
+                        p = replace(p, delivered=verdict.verdict is Verdict.YES)
                 spent += cost
                 providers[provider or "unknown"] += 1
                 if verdict.error:

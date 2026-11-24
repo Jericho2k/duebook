@@ -52,6 +52,7 @@ class Verification:
     model: str = ""
     #: Why there is no real verdict, when the verifier could not be asked.
     error: str = ""
+    delivery_quote: str = field(default="", metadata={"omit_default": True})
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +98,7 @@ class ResolveCommitment:
     context_quote: str = ""
     evidence_id: str = field(default="", metadata={"omit_default": True})
     partial: bool = field(default=False, metadata={"omit_default": True})
+    delivered: bool = field(default=False, metadata={"omit_default": True})
 
 
 @dataclass(frozen=True, slots=True)

@@ -151,7 +151,7 @@ GUARDED = frozenset({Reason.TARGET_MISMATCH, Reason.NOT_ABOUT_TARGET, Reason.AMB
 #: close may not name another thing; 4 promise identity (decision 0003);
 #: 5 identifier slots hold a set (decision 0005); 6 an unconfirmed claim is checked, and a
 #: confirmation aimed at something that is not an open promise is suggested (decision 0006).
-RULES = 7
+RULES = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -678,7 +678,14 @@ def _resolve_commitment(
         updated = replace(c, progress=(*c.progress, source)) if source not in c.progress else c
         return _put_commitment(card, updated), []
 
-    if event.author.side is c.owner.side:
+    debtor = event.author.side is c.owner.side
+    delivery = (
+        p.verification.delivery_quote if debtor and guards.rules >= 8 and guards.verifier
+        and event.public and p.delivered and p.verification
+        and p.verification.verdict is Verdict.YES else ""
+    )
+    delivered = bool(delivery.strip()) and delivery in event.text
+    if debtor and not delivered:
         # The debtor's word that it is done is a claim, not a fact.
         if c.state is CommitmentState.CLAIMED:
             return card, [Reason.ALREADY_CLAIMED]
@@ -686,8 +693,9 @@ def _resolve_commitment(
                           claim_checked=guards.claims)  # fmt: skip
     else:
         updated = replace(
-            c, state=CommitmentState.FULFILLED, resolved_at=event.at, resolution=source,
-            resolution_context=context,
+            c, state=CommitmentState.FULFILLED, resolved_at=event.at,
+            resolution=replace(source, quote=delivery) if delivered else source,
+            resolution_context=context, claimed_at=None if delivered else c.claimed_at,
         )
     return _put_commitment(card, updated), []
 
