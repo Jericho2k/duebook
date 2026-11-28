@@ -55,10 +55,15 @@ def encode(value: Any) -> Any:
         return [encode(item) for item in value]
     if dataclasses.is_dataclass(value) and type(value).__name__ in _TYPES:
         body = {TAG: type(value).__name__}
-        for f in dataclasses.fields(value):
+        for f in serialized_fields(value):
             body[f.name] = encode(getattr(value, f.name))
         return body
     raise TypeError(f"cannot store {type(value).__name__}")
+
+
+def serialized_fields(value: Any):
+    return (f for f in dataclasses.fields(value)
+            if not f.metadata.get("omit_default") or getattr(value, f.name) != f.default)
 
 
 def decode(raw: Any) -> Any:

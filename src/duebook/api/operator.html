@@ -682,7 +682,7 @@
         button.setAttribute("aria-controls", chat.id);
         button.setAttribute("aria-pressed", "false");
         if (evidence.detail) button.title = evidence.detail;
-        reference.textContent = "№" + evidence.article_id;
+        reference.textContent = "№" + (evidence.seq ?? evidence.article_id);
         button.append(label + " ", reference);
         button.addEventListener("click", () => load({conversation: true, evidence}));
         citations.append(button);
@@ -704,7 +704,7 @@
     if (item.activated_by) sources.push(source("Условие выполнено", item.activated_by));
     if (resolved) sources.push(source(resolution[resolved.kind] || "Решение", resolved.source));
     if (item.resolution_context) sources.push(source("Контекст", item.resolution_context));
-    sources.push(...suggestionSources(item.suggestions));
+    sources.push(...(item.repeats ?? []), ...suggestionSources(item.suggestions));
     const status = lifecycle[item.status];
     return {
       title: item.action, status, sources,

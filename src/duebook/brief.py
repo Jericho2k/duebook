@@ -189,6 +189,12 @@ class _Writer:
         elif c.state is CommitmentState.CLAIMED and c.resolution is not None:
             parts.append(f"заявлено как выполненное, не подтверждено {self.ref(c.resolution)}")
             sources.append(c.resolution)
+        for repeat in c.repeats:
+            parts.append(f"повторено в сообщении №{repeat.seq}")
+            sources.append(repeat)
+        for progress in c.progress:
+            parts.append(f"частично выполнено {self.ref(progress)}")
+            sources.append(progress)
         for hint in c.suggestions:
             # A close the reducer would not admit: still owed, but worth a look.
             if hint.reason == Reason.CONTEXT_NAMES_OTHER:
@@ -253,6 +259,7 @@ def compose(
     names: Mapping[str, str] | None = None,
     count: Callable[[str], int] = estimate_tokens,
     quote_chars: int = 80,
+    handoff_pending: bool = False,
 ) -> Brief:
     """Render the card for an operator taking the ticket over at ``now``.
 
@@ -264,6 +271,8 @@ def compose(
     w = _Writer(card, now, cal or WorkCalendar(), policy or AlertPolicy(), names or {}, quote_chars)
     sections = [s for s in _sections(w) if s.lines]
     header = _header(w)
+    if handoff_pending:
+        header += "\nсверка после передачи ещё не завершена"
 
     kept, dropped = list(sections), []
     while True:

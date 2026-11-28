@@ -22,7 +22,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from ..extract.client import Completion
+from ..extract.client import Completion, ModelCall, capture_calls
 from ..extract.cost import Pricing, Usage
 from ..extract.extractor import JsonModel
 
@@ -75,6 +75,7 @@ class Tally:
     #: call (when it was first made).
     cache_hits: int = 0
     providers: dict[str, int] = field(default_factory=dict)
+    model_calls: list[ModelCall] = field(default_factory=list)
 
     @property
     def usage(self) -> Usage:
@@ -103,7 +104,12 @@ class Meter:
         self.ledger.check()
         started = time.perf_counter()
         try:
-            completion = self.model.complete_json(messages, schema, name)
+            with capture_calls() as calls:
+                start = len(calls)
+                try:
+                    completion = self.model.complete_json(messages, schema, name)
+                finally:
+                    self.tally.model_calls.extend(calls[start:])
         except Exception as error:
             spent = getattr(error, "usage", None) or Usage()
             self.ledger.add(spent)

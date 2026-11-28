@@ -186,7 +186,9 @@ class Pipeline:
         with self.store.exclusive(ticket_id):
             while True:
                 card = self.store.card(ticket_id)
-                event = self.store.event(ticket_id, card.last_seq + 1)
+                event = self.store.next_check(card) or self.store.event(
+                    ticket_id, card.last_seq + 1
+                )
                 if event is None:
                     break
                 now = self.clock()
@@ -196,7 +198,8 @@ class Pipeline:
                     # a failing model sooner.
                     return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
 
-                earlier = _usage(hold.usage) if hold is not None else Usage()
+                held_usage = hold.usage if hold is not None and hold.seq == event.seq else None
+                earlier = _usage(held_usage)
                 try:
                     previous = self.store.previous_turn(event)
                     extraction = read_event(self.extractor, card, event, previous)
@@ -205,10 +208,13 @@ class Pipeline:
                     if not gives_up(error, attempts + 1):
                         failed = getattr(error, "usage", None) or Usage()
                         spent += failed
+                        usage = _saved_usage(
+                            earlier + failed, held_usage, getattr(error, "model_calls", ())
+                        )
                         hold = self.store.hold(ticket_id, event.seq,
                                                f"{type(error).__name__}: {error}", now=now,
                                                retry_at=self._retry_at(attempts, now),
-                                               usage=asdict(earlier + failed))  # fmt: skip
+                                               usage=usage)  # fmt: skip
                         return Handled(ticket_id, card, new, tuple(applied), hold, usage=spent)
                     # ...until the message itself is shown to be unreadable.
                     extraction = unread(event, error)
@@ -218,7 +224,8 @@ class Pipeline:
                     event,
                     extraction.proposals,
                     now=self.clock(),
-                    usage=asdict(earlier + extraction.usage),
+                    usage=_saved_usage(earlier + extraction.usage, held_usage),
+                    model_calls=extraction.model_calls,
                     verifier_usage=asdict(extraction.verifier_usage)
                     if extraction.verifier_usage is not None else None,
                     malformed=[
@@ -232,4 +239,9 @@ class Pipeline:
 
 
 def _usage(raw: dict | None) -> Usage:
-    return Usage(**raw) if raw else Usage()
+    return Usage(**{k: v for k, v in raw.items() if k != "model_calls"}) if raw else Usage()
+
+
+def _saved_usage(usage: Usage, earlier: dict | None, calls=()) -> dict:
+    records = [*((earlier or {}).get("model_calls") or ()), *(c.record() for c in calls)]
+    return asdict(usage) | ({"model_calls": records} if records else {})

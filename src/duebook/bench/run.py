@@ -24,15 +24,32 @@ Failures are reported alongside the score, not folded into it silently.
 from __future__ import annotations
 
 import time
+from collections import defaultdict, deque
 from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass, field, replace
 
 from ..card import Card
-from ..events import Event, MessagePosted, other_side, remember_turn
+from ..events import (
+    AssigneeChanged,
+    CheckKind,
+    Event,
+    MessagePosted,
+    PromiseCheck,
+    other_side,
+    remember_turn,
+)
 from ..extract.client import ModelError
 from ..extract.cost import Usage
-from ..extract.extractor import ATTEMPTS, Extraction, Reader, gives_up, read_event, unread
-from ..lifecycle import AlertPolicy
+from ..extract.extractor import (
+    ATTEMPTS,
+    Extraction,
+    Reader,
+    gives_up,
+    mark_useful,
+    read_event,
+    unread,
+)
+from ..lifecycle import AlertPolicy, deadline_checks, handoff_checks
 from ..proposals import (
     CancelCommitment,
     MakeCommitment,
@@ -41,6 +58,7 @@ from ..proposals import (
     SettleConditional,
 )
 from ..reducer import GUARDED, Guards, apply
+from ..store import promise_check
 from ..store.codec import encode
 from ..temporal import WorkCalendar
 from .generate import CloseCase, SimTicket
@@ -144,6 +162,7 @@ class Folded:
     proposals: tuple[tuple[Proposal, ...], ...] = ()
     #: Every close the guards refused.
     refused: tuple[Refused, ...] = ()
+    checks: tuple[tuple[PromiseCheck, tuple[Proposal, ...]], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,6 +186,10 @@ def fold(
     guards: Guards | None = None,
     *,
     trace: list | None = None,
+    policy: AlertPolicy | None = None,
+    reconcile: bool = False,
+    recorded_checks: Sequence[tuple[PromiseCheck, tuple[Proposal, ...]]] = (),
+    frames: list | None = None,
 ) -> Folded:
     """Read a ticket event by event, keeping the card at each of ``stops``."""
     wanted = set(stops)
@@ -176,12 +199,35 @@ def fold(
     read: list[tuple[Proposal, ...]] = []
     refused: list[Refused] = []
     failure = None
-    turns = {}
-    for event in ticket.events:
+    turns, messages, checks = {}, [], []
+    archived = defaultdict(list)
+    for check, ps in recorded_checks:
+        archived[check.seq].append((check, ps))
+    policy = policy or AlertPolicy()
+    events = iter(ticket.events)
+    upcoming, last = next(events, None), None
+    pending = deque()
+    while upcoming is not None or pending or reconcile and last != ticket.end:
+        if not pending:
+            through = upcoming.at if upcoming else ticket.end
+            if reconcile and last is not None:
+                due = ((at, c) for at, c in deadline_checks(card, policy) if last < at <= through)
+                pending.extend(
+                    (promise_check(card, c, CheckKind.DEADLINE, at, reversed(messages)), None)
+                    for at, c in sorted(due, key=lambda item: (item[0], item[1].id))
+                )
+            if upcoming is not None:
+                pending.append((upcoming, None))
+            last, upcoming = through, next(events, None)
+            if not pending:
+                break
+        event, recorded = pending.popleft()
+        is_check = isinstance(event, PromiseCheck)
         started = time.perf_counter()
         previous = turns.get(other_side(event))
         try:
-            extraction = read_as_the_pipeline(extractor, card, event, previous)
+            extraction = (read_as_the_pipeline(extractor, card, event, previous)
+                          if recorded is None else Extraction(recorded))
         except Exception as error:  # held at this event, as the pipeline would
             seconds += time.perf_counter() - started
             spent += getattr(error, "usage", None) or Usage()
@@ -196,9 +242,21 @@ def fold(
         spent += usage
         if usage.calls:
             prompts.append((event.seq, usage.prompt_tokens))
-        read.append(extraction.proposals)
+        if is_check:
+            checks.append((event, extraction.proposals))
+        else:
+            read.append(extraction.proposals)
+            pending.extendleft(reversed(archived[event.seq]))
         outcome = apply(card, event, extraction.proposals, cal, guards=guards, previous=previous)
+        mark_useful(extraction.model_calls, card, outcome, event, extraction.proposals,
+                    cal, guards=guards, previous=previous)
         remember_turn(turns, event)
+        if isinstance(event, MessagePosted):
+            messages.append(event)
+        if reconcile and isinstance(event, AssigneeChanged):
+            handoff = sorted(handoff_checks(outcome.card, event), key=lambda item: item[1].id)
+            pending.extend((promise_check(outcome.card, c, CheckKind.HANDOFF, at,
+                                          reversed(messages)), None) for at, c in handoff)
         refused += [_refused(card, event.seq, r.proposal, r.reason)
                     for r in outcome.rejections if r.reason in GUARDED]  # fmt: skip
         card = outcome.card
@@ -212,31 +270,37 @@ def fold(
                 ],
                 "card": encode(card),
             })
-        if event.seq in wanted:
+        if frames is not None:
+            frames.append((event, card))
+        if event.seq in wanted and (not is_check or event.kind is CheckKind.HANDOFF):
             cards[event.seq] = card
+    if ticket.events and ticket.events[-1].seq in wanted:
+        cards[ticket.events[-1].seq] = card
     # A ticket that stopped early is judged on the card it reached.
     for seq in wanted - set(cards):
         cards[seq] = card
     return Folded(card, cards, spent, failure, seconds, tuple(prompts), tuple(read),
-                  tuple(refused))  # fmt: skip
+                  tuple(refused), tuple(checks))  # fmt: skip
 
 
 def read_as_the_pipeline(reader: Reader, card: Card, event: Event,
                          previous: MessagePosted | None) -> Extraction:  # fmt: skip
     """Read one message with the pipeline's attempts; raise where the pipeline would hold."""
-    spent = Usage()
+    spent, model_calls = Usage(), ()
     for attempt in range(1, ATTEMPTS + 1):
         try:
             outcome = read_event(reader, card, event, previous)
         except ModelError as error:
             spent += error.usage
+            model_calls += getattr(error, "model_calls", ())
             if gives_up(error, attempt):
-                return replace(unread(event, error), usage=spent)
+                return replace(unread(event, error), usage=spent, model_calls=model_calls)
             if not error.unreadable:
                 error.usage = spent
                 raise
             continue
-        return replace(outcome, usage=spent + outcome.usage)
+        return replace(outcome, usage=spent + outcome.usage,
+                       model_calls=(*model_calls, *outcome.model_calls))
     raise AssertionError("unreachable: the last attempt gives up or returns")
 
 
@@ -271,11 +335,13 @@ def refold(
     proposals: Sequence[Sequence[Proposal]],
     guards: Guards | None = None,
     cal: WorkCalendar | None = None,
+    *,
+    recorded_checks: Sequence[tuple[PromiseCheck, tuple[Proposal, ...]]] = (),
 ) -> Folded:
     """Fold a ticket again from the proposals a run made, under other rules."""
     answers = {e.id: tuple(p) for e, p in zip(ticket.events, proposals, strict=False)}
     stops = [cp.seq for cp in checkpoints(ticket)]
-    return fold(ticket, Replayed(answers), stops, cal, guards)
+    return fold(ticket, Replayed(answers), stops, cal, guards, recorded_checks=recorded_checks)
 
 
 def snapshots(

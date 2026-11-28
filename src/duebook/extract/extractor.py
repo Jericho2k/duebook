@@ -15,12 +15,13 @@ from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from ..card import Card
-from ..events import Event, MessagePosted
+from ..events import Event, MessagePosted, PromiseCheck
 from ..proposals import Proposal, Unreadable
+from ..reducer import Outcome, apply
 from ..slots import DEFAULT as DEFAULT_VOCABULARY
 from ..slots import Vocabulary
 from ..temporal import WorkCalendar
-from .client import ChatClient, Completion, ModelError
+from .client import ChatClient, Completion, ModelCall, ModelError, call_kind, capture_calls
 from .cost import Usage
 from .prompt import Bound, build_messages
 from .schema import OUTPUT_SCHEMA, Malformed, parse_output
@@ -53,7 +54,18 @@ def read_event(reader: Reader, card: Card, event: Event,
                previous: MessagePosted | None = None) -> Extraction:  # fmt: skip
     """Supply the preceding turn to readers that use conversational context."""
     contextual = getattr(reader, "extract_with_context", None)
-    return contextual(card, event, previous) if contextual else reader.extract(card, event)
+    with capture_calls() as calls:
+        start = len(calls)
+        try:
+            result = (contextual(card, event, previous) if contextual
+                      else reader.extract(card, event))
+        except ModelError as error:
+            error.model_calls = tuple(calls[start:])
+            raise
+        finally:
+            for call in calls[start:]:
+                call.event_id = event.id
+        return replace(result, model_calls=tuple(calls[start:]))
 
 
 def reading_clients(client: ChatClient) -> tuple[ChatClient, ChatClient]:
@@ -79,7 +91,8 @@ def unread(event: Event, error: Exception) -> Extraction:
     """What is recorded for a message no attempt could read (decision 0002)."""
     text = event.text if isinstance(event, MessagePosted) else ""
     return Extraction((Unreadable(text, f"{type(error).__name__}: {error}"[:500]),),
-                      usage=getattr(error, "usage", None) or Usage())  # fmt: skip
+                      usage=getattr(error, "usage", None) or Usage(),
+                      model_calls=getattr(error, "model_calls", ()))  # fmt: skip
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,10 +113,34 @@ class Extraction:
     #: Why earlier model attempts were discarded, if any were.
     retried: tuple[str, ...] = ()
     verifier_usage: VerifierUsage | None = None
+    model_calls: tuple[ModelCall, ...] = ()
 
     @property
     def total_usage(self) -> Usage:
         return self.usage if self.verifier_usage is None else self.usage + self.verifier_usage.usage
+
+
+def mark_useful(calls: tuple[ModelCall, ...], before: Card, outcome: Outcome, event: Event,
+                proposals, cal, vocab=None, guards=None, previous=None) -> None:
+    answered = set()
+    for call in reversed(calls):
+        if not call.kind.startswith("reconcile_"):
+            continue
+        index = call.proposal
+        call.useful = False
+        if index in answered:
+            continue
+        answered.add(index)
+        if isinstance(event, PromiseCheck):
+            call.useful = before != outcome.card
+        elif call.original is not None and index is not None:
+            p = proposals[index]
+            original = call.original
+            if original.supersedes == p.supersedes:
+                original = replace(original, verification=p.verification)
+            baseline = (*proposals[:index], original, *proposals[index + 1:])
+            card = apply(before, event, baseline, cal, vocab, guards, previous=previous).card
+            call.useful = card != outcome.card
 
 
 @dataclass(slots=True)
@@ -141,7 +178,10 @@ class Extractor:
                 raise
             first = error
         try:
-            second = self.escalation.complete_json(messages, OUTPUT_SCHEMA, name="ticket_update")
+            with call_kind("escalate"):
+                second = self.escalation.complete_json(
+                    messages, OUTPUT_SCHEMA, name="ticket_update"
+                )
         except ModelError as error:
             error.usage += first.usage
             raise

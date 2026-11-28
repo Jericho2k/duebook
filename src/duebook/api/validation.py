@@ -16,7 +16,7 @@ from enum import Enum
 from types import NoneType, UnionType
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
-from ..events import Event
+from ..events import AssigneeChanged, Event, MessagePosted, StatusChanged
 from ..store.codec import decode_event
 
 
@@ -33,7 +33,7 @@ def read_event(raw: Any) -> Event:
         raise
     except (ValueError, TypeError, KeyError) as error:
         raise Invalid(str(error)) from error
-    if type(event) is Event:
+    if not isinstance(event, MessagePosted | AssigneeChanged | StatusChanged):
         raise Invalid("an event must be a MessagePosted, AssigneeChanged or StatusChanged")
     _check(event, type(event), "event")
     if not event.id.strip() or not event.ticket_id.strip():

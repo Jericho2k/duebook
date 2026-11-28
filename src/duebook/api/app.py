@@ -25,7 +25,7 @@ import hmac
 import json
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
@@ -178,11 +178,16 @@ def create_app(
         budget: Annotated[int | None, Query(ge=1)] = None,
         format: Literal["text", "json"] = "text",
     ) -> PlainTextResponse | dict[str, Any]:
-        with store() as s:
+        with store() as s, s.conn.transaction():
+            s.conn.execute("set transaction isolation level repeatable read, read only")
             current = _known(s, ticket_id)
+            since = s.handoff_pending_since(current)
             names = s.authors(ticket_id)
         now = clock()
-        b = compose(current, now, budget=budget, cal=cal, policy=policy, names=names)
+        if since is not None and now - since <= timedelta(minutes=2):
+            raise HTTPException(202, "Handoff reconciliation is pending", {"Retry-After": "1"})
+        b = compose(current, now, budget=budget, cal=cal, policy=policy, names=names,
+                    handoff_pending=since is not None)
         if format == "text":
             return PlainTextResponse(b.text)
         return _brief_json(ticket_id, b, now, names)

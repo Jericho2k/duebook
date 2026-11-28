@@ -383,7 +383,7 @@ def test_one_model_can_be_asked_at_another_reasoning_effort_and_stays_locked():
     client_for(handler, reasoning="off").complete_json([], {})
     assert bodies[1]["reasoning"] == {"enabled": False}
     with pytest.raises(ValueError, match="unknown reasoning"):
-        client_for(handler, reasoning="medium").complete_json([], {})
+        client_for(handler, reasoning="invalid").complete_json([], {})
 
 
 def test_the_writer_is_locked_to_its_three_hosts():
